@@ -1,0 +1,19 @@
+# Estudar criptografia que envolvem essas funcoes
+
+Assinar(mensagem, chavePrivada) = assinatura;
+Verify(mensagem, assinatura, chavePublica) = boolean;
+
+#
+
+Bloco é definido como uma lista de transacoes, o hash do bloco anterior
+e a resposta da prova de trabalho.
+
+Prova de trabalho -> mensagem que adicionada ao final do bloco, faz com que o 
+hash do bloco tenha um retorno (parcial) especifico.
+
+
+# Topicos para estudar:
+
+Merkle trees
+Alternatives para a prova de trabalho
+Scripting
