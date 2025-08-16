@@ -1,8 +1,9 @@
 use super::Transaction;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Block {
     pub id: Uuid,
     pub nonce: u64,
@@ -21,14 +22,10 @@ impl Block {
         }
     }
 
-    pub fn add_transaction(&mut self, tx: Transaction) {
-        self.transactions.push(tx);
-    }
-
     pub fn calculate_hash(&self) -> String {
         let mut hasher = Sha256::new();
         let data = format!(
-            "{:?}{}{}{:?}",
+            "{:?} {} {} {:?}",
             self.id, self.nonce, self.prev_block_hash, self.transactions
         );
         hasher.update(data);

@@ -1,24 +1,19 @@
+mod config;
 mod model;
 
-use model::Blockchain;
-use model::Miner;
-
 use crate::model::Transaction;
+use model::Node;
 
 fn main() {
-    let mut bc = Blockchain::new();
-    let miner = Miner::new("MinerAddress".into());
-    let difficulty = 4;
+    let mut node = Node::new();
 
-    println!("Blockchain initialized with genesis block");
+    println!("\nReceiving transactions...");
+    node.receive_transaction(Transaction::new(10.5, "dest1".into(), "origA".into()));
+    node.receive_transaction(Transaction::new(5.0, "dest2".into(), "origB".into()));
 
-    let t1 = Transaction::new(100.0, "Alice".into(), "Bob".into());
-    println!("Transaction added to mempool: {:?}", t1);
-    bc.add_transaction_to_mempool(t1);
+    node.mine();
 
-    println!("Mining block...");
-    miner.mine(bc.get_mempool(), bc.get_last_block_hash(), difficulty);
-    bc.add_block(mined_block, difficulty);
-
-    println!("Updated state of blockchain: {:?}", bc);
+    println!("\n--- Final Blockchain State ---");
+    node.print_chain();
+    node.save_node();
 }

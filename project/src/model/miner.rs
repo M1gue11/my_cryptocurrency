@@ -27,24 +27,21 @@ impl Miner {
         while !Miner::is_hash_valid(&block.calculate_hash(), &prefix) {
             block.nonce += 1;
         }
-
-        println!(
-            "Bloco minerado! Nonce: {} Hash: {}",
-            block.nonce,
-            block.calculate_hash()
-        );
-    }
-
-    pub fn mine(&self, transactions: &Vec<Transaction>, previous_hash: String, difficulty: usize) {
-        let mut block_to_mine = self.build_block(transactions, previous_hash);
-        self.mine_block(&mut block_to_mine, difficulty);
-        println!(
-            "Block mined successfully! Calculated nonce: {:?}",
-            block_to_mine.nonce
-        );
     }
 
     fn is_hash_valid(hash: &str, prefix: &str) -> bool {
         hash.starts_with(prefix)
+    }
+
+    pub fn mine(
+        &self,
+        mempool: &Vec<Transaction>,
+        previous_hash: String,
+        difficulty: usize,
+    ) -> Block {
+        // TODO: implement logic to decide which transactions to include
+        let mut block_to_mine = self.build_block(mempool, previous_hash);
+        self.mine_block(&mut block_to_mine, difficulty);
+        block_to_mine
     }
 }
