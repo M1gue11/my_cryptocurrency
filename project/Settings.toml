@@ -1,3 +1,3 @@
-difficulty = 3
+difficulty = 8
 node_name = "MeuNode"
 persisted_chain_path = "saved_files/"

@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
+    /// Difficulty level for mining in number of leading zero bits
     pub difficulty: usize,
     pub node_name: String,
     pub persisted_chain_path: String,

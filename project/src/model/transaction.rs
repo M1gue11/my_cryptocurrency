@@ -1,29 +1,88 @@
+use crate::security_utils::{digest_to_hex_string, sha256};
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Transaction {
-    pub id: Uuid,
+    pub id: [u8; 32],
     pub amount: f64,
     pub date: NaiveDateTime,
     pub destination_addr: String,
-    pub origin_addr: String,
+    pub origin_addr: Option<String>,
     pub signature: String,
+    pub message: Option<String>,
 }
 
 impl Transaction {
-    pub fn new(amount: f64, destination_addr: String, origin_addr: String) -> Self {
-        // TODO: Implement signature generation and validation
-        let id = Uuid::new_v4();
+    pub fn new(
+        amount: f64,
+        destination_addr: String,
+        origin_addr: String,
+        message: Option<String>,
+    ) -> Self {
         let date = Utc::now().naive_utc();
-        return Transaction {
+        let origin_addr_opt = Some(origin_addr);
+        let data = format!(
+            "{}{}{:?}{:?}",
+            amount, date, destination_addr, origin_addr_opt
+        );
+        let id = sha256(data.as_bytes());
+
+        Transaction {
             id,
             amount,
             date,
             destination_addr,
-            origin_addr,
+            origin_addr: origin_addr_opt,
             signature: String::new(),
-        };
+            message,
+        }
+    }
+
+    pub fn new_coinbase(amount: f64, mining_address: String) -> Self {
+        let date = Utc::now().naive_utc();
+        let origin_addr_opt = None;
+        let data = format!(
+            "{}{}{:?}{:?}",
+            amount, date, mining_address, origin_addr_opt
+        );
+        let id = sha256(data.as_bytes());
+
+        Transaction {
+            id,
+            amount,
+            date,
+            destination_addr: mining_address,
+            origin_addr: origin_addr_opt,
+            signature: String::new(),
+            message: None,
+        }
+    }
+}
+
+impl std::fmt::Display for Transaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {:?} {:?} {}",
+            digest_to_hex_string(&self.id),
+            self.amount,
+            self.origin_addr,
+            self.destination_addr
+        )
+    }
+}
+
+impl std::fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Transaction")
+            .field("id", &digest_to_hex_string(&self.id))
+            .field("amount", &self.amount)
+            .field("date", &self.date)
+            .field("destination_addr", &self.destination_addr)
+            .field("origin_addr", &self.origin_addr)
+            .field("signature", &self.signature)
+            .field("message", &self.message)
+            .finish()
     }
 }

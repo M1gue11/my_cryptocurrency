@@ -1,5 +1,5 @@
 use super::Block;
-use crate::config::CONFIG;
+use crate::{config::CONFIG, security_utils::hash_starts_with_zero_bits};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -15,37 +15,29 @@ pub struct Blockchain {
 
 impl Blockchain {
     pub fn new() -> Self {
-        match Self::load_chain(None) {
-            Ok(blockchain) => blockchain,
-            Err(_) => {
-                let mut chain = Vec::new();
-                let genesis_block = Block::new("0".into());
-                chain.push(genesis_block);
-                Blockchain { chain }
-            }
+        Blockchain { chain: Vec::new() }
+    }
+
+    pub fn get_last_block_hash(&self) -> [u8; 32] {
+        match self.chain.last() {
+            Some(block) => block.calculate_hash(),
+            None => [0; 32],
         }
     }
 
-    pub fn get_last_block_hash(&self) -> String {
-        self.chain
-            .last()
-            .expect("Blockchain is empty")
-            .calculate_hash()
+    pub fn is_empty(&self) -> bool {
+        self.chain.is_empty()
     }
 
     pub fn add_block(&mut self, block: Block, difficulty: usize) -> bool {
-        let last_block = self
-            .chain
-            .last()
-            .expect("The chain should have at least one block.");
-        let prefix = "0".repeat(difficulty);
+        let last_block_hash = self.get_last_block_hash();
 
-        if block.prev_block_hash != last_block.calculate_hash() {
+        if block.prev_block_hash != last_block_hash {
             println!("ERROR: Previous block hash does not match!");
             return false;
         }
 
-        if !block.calculate_hash().starts_with(&prefix) {
+        if !hash_starts_with_zero_bits(&block.calculate_hash(), difficulty) {
             println!("ERROR: Invalid proof of work!");
             return false;
         }

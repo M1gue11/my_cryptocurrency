@@ -1,44 +1,50 @@
-use super::Transaction;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use uuid::Uuid;
+use crate::security_utils::{digest_to_hex_string, sha256};
 
-#[derive(Debug, Serialize, Deserialize)]
+use super::Transaction;
+use chrono::{NaiveDateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct Block {
-    pub id: Uuid,
-    pub nonce: u64,
+    pub prev_block_hash: [u8; 32],
     pub transactions: Vec<Transaction>,
-    pub prev_block_hash: String,
+    pub nonce: u32,
+    pub date: NaiveDateTime,
 }
 
 impl Block {
-    pub fn new(prev_block_hash: String) -> Self {
-        let id = Uuid::new_v4();
+    pub fn new(prev_block_hash: [u8; 32]) -> Self {
+        let date = Utc::now().naive_utc();
         Block {
-            id,
             nonce: 0,
             transactions: Vec::new(),
             prev_block_hash,
+            date,
         }
     }
 
-    pub fn calculate_hash(&self) -> String {
-        let mut hasher = Sha256::new();
+    pub fn calculate_hash(&self) -> [u8; 32] {
         let data = format!(
-            "{:?} {} {} {:?}",
-            self.id, self.nonce, self.prev_block_hash, self.transactions
+            "{}{}{:?}{:?}",
+            self.nonce,
+            digest_to_hex_string(&self.prev_block_hash),
+            self.transactions,
+            self.date
         );
-        hasher.update(data);
-        format!("{:x}", hasher.finalize())
+        sha256(data.as_bytes())
     }
 }
 
-impl std::fmt::Display for Transaction {
+impl std::fmt::Debug for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {} {} {}",
-            self.id, self.amount, self.origin_addr, self.destination_addr
-        )
+        f.debug_struct("Block")
+            .field(
+                "prev_block_hash",
+                &digest_to_hex_string(&self.prev_block_hash),
+            )
+            .field("transactions", &self.transactions)
+            .field("nonce", &self.nonce)
+            .field("date", &self.date)
+            .finish()
     }
 }
