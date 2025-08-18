@@ -1,4 +1,7 @@
-use crate::security_utils::{digest_to_hex_string, sha256};
+use crate::security_utils::{
+    digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
+    verify_signature,
+};
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +61,13 @@ impl Transaction {
             message: None,
         }
     }
+
+    pub fn verify_tx(&self) -> bool {
+        let signature = load_signature_from_hex(&self.signature);
+        let origin_addr = self.origin_addr.clone().unwrap_or_default();
+        let pk = load_public_key_from_hex(origin_addr);
+        verify_signature(&pk, self.to_string().as_bytes(), signature)
+    }
 }
 
 impl std::fmt::Display for Transaction {
@@ -68,7 +78,7 @@ impl std::fmt::Display for Transaction {
             digest_to_hex_string(&self.id),
             self.amount,
             self.origin_addr,
-            self.destination_addr
+            self.destination_addr,
         )
     }
 }

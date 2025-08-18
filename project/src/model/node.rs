@@ -60,6 +60,7 @@ impl Node {
 
     pub fn receive_transaction(&mut self, tx: Transaction) {
         // TODO: validate transaction
+        assert!(tx.verify_tx(), "Invalid transaction signature");
         self.mempool.push(tx);
     }
 
