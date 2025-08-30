@@ -1,12 +1,10 @@
 use crate::config::CONFIG;
 use crate::model::{Block, Blockchain, Miner, Transaction};
 
-const BLOCK_REWARD: f64 = 100.0;
-
 pub struct Node {
+    pub miner: Miner,
     blockchain: Blockchain,
     mempool: Vec<Transaction>,
-    miner: Miner,
     difficulty: usize,
 }
 
@@ -24,7 +22,7 @@ impl Node {
         Node {
             blockchain: bc,
             mempool: Vec::new(),
-            miner: Miner::new(CONFIG.node_name.to_string()),
+            miner: Miner::new(),
             difficulty: CONFIG.difficulty,
         }
     }
@@ -58,18 +56,41 @@ impl Node {
         }
     }
 
-    pub fn receive_transaction(&mut self, tx: Transaction) {
-        // TODO: validate transaction
-        assert!(tx.verify_tx(), "Invalid transaction signature");
+    pub fn validate_transaction_balance(&self, tx: &Transaction) -> bool {
+        // TODO: merkle root
+        let mut balance = 0.0;
+        for block in &self.blockchain.chain {
+            for old_tx in &block.transactions {
+                if &old_tx.origin_addr.clone().unwrap_or_default()
+                    == &tx.origin_addr.clone().unwrap_or_default()
+                {
+                    balance -= old_tx.amount;
+                }
+                if &old_tx.destination_addr == &tx.origin_addr.clone().unwrap_or_default() {
+                    balance += old_tx.amount;
+                }
+            }
+        }
+        balance >= tx.amount
+    }
+
+    pub fn receive_transaction(&mut self, tx: Transaction) -> Result<(), String> {
+        if !self.validate_transaction_balance(&tx) {
+            return Err(format!("Insufficient balance for {:?}", tx));
+        }
+        if !tx.verify_tx() {
+            return Err("Invalid transaction signature".to_string());
+        }
         self.mempool.push(tx);
+        Ok(())
     }
 
     pub fn mine(&mut self) -> &Block {
         let previous_hash = self.blockchain.get_last_block_hash();
 
-        let mined_block =
-            self.miner
-                .mine(&self.mempool, previous_hash, self.difficulty, BLOCK_REWARD);
+        let mined_block = self
+            .miner
+            .mine(&self.mempool, previous_hash, self.difficulty);
 
         self.submit_block(mined_block);
         self.blockchain.chain.last().unwrap()

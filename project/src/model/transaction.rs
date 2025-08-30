@@ -1,6 +1,9 @@
-use crate::security_utils::{
-    digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
-    verify_signature,
+use crate::{
+    config::CONFIG,
+    security_utils::{
+        digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
+        verify_signature,
+    },
 };
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -42,20 +45,21 @@ impl Transaction {
         }
     }
 
-    pub fn new_coinbase(amount: f64, mining_address: String) -> Self {
+    pub fn new_coinbase(miner_address: String) -> Self {
         let date = Utc::now().naive_utc();
         let origin_addr_opt = None;
+        let reward_amount = CONFIG.block_reward;
         let data = format!(
             "{}{}{:?}{:?}",
-            amount, date, mining_address, origin_addr_opt
+            reward_amount, date, miner_address, origin_addr_opt
         );
         let id = sha256(data.as_bytes());
 
         Transaction {
             id,
-            amount,
+            amount: reward_amount,
             date,
-            destination_addr: mining_address,
+            destination_addr: miner_address,
             origin_addr: origin_addr_opt,
             signature: String::new(),
             message: None,

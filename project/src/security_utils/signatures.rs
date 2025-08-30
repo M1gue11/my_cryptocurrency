@@ -8,9 +8,15 @@ use rand::rngs::OsRng;
 use crate::security_utils::digest_to_hex_string;
 use crate::security_utils::sha256;
 
-pub fn generate_key_pair() -> (SigningKey, VerifyingKey) {
+pub fn generate_random_key_pair() -> (SigningKey, VerifyingKey) {
     let mut csprng = OsRng;
     let signing_key = SigningKey::generate(&mut csprng);
+    let public_key = signing_key.verifying_key();
+    (signing_key, public_key)
+}
+
+pub fn generate_key_pair_from_seed(seed: &[u8; 32]) -> (SigningKey, VerifyingKey) {
+    let signing_key = SigningKey::from_bytes(seed);
     let public_key = signing_key.verifying_key();
     (signing_key, public_key)
 }
@@ -25,13 +31,11 @@ pub fn secret_key_to_hex(sk: &SigningKey) -> String {
 
 pub fn sign_hash(signing_key: &mut SigningKey, message: &[u8]) -> Signature {
     let hash = sha256(message);
-    println!("Transaction hash: {}", digest_to_hex_string(&hash));
     signing_key.try_sign(&hash).expect("Failed to sign message")
 }
 
 pub fn verify_signature(public_key: &VerifyingKey, message: &[u8], signature: Signature) -> bool {
     let hash = sha256(message);
-    println!("Transaction hash: {}", digest_to_hex_string(&hash));
     public_key.verify(&hash, &signature).is_ok()
 }
 
