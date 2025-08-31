@@ -20,16 +20,25 @@ impl Wallet {
         }
     }
 
-    pub fn derive_child(&self, index: u32) -> HDKey {
-        // 0x00 is arbitrary
-        // 0x00 || parent_sk || index_be
-        let mut data = Vec::with_capacity(1 + 32 + 4 + 32);
-        data.push(0x00);
-        data.extend_from_slice(&self.master_hdkey.private_key);
-        data.extend_from_slice(&index.to_be_bytes());
-        data.extend_from_slice(&self.master_hdkey.chain_code);
+    fn derive_child(&self, index: u32) -> HDKey {
+        self.master_hdkey.derive_child(index)
+    }
 
-        HDKey::new(&data)
+    pub fn derive_path(&self, path: &[u32]) -> HDKey {
+        let mut node = self.master_hdkey.clone();
+        for &i in path {
+            node = node.derive_child(i);
+        }
+        node
+    }
+
+    pub fn generate_n_keys(&self, n: u32) -> Vec<HDKey> {
+        let mut keys = Vec::with_capacity(n as usize);
+        for i in 0..n {
+            let child_hdkey = self.derive_path(&[111, 0, 0, 0, i]);
+            keys.push(child_hdkey);
+        }
+        keys
     }
 
     pub fn get_new_receive_addr(&mut self) -> VerifyingKey {
