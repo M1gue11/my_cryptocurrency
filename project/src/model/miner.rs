@@ -19,7 +19,7 @@ impl Miner {
         let mut block_txs = transactions.to_vec();
 
         let reward_tx =
-            Transaction::new_coinbase(public_key_to_hex(&self.wallet.get_new_receive_addr()));
+            Transaction::new_coinbase(public_key_to_hex(&self.wallet.get_receive_addr()));
         block_txs.insert(0, reward_tx);
 
         let mut new_block = Block::new(previous_hash);

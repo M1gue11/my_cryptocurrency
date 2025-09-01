@@ -1,5 +1,5 @@
 use super::Block;
-use crate::{config::CONFIG, security_utils::hash_starts_with_zero_bits};
+use crate::{globals::CONFIG, security_utils::hash_starts_with_zero_bits};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,

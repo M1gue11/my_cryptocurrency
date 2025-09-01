@@ -1,5 +1,7 @@
+use crate::model::Node;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
+use std::sync::Mutex;
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
@@ -16,3 +18,5 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
         .unwrap();
     settings.try_deserialize().unwrap()
 });
+
+pub static NODE: Lazy<Mutex<Node>> = Lazy::new(|| Mutex::new(Node::new()));

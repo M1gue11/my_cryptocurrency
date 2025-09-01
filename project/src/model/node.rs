@@ -1,4 +1,4 @@
-use crate::config::CONFIG;
+use crate::globals::CONFIG;
 use crate::model::{Block, Blockchain, Miner, Transaction};
 
 pub struct Node {

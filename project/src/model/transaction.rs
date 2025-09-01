@@ -1,5 +1,5 @@
 use crate::{
-    config::CONFIG,
+    globals::CONFIG,
     security_utils::{
         digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
         verify_signature,
