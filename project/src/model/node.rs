@@ -1,4 +1,5 @@
 use crate::globals::CONFIG;
+use crate::model::io::UTXO;
 use crate::model::{Block, Blockchain, Miner, Transaction};
 
 pub struct Node {
@@ -48,37 +49,68 @@ impl Node {
             let added_block = self.blockchain.chain.last().unwrap();
 
             // TODO: improve this logic to be more efficient
-            self.mempool
-                .retain(|tx| !added_block.transactions.iter().any(|btx| btx.id == tx.id));
+            self.mempool.retain(|tx| {
+                !added_block
+                    .transactions
+                    .iter()
+                    .any(|btx| btx.id() == tx.id())
+            });
             true
         } else {
             false
         }
     }
 
-    pub fn validate_transaction_balance(&self, tx: &Transaction) -> bool {
-        // TODO: merkle root
-        let mut balance = 0.0;
+    // pub fn validate_transaction_balance(&self, tx: &Transaction) -> bool {
+    //     // TODO: merkle root
+    //     let mut balance = 0.0;
+    //     for block in &self.blockchain.chain {
+    //         for old_tx in &block.transactions {
+    //             if &old_tx.origin_addr.clone().unwrap_or_default()
+    //                 == &tx.origin_addr.clone().unwrap_or_default()
+    //             {
+    //                 balance -= old_tx.amount;
+    //             }
+    //             if &old_tx.destination_addr == &tx.origin_addr.clone().unwrap_or_default() {
+    //                 balance += old_tx.amount;
+    //             }
+    //         }
+    //     }
+    //     balance >= tx.amount
+    // }
+
+    pub fn find_transaction(&self, tx_id: &[u8; 32]) -> Option<&Transaction> {
         for block in &self.blockchain.chain {
-            for old_tx in &block.transactions {
-                if &old_tx.origin_addr.clone().unwrap_or_default()
-                    == &tx.origin_addr.clone().unwrap_or_default()
-                {
-                    balance -= old_tx.amount;
-                }
-                if &old_tx.destination_addr == &tx.origin_addr.clone().unwrap_or_default() {
-                    balance += old_tx.amount;
+            for tx in &block.transactions {
+                if &tx.id() == tx_id {
+                    return Some(tx);
                 }
             }
         }
-        balance >= tx.amount
+        None
+    }
+
+    pub fn scan_utxos(&self) -> Vec<UTXO> {
+        let mut utxos = Vec::new();
+        for block in &self.blockchain.chain {
+            for tx in &block.transactions {
+                for (output_index, output) in tx.outputs.iter().enumerate() {
+                    utxos.push(UTXO {
+                        tx_id: tx.id(),
+                        index: output_index,
+                        output: output.clone(),
+                    });
+                }
+                for input in &tx.inputs {
+                    utxos.retain(|o| o.tx_id != input.prev_tx_id);
+                }
+            }
+        }
+        utxos
     }
 
     pub fn receive_transaction(&mut self, tx: Transaction) -> Result<(), String> {
-        if !self.validate_transaction_balance(&tx) {
-            return Err(format!("Insufficient balance for {:?}", tx));
-        }
-        if !tx.verify_tx() {
+        if !tx.validate() {
             return Err("Invalid transaction signature".to_string());
         }
         self.mempool.push(tx);
@@ -97,7 +129,7 @@ impl Node {
     }
 
     pub fn save_node(&self) {
-        // TODO: implement node saving
+        // TODO: improve node saving
         self.blockchain.persist_chain(None);
     }
 

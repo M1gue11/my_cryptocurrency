@@ -2,11 +2,13 @@ mod globals;
 mod model;
 mod security_utils;
 
-use crate::globals::NODE;
-use crate::model::Wallet;
+use crate::{
+    globals::NODE,
+    model::{TxOutput, Wallet},
+};
 
 fn main() {
-    let mut node = NODE.lock().unwrap();
+    let mut node = NODE.write().unwrap();
     let mut w2 = Wallet::new("seed 3");
 
     let keys = node.miner.wallet.generate_n_keys(10);
@@ -20,13 +22,14 @@ fn main() {
         node.mine();
     }
 
-    let origin_addr = node.miner.wallet.derive_path(&[111, 0, 0, 0, 0]);
-    let tx1 = node.miner.wallet.send_tx(
-        origin_addr.get_public_key(),
-        w2.get_receive_addr(),
-        80.0,
-        Some("Payment for services".to_string()),
-    );
+    let outputs = vec![TxOutput {
+        value: 30.0,
+        address: w2.get_receive_addr(),
+    }];
+    let tx1 = node
+        .miner
+        .wallet
+        .send_tx(outputs, Some("Payment for services".to_string()));
 
     println!("\nReceiving transactions...");
     match node.receive_transaction(tx1.unwrap()) {

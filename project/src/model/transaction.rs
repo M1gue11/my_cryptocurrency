@@ -1,5 +1,6 @@
 use crate::{
     globals::CONFIG,
+    model::{TxInput, TxOutput},
     security_utils::{
         digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
         verify_signature,
@@ -10,67 +11,70 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Transaction {
-    pub id: [u8; 32],
-    pub amount: f64,
+    pub inputs: Vec<TxInput>,
+    pub outputs: Vec<TxOutput>,
     pub date: NaiveDateTime,
-    pub destination_addr: String,
-    pub origin_addr: Option<String>,
-    pub signature: String,
     pub message: Option<String>,
 }
 
 impl Transaction {
-    pub fn new(
-        amount: f64,
-        destination_addr: String,
-        origin_addr: String,
-        message: Option<String>,
-    ) -> Self {
+    pub fn new(inputs: Vec<TxInput>, outputs: Vec<TxOutput>, message: Option<String>) -> Self {
         let date = Utc::now().naive_utc();
-        let origin_addr_opt = Some(origin_addr);
-        let data = format!(
-            "{}{}{:?}{:?}",
-            amount, date, destination_addr, origin_addr_opt
-        );
-        let id = sha256(data.as_bytes());
-
         Transaction {
-            id,
-            amount,
+            inputs,
+            outputs,
             date,
-            destination_addr,
-            origin_addr: origin_addr_opt,
-            signature: String::new(),
             message,
         }
     }
 
+    pub fn id(&self) -> [u8; 32] {
+        sha256(&self.as_bytes())
+    }
+
     pub fn new_coinbase(miner_address: String) -> Self {
         let date = Utc::now().naive_utc();
-        let origin_addr_opt = None;
+        let inputs = Vec::new();
         let reward_amount = CONFIG.block_reward;
-        let data = format!(
-            "{}{}{:?}{:?}",
-            reward_amount, date, miner_address, origin_addr_opt
-        );
-        let id = sha256(data.as_bytes());
+        let outputs = vec![TxOutput {
+            value: reward_amount,
+            address: miner_address,
+        }];
+        let message = Some("Coinbase transaction".to_string());
 
         Transaction {
-            id,
-            amount: reward_amount,
             date,
-            destination_addr: miner_address,
-            origin_addr: origin_addr_opt,
-            signature: String::new(),
-            message: None,
+            inputs,
+            outputs,
+            message,
         }
     }
 
-    pub fn verify_tx(&self) -> bool {
-        let signature = load_signature_from_hex(&self.signature);
-        let origin_addr = self.origin_addr.clone().unwrap_or_default();
-        let pk = load_public_key_from_hex(origin_addr);
-        verify_signature(&pk, self.to_string().as_bytes(), signature)
+    pub fn validate(&self) -> bool {
+        let partial_tx = Transaction {
+            inputs: self.inputs.iter().map(|i| i.get_partial()).collect(),
+            outputs: self.outputs.clone(),
+            date: self.date,
+            message: self.message.clone(),
+        };
+        let partial_tx_bytes = partial_tx.as_bytes();
+        for input in &self.inputs {
+            let pubkey = load_public_key_from_hex(&input.public_key);
+            let sig = load_signature_from_hex(&input.signature);
+
+            if !verify_signature(&pubkey, &partial_tx_bytes, sig) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let data = format!(
+            "{:?}{:?}{}{:?}",
+            self.inputs, self.outputs, self.date, self.message
+        );
+        data.as_bytes().to_vec()
     }
 }
 
@@ -78,11 +82,12 @@ impl std::fmt::Display for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {:?} {:?} {}",
-            digest_to_hex_string(&self.id),
-            self.amount,
-            self.origin_addr,
-            self.destination_addr,
+            "Transaction {{ id: {}, inputs: {:?}, outputs: {:?}, date: {}, message: {:?} }}",
+            digest_to_hex_string(&self.id()),
+            self.inputs,
+            self.outputs,
+            self.date,
+            self.message
         )
     }
 }
@@ -90,12 +95,10 @@ impl std::fmt::Display for Transaction {
 impl std::fmt::Debug for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Transaction")
-            .field("id", &digest_to_hex_string(&self.id))
-            .field("amount", &self.amount)
+            .field("id", &digest_to_hex_string(&self.id()))
+            .field("inputs", &self.inputs)
+            .field("outputs", &self.outputs)
             .field("date", &self.date)
-            .field("destination_addr", &self.destination_addr)
-            .field("origin_addr", &self.origin_addr)
-            .field("signature", &self.signature)
             .field("message", &self.message)
             .finish()
     }

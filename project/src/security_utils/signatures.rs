@@ -3,30 +3,11 @@ use ed25519_dalek::SigningKey;
 use ed25519_dalek::Verifier;
 use ed25519_dalek::VerifyingKey;
 use ed25519_dalek::ed25519::signature::SignerMut;
-use rand::rngs::OsRng;
 
-use crate::security_utils::digest_to_hex_string;
 use crate::security_utils::sha256;
-
-pub fn generate_random_key_pair() -> (SigningKey, VerifyingKey) {
-    let mut csprng = OsRng;
-    let signing_key = SigningKey::generate(&mut csprng);
-    let public_key = signing_key.verifying_key();
-    (signing_key, public_key)
-}
-
-pub fn generate_key_pair_from_seed(seed: &[u8; 32]) -> (SigningKey, VerifyingKey) {
-    let signing_key = SigningKey::from_bytes(seed);
-    let public_key = signing_key.verifying_key();
-    (signing_key, public_key)
-}
 
 pub fn public_key_to_hex(public_key: &VerifyingKey) -> String {
     hex::encode(public_key.to_bytes())
-}
-
-pub fn secret_key_to_hex(sk: &SigningKey) -> String {
-    hex::encode(sk.to_bytes())
 }
 
 pub fn sign_hash(signing_key: &mut SigningKey, message: &[u8]) -> Signature {
@@ -45,7 +26,7 @@ pub fn load_signature_from_hex(hex: &str) -> Signature {
     Signature::from_bytes(&arr)
 }
 
-pub fn load_public_key_from_hex(hex: String) -> VerifyingKey {
+pub fn load_public_key_from_hex(hex: &String) -> VerifyingKey {
     let bytes = hex::decode(hex).expect("Failed to decode hex");
     let arr: [u8; 32] = bytes.try_into().expect("Public key must be 32 bytes");
     VerifyingKey::from_bytes(&arr).expect("Failed to create public key from bytes")

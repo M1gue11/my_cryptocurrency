@@ -1,6 +1,6 @@
 use crate::{
     model::{Block, Transaction, Wallet},
-    security_utils::{hash_starts_with_zero_bits, public_key_to_hex},
+    security_utils::hash_starts_with_zero_bits,
 };
 
 pub struct Miner {
@@ -18,8 +18,7 @@ impl Miner {
         // TODO: build a logic to choose transactions
         let mut block_txs = transactions.to_vec();
 
-        let reward_tx =
-            Transaction::new_coinbase(public_key_to_hex(&self.wallet.get_receive_addr()));
+        let reward_tx = Transaction::new_coinbase(self.wallet.get_receive_addr());
         block_txs.insert(0, reward_tx);
 
         let mut new_block = Block::new(previous_hash);
