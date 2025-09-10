@@ -1,4 +1,4 @@
-use crate::globals::NODE;
+use crate::model::get_node;
 // use crate::globals::NODE;
 use crate::model::io::UTXO;
 use crate::{
@@ -75,9 +75,7 @@ impl Wallet {
     }
 
     pub fn get_wallet_utxos(&self) -> Vec<UTXO> {
-        println!("TOAQUI ");
-        let node = NODE.read().unwrap();
-        println!("HAHAH");
+        let node = get_node();
         let utxos = node.scan_utxos();
         let wallet_utxos = utxos
             .into_iter()
@@ -121,7 +119,7 @@ impl Wallet {
         }
 
         let mut inputs = Vec::new();
-        let node = NODE.read().unwrap();
+        let node = get_node();
 
         for utxo in utxos_to_spend.unwrap() {
             let output_tx = node.find_transaction(&utxo.tx_id);

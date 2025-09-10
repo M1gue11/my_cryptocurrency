@@ -9,6 +9,24 @@ pub struct Node {
     difficulty: usize,
 }
 
+static mut NODE: Option<Node> = None;
+
+pub fn init_node() {
+    unsafe {
+        NODE = Some(Node::new());
+    }
+}
+
+#[allow(static_mut_refs)]
+pub fn get_node_mut() -> &'static mut Node {
+    unsafe { NODE.as_mut().expect("Node não inicializado") }
+}
+
+#[allow(static_mut_refs)]
+pub fn get_node() -> &'static Node {
+    unsafe { NODE.as_ref().expect("Node não inicializado") }
+}
+
 impl Node {
     pub fn new() -> Self {
         println!("Starting a new node...");
@@ -60,24 +78,6 @@ impl Node {
             false
         }
     }
-
-    // pub fn validate_transaction_balance(&self, tx: &Transaction) -> bool {
-    //     // TODO: merkle root
-    //     let mut balance = 0.0;
-    //     for block in &self.blockchain.chain {
-    //         for old_tx in &block.transactions {
-    //             if &old_tx.origin_addr.clone().unwrap_or_default()
-    //                 == &tx.origin_addr.clone().unwrap_or_default()
-    //             {
-    //                 balance -= old_tx.amount;
-    //             }
-    //             if &old_tx.destination_addr == &tx.origin_addr.clone().unwrap_or_default() {
-    //                 balance += old_tx.amount;
-    //             }
-    //         }
-    //     }
-    //     balance >= tx.amount
-    // }
 
     pub fn find_transaction(&self, tx_id: &[u8; 32]) -> Option<&Transaction> {
         for block in &self.blockchain.chain {

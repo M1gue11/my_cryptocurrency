@@ -1,8 +1,5 @@
 use once_cell::sync::Lazy;
 use serde::Deserialize;
-use std::sync::RwLock;
-
-use crate::model::Node;
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
@@ -20,4 +17,4 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
     settings.try_deserialize().unwrap()
 });
 
-pub static NODE: Lazy<RwLock<Node>> = Lazy::new(|| RwLock::new(Node::new()));
+// pub static NODE: Lazy<RwLock<Node>> = Lazy::new(|| RwLock::new(Node::new()));

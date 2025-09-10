@@ -2,13 +2,11 @@ mod globals;
 mod model;
 mod security_utils;
 
-use crate::{
-    globals::NODE,
-    model::{TxOutput, Wallet},
-};
+use crate::model::{TxOutput, Wallet, get_node_mut, init_node};
 
 fn main() {
-    let mut node = NODE.write().unwrap();
+    init_node();
+    let node = get_node_mut();
     let mut w2 = Wallet::new("seed 3");
 
     let keys = node.miner.wallet.generate_n_keys(10);
@@ -21,18 +19,14 @@ fn main() {
         println!("Blockchain is empty, starting with genesis block.");
         node.mine();
     }
-
     let outputs = vec![TxOutput {
         value: 30.0,
-        address: w2.get_receive_addr(),
+        address: node.miner.wallet.get_receive_addr(),
     }];
-    let tx1 = node
-        .miner
-        .wallet
-        .send_tx(outputs, Some("Payment for services".to_string()));
+    let tx = w2.send_tx(outputs, Some("Test transaction".to_string()));
 
     println!("\nReceiving transactions...");
-    match node.receive_transaction(tx1.unwrap()) {
+    match node.receive_transaction(tx.unwrap()) {
         Ok(_) => println!("Transaction received!"),
         Err(e) => println!("Error: {}", e),
     }
@@ -41,5 +35,5 @@ fn main() {
 
     println!("\n--- Final Blockchain State ---");
     node.print_chain();
-    // node.save_node();
+    node.save_node();
 }
