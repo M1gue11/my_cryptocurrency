@@ -15,7 +15,6 @@ impl Miner {
     }
 
     fn build_block(&mut self, transactions: &Vec<Transaction>, previous_hash: [u8; 32]) -> Block {
-        // TODO: build a logic to choose transactions
         let mut block_txs = transactions.to_vec();
 
         let reward_tx = Transaction::new_coinbase(self.wallet.get_receive_addr());
@@ -38,7 +37,6 @@ impl Miner {
         previous_hash: [u8; 32],
         difficulty: usize,
     ) -> Block {
-        // TODO: implement logic to decide which transactions to include
         let mut block_to_mine = self.build_block(mempool, previous_hash);
         self.mine_block(&mut block_to_mine, difficulty);
         block_to_mine

@@ -66,7 +66,6 @@ impl Node {
             // cleaning mempool
             let added_block = self.blockchain.chain.last().unwrap();
 
-            // TODO: improve this logic to be more efficient
             self.mempool.retain(|tx| {
                 !added_block
                     .transactions
@@ -129,7 +128,6 @@ impl Node {
     }
 
     pub fn save_node(&self) {
-        // TODO: improve node saving
         self.blockchain.persist_chain(None);
     }
 

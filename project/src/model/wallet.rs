@@ -14,7 +14,6 @@ pub struct Wallet {
 const BASE_PATH: [u32; 4] = [111, 0, 0, 0]; // purpose / account / change / index
 impl Wallet {
     pub fn new(seed: &str) -> Self {
-        // TODO: improve seed generation
         let hdkey = HDKey::new(seed.as_bytes());
         Wallet {
             master_hdkey: hdkey,
@@ -42,7 +41,6 @@ impl Wallet {
     }
 
     pub fn owns_address(&self, address: &str) -> Option<u32> {
-        // TODO: rethink this limit
         let limit = self.current_index + 100;
         for i in 0..limit {
             let mut full_path = BASE_PATH.to_vec();
@@ -56,7 +54,6 @@ impl Wallet {
     }
 
     pub fn get_receive_addr(&mut self) -> String {
-        // TODO: get a new receive address that is not already used
         let mut path = BASE_PATH.to_vec();
         path.push(self.current_index);
         let child_hdkey = self.derive_path(&path);
@@ -65,7 +62,6 @@ impl Wallet {
     }
 
     pub fn get_change_addr(&mut self) -> String {
-        // TODO: get a new change address that is not already used
         let mut path = BASE_PATH.to_vec();
         path[2] = 1; // change
         path.push(self.current_index);
@@ -160,10 +156,4 @@ impl Wallet {
 
         Ok(tx)
     }
-
-    // TODO: the ideia here is fetch the origin address with balance from the node
-    // pub fn send_payment(&self, dest_pk: VerifyingKey, amount: f64) {
-    //     let node = NODE.lock().unwrap();
-    //     // let origin_addr = node.
-    // }
 }
