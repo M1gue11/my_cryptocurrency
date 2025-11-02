@@ -5,6 +5,7 @@ use crate::{
         digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
         verify_signature,
     },
+    utils::format_date,
 };
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -70,11 +71,16 @@ impl Transaction {
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        let data = format!(
-            "{:?}{:?}{}{:?}",
-            self.inputs, self.outputs, self.date, self.message
-        );
-        data.as_bytes().to_vec()
+        let mut out = Vec::new();
+        for input in &self.inputs {
+            out.extend_from_slice(&input.as_bytes());
+        }
+        for output in &self.outputs {
+            out.extend_from_slice(&TxOutput::as_bytes(output));
+        }
+        out.extend_from_slice(format_date(&self.date).as_bytes());
+        out.extend_from_slice(self.message.as_ref().unwrap_or(&String::new()).as_bytes());
+        out
     }
 }
 

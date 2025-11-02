@@ -18,6 +18,15 @@ impl TxInput {
             public_key: String::new(),
         }
     }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(&self.prev_tx_id);
+        out.extend_from_slice(&self.output_index.to_be_bytes());
+        out.extend_from_slice(self.signature.as_bytes());
+        out.extend_from_slice(self.public_key.as_bytes());
+        out
+    }
 }
 
 impl std::fmt::Debug for TxInput {
@@ -35,6 +44,15 @@ impl std::fmt::Debug for TxInput {
 pub struct TxOutput {
     pub value: f64,
     pub address: String, // endereço destino (ex: Base58Check)
+}
+
+impl TxOutput {
+    pub fn as_bytes(o: &TxOutput) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(&o.value.to_be_bytes());
+        out.extend_from_slice(o.address.as_bytes());
+        out
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
