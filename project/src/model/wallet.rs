@@ -11,7 +11,8 @@ pub struct Wallet {
     current_index: u32,
 }
 
-const BASE_PATH: [u32; 4] = [111, 0, 0, 0]; // purpose / account / change / index
+/** purpose / account / change / index */
+const BASE_PATH: [u32; 4] = [111, 0, 0, 0];
 impl Wallet {
     pub fn new(seed: &str) -> Self {
         let hdkey = HDKey::new(seed.as_bytes());

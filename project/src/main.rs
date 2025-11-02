@@ -1,6 +1,7 @@
 mod globals;
 mod model;
 mod security_utils;
+mod utils;
 
 use crate::model::{TxOutput, Wallet, get_node_mut, init_node};
 
@@ -19,11 +20,15 @@ fn main() {
         println!("Blockchain is empty, starting with genesis block.");
         node.mine();
     }
+
     let outputs = vec![TxOutput {
-        value: 30.0,
-        address: node.miner.wallet.get_receive_addr(),
+        value: 100.0,
+        address: w2.get_receive_addr(),
     }];
-    let tx = w2.send_tx(outputs, Some("Test transaction".to_string()));
+    let tx = node
+        .miner
+        .wallet
+        .send_tx(outputs, Some("Test transaction".to_string()));
 
     println!("\nReceiving transactions...");
     match node.receive_transaction(tx.unwrap()) {
@@ -35,5 +40,5 @@ fn main() {
 
     println!("\n--- Final Blockchain State ---");
     node.print_chain();
-    node.save_node();
+    // node.save_node();
 }

@@ -4,7 +4,7 @@ use crate::model::{Block, Blockchain, Miner, Transaction};
 
 pub struct Node {
     pub miner: Miner,
-    blockchain: Blockchain,
+    pub blockchain: Blockchain,
     mempool: Vec<Transaction>,
     difficulty: usize,
 }
@@ -54,10 +54,10 @@ impl Node {
         let chain_ref = &self.blockchain.chain;
         chain_ref.iter().enumerate().all(|(i, block)| {
             if i == 0 {
-                return block.prev_block_hash == [0; 32];
+                return block.header.prev_block_hash == [0; 32];
             }
             let prev_block = &chain_ref[i - 1];
-            block.prev_block_hash == prev_block.calculate_hash()
+            block.header.prev_block_hash == prev_block.header_hash()
         })
     }
 

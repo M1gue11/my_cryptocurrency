@@ -22,12 +22,13 @@ impl Miner {
 
         let mut new_block = Block::new(previous_hash);
         new_block.transactions = block_txs;
+        new_block.evaluate_merkle_root();
         new_block
     }
 
     fn mine_block(&self, block: &mut Block, difficulty: usize) {
-        while !hash_starts_with_zero_bits(&block.calculate_hash(), difficulty) {
-            block.nonce += 1;
+        while !hash_starts_with_zero_bits(&block.header_hash(), difficulty) {
+            block.header.nonce += 1;
         }
     }
 

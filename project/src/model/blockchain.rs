@@ -20,7 +20,7 @@ impl Blockchain {
 
     pub fn get_last_block_hash(&self) -> [u8; 32] {
         match self.chain.last() {
-            Some(block) => block.calculate_hash(),
+            Some(block) => block.header_hash(),
             None => [0; 32],
         }
     }
@@ -32,12 +32,12 @@ impl Blockchain {
     pub fn add_block(&mut self, block: Block, difficulty: usize) -> bool {
         let last_block_hash = self.get_last_block_hash();
 
-        if block.prev_block_hash != last_block_hash {
+        if block.header.prev_block_hash != last_block_hash {
             println!("ERROR: Previous block hash does not match!");
             return false;
         }
 
-        if !hash_starts_with_zero_bits(&block.calculate_hash(), difficulty) {
+        if !hash_starts_with_zero_bits(&block.header_hash(), difficulty) {
             println!("ERROR: Invalid proof of work!");
             return false;
         }
