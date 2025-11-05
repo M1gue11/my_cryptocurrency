@@ -101,7 +101,4 @@ pub enum TransactionCommands {
         #[arg(short, long)]
         id: String,
     },
-    
-    /// List all pending transactions in mempool
-    Pending,
 }

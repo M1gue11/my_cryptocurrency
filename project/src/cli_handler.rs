@@ -47,10 +47,10 @@ fn handle_mine(command: MineCommands) {
 
 fn handle_chain(command: ChainCommands) {
     init_node();
-    let node = get_node();
     
     match command {
         ChainCommands::Show => {
+            let node = get_node();
             if node.is_chain_empty() {
                 println!("⚠ Blockchain is empty");
                 return;
@@ -80,6 +80,7 @@ fn handle_chain(command: ChainCommands) {
         }
         
         ChainCommands::Validate => {
+            let node = get_node();
             let is_valid = node.validate_blockchain();
             
             if is_valid {
@@ -90,11 +91,13 @@ fn handle_chain(command: ChainCommands) {
         }
         
         ChainCommands::Save => {
+            let node = get_node();
             node.save_node();
             println!("✓ Blockchain saved to disk");
         }
         
         ChainCommands::Status => {
+            let node = get_node();
             let block_count = node.blockchain.chain.len();
             let is_valid = node.validate_blockchain();
             
@@ -118,9 +121,8 @@ fn handle_wallet(command: WalletCommands) {
     
     match command {
         WalletCommands::New { seed } => {
-            let wallet = Wallet::new(&seed);
-            let mut wallet_mut = wallet;
-            let address = wallet_mut.get_receive_addr();
+            let mut wallet = Wallet::new(&seed);
+            let address = wallet.get_receive_addr();
             
             println!("✓ Wallet created successfully");
             println!("  First address: {}", address);
@@ -243,10 +245,5 @@ fn handle_transaction(command: TransactionCommands) {
             }
         }
         
-        TransactionCommands::Pending => {
-            // Note: mempool is private in Node struct, so we can't access it directly
-            println!("⚠ Mempool access not available in current implementation");
-            println!("  Pending transactions are stored internally and will be included in the next mined block");
-        }
     }
 }
