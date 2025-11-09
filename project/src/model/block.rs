@@ -1,9 +1,10 @@
+use super::Transaction;
+use crate::globals::CONFIG;
+use crate::security_utils::hash_starts_with_zero_bits;
 use crate::{
     security_utils::{digest_to_hex_string, sha256},
     utils::{MerkleTree, format_date},
 };
-
-use super::Transaction;
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -36,10 +37,6 @@ impl Block {
         }
     }
 
-    pub fn add_transaction(&mut self, tx: Transaction) {
-        self.transactions.push(tx);
-    }
-
     pub fn evaluate_merkle_root(&mut self) {
         let mut leaf_hashes: Vec<[u8; 32]> = Vec::new();
         for tx in &self.transactions {
@@ -60,6 +57,42 @@ impl Block {
 
     pub fn header_hash(&self) -> [u8; 32] {
         sha256(&self.header_bytes())
+    }
+
+    pub fn id(&self) -> [u8; 32] {
+        self.header_hash()
+    }
+
+    pub fn eval_merkle_root_from_transactions(txs: &[Transaction]) -> [u8; 32] {
+        let mut leaf_hashes: Vec<[u8; 32]> = Vec::new();
+        for tx in txs {
+            leaf_hashes.push(tx.id());
+        }
+        let merkle_tree = MerkleTree::from_leaves(leaf_hashes);
+        merkle_tree.root()
+    }
+
+    pub fn validate(&self) -> Result<bool, String> {
+        if self.transactions.is_empty() {
+            return Err("Block has no transactions".to_string());
+        }
+
+        if !hash_starts_with_zero_bits(&self.header_hash(), CONFIG.difficulty) {
+            return Err("Invalid proof of work".to_string());
+        }
+
+        for tx in &self.transactions {
+            if !tx.validate() {
+                return Err(format!("Invalid transaction found in block: {:?}", tx));
+            }
+        }
+
+        if Block::eval_merkle_root_from_transactions(&self.transactions) != self.header.merkle_root
+        {
+            return Err("Invalid Merkle root".to_string());
+        }
+
+        Ok(true)
     }
 }
 

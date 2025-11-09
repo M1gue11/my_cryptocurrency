@@ -1,5 +1,5 @@
 use super::Block;
-use crate::{globals::CONFIG, security_utils::hash_starts_with_zero_bits};
+use crate::globals::CONFIG;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -29,7 +29,7 @@ impl Blockchain {
         self.chain.is_empty()
     }
 
-    pub fn add_block(&mut self, block: Block, difficulty: usize) -> bool {
+    pub fn add_block(&mut self, block: Block) -> bool {
         let last_block_hash = self.get_last_block_hash();
 
         if block.header.prev_block_hash != last_block_hash {
@@ -37,10 +37,15 @@ impl Blockchain {
             return false;
         }
 
-        if !hash_starts_with_zero_bits(&block.header_hash(), difficulty) {
-            println!("ERROR: Invalid proof of work!");
+        let block_validation = block.validate();
+        if block_validation.is_err() {
+            println!(
+                "ERROR: Block validation failed! {}",
+                block_validation.err().unwrap()
+            );
             return false;
         }
+
         self.chain.push(block);
         return true;
     }

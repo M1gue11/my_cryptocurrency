@@ -4,10 +4,10 @@ use crate::security_utils::digest_to_hex_string;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TxInput {
-    pub prev_tx_id: [u8; 32], // hash da transação anterior
-    pub output_index: usize,  // índice do output gasto
-    pub signature: String,    // assinatura do dono
-    pub public_key: String,   // chave pública do dono
+    pub prev_tx_id: [u8; 32], // previous transaction ID
+    pub output_index: usize,  // spent output index
+    pub signature: String,    // owner's signature
+    pub public_key: String,   // owner's public key
 }
 impl TxInput {
     pub fn get_partial(&self) -> TxInput {
@@ -40,7 +40,7 @@ impl std::fmt::Debug for TxInput {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct TxOutput {
     pub value: f64,
     pub address: String, // endereço destino (ex: Base58Check)
