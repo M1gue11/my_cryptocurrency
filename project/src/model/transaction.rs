@@ -10,6 +10,7 @@ use crate::{
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub type TxId = [u8; 32];
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub inputs: Vec<TxInput>,
@@ -17,7 +18,6 @@ pub struct Transaction {
     pub date: NaiveDateTime,
     pub message: Option<String>,
 }
-
 impl Transaction {
     pub fn new(inputs: Vec<TxInput>, outputs: Vec<TxOutput>, message: Option<String>) -> Self {
         let date = Utc::now().naive_utc();
@@ -29,7 +29,7 @@ impl Transaction {
         }
     }
 
-    pub fn id(&self) -> [u8; 32] {
+    pub fn id(&self) -> TxId {
         sha256(&self.as_bytes())
     }
 
@@ -52,6 +52,7 @@ impl Transaction {
     }
 
     pub fn validate(&self) -> bool {
+        // TODO: improve error messages
         let partial_tx = Transaction {
             inputs: self.inputs.iter().map(|i| i.get_partial()).collect(),
             outputs: self.outputs.clone(),
