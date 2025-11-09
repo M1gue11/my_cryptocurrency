@@ -5,11 +5,8 @@ mod model;
 mod security_utils;
 mod utils;
 
-use clap::Parser;
-use cli::Cli;
-use cli_handler::handle_command;
+use cli_handler::run_interactive_mode;
 
 fn main() {
-    let cli = Cli::parse();
-    handle_command(cli.command);
+    run_interactive_mode();
 }

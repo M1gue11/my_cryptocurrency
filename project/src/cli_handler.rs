@@ -1,13 +1,271 @@
 use crate::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, WalletCommands};
 use crate::model::{TxOutput, Wallet, get_node, get_node_mut, init_node};
+use std::io::{self, Write};
 
-pub fn handle_command(command: Commands) {
+pub fn run_interactive_mode() {
+    // Initialize node once at startup
+    init_node();
+    
+    print_welcome();
+    
+    loop {
+        print!("\n> ");
+        io::stdout().flush().unwrap();
+        
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                let input = input.trim();
+                
+                if input.is_empty() {
+                    continue;
+                }
+                
+                // Handle exit commands
+                if input == "exit" || input == "quit" || input == "q" {
+                    println!("Goodbye!");
+                    break;
+                }
+                
+                // Handle help command
+                if input == "help" || input == "?" {
+                    print_help();
+                    continue;
+                }
+                
+                // Parse and execute command
+                match parse_command(input) {
+                    Ok(command) => {
+                        if let Err(e) = execute_command(command) {
+                            println!("✗ Error: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        println!("✗ {}", e);
+                        println!("  Type 'help' for available commands");
+                    }
+                }
+            }
+            Err(e) => {
+                println!("✗ Error reading input: {}", e);
+            }
+        }
+    }
+}
+
+fn print_welcome() {
+    println!("\n╔══════════════════════════════════════════════════════════════════════╗");
+    println!("║                                                                      ║");
+    println!("║              🔗 Cryptocurrency Node Interactive CLI 🔗               ║");
+    println!("║                                                                      ║");
+    println!("╚══════════════════════════════════════════════════════════════════════╝");
+    println!("\nWelcome! Type 'help' for available commands or 'exit' to quit.\n");
+    
+    // Show initial status
+    let node = get_node();
+    if node.is_chain_empty() {
+        println!("⚠  Blockchain is empty. Use 'mine block' to create the genesis block.");
+    } else {
+        println!("✓  Loaded blockchain with {} blocks", node.blockchain.chain.len());
+    }
+}
+
+fn print_help() {
+    println!("\n╔══════════════════════════════════════════════════════════════════════╗");
+    println!("║                        Available Commands                            ║");
+    println!("╚══════════════════════════════════════════════════════════════════════╝");
+    println!("\n📋 General:");
+    println!("  help, ?                    - Show this help message");
+    println!("  exit, quit, q              - Exit the program");
+    println!("  init                       - Reinitialize the node");
+    
+    println!("\n⛏  Mining:");
+    println!("  mine block                 - Mine a new block with pending transactions");
+    
+    println!("\n🔗 Blockchain:");
+    println!("  chain show                 - Display the entire blockchain");
+    println!("  chain status               - Show blockchain status");
+    println!("  chain validate             - Validate blockchain integrity");
+    println!("  chain save                 - Save blockchain to disk");
+    
+    println!("\n💰 Wallet:");
+    println!("  wallet new --seed <seed>           - Create a new wallet");
+    println!("  wallet address                     - Get new receive address (miner wallet)");
+    println!("  wallet balance --seed <seed>       - Check wallet balance");
+    println!("  wallet send --to <addr> --amount <n> [--message <msg>]");
+    println!("                                     - Send transaction");
+    println!("  wallet generate-keys [--count <n>] - Generate n keys (default: 5)");
+    
+    println!("\n📄 Transaction:");
+    println!("  transaction view --id <hex_id>     - View transaction details");
+    println!();
+}
+
+fn parse_command(input: &str) -> Result<Commands, String> {
+    let parts: Vec<&str> = input.split_whitespace().collect();
+    
+    if parts.is_empty() {
+        return Err("Empty command".to_string());
+    }
+    
+    match parts[0] {
+        "init" => Ok(Commands::Init),
+        
+        "mine" => {
+            if parts.len() < 2 {
+                return Err("Usage: mine block".to_string());
+            }
+            match parts[1] {
+                "block" => Ok(Commands::Mine(MineCommands::Block)),
+                _ => Err(format!("Unknown mine command: {}", parts[1])),
+            }
+        }
+        
+        "chain" => {
+            if parts.len() < 2 {
+                return Err("Usage: chain <show|status|validate|save>".to_string());
+            }
+            match parts[1] {
+                "show" => Ok(Commands::Chain(ChainCommands::Show)),
+                "status" => Ok(Commands::Chain(ChainCommands::Status)),
+                "validate" => Ok(Commands::Chain(ChainCommands::Validate)),
+                "save" => Ok(Commands::Chain(ChainCommands::Save)),
+                _ => Err(format!("Unknown chain command: {}", parts[1])),
+            }
+        }
+        
+        "wallet" => {
+            if parts.len() < 2 {
+                return Err("Usage: wallet <new|address|balance|send|generate-keys>".to_string());
+            }
+            
+            match parts[1] {
+                "new" => {
+                    let seed = parse_flag_value(&parts, "--seed")?;
+                    if seed.is_empty() {
+                        return Err("Seed cannot be empty".to_string());
+                    }
+                    Ok(Commands::Wallet(WalletCommands::New { seed }))
+                }
+                
+                "address" => Ok(Commands::Wallet(WalletCommands::Address)),
+                
+                "balance" => {
+                    let seed = parse_flag_value(&parts, "--seed")?;
+                    if seed.is_empty() {
+                        return Err("Seed cannot be empty".to_string());
+                    }
+                    Ok(Commands::Wallet(WalletCommands::Balance { seed }))
+                }
+                
+                "send" => {
+                    let to = parse_flag_value(&parts, "--to")?;
+                    let amount_str = parse_flag_value(&parts, "--amount")?;
+                    
+                    if to.is_empty() {
+                        return Err("Recipient address cannot be empty".to_string());
+                    }
+                    
+                    let amount = amount_str.parse::<f64>()
+                        .map_err(|_| "Invalid amount format. Must be a number".to_string())?;
+                    
+                    if amount <= 0.0 {
+                        return Err("Amount must be greater than zero".to_string());
+                    }
+                    
+                    let message = parse_flag_value(&parts, "--message").ok();
+                    
+                    Ok(Commands::Wallet(WalletCommands::Send { to, amount, message }))
+                }
+                
+                "generate-keys" => {
+                    let count = if let Ok(count_str) = parse_flag_value(&parts, "--count") {
+                        count_str.parse::<u32>()
+                            .map_err(|_| "Invalid count format. Must be a positive number".to_string())?
+                    } else {
+                        5
+                    };
+                    
+                    if count == 0 {
+                        return Err("Count must be greater than zero".to_string());
+                    }
+                    
+                    if count > 100 {
+                        return Err("Count cannot exceed 100".to_string());
+                    }
+                    
+                    Ok(Commands::Wallet(WalletCommands::GenerateKeys { count }))
+                }
+                
+                _ => Err(format!("Unknown wallet command: {}", parts[1])),
+            }
+        }
+        
+        "transaction" | "tx" => {
+            if parts.len() < 2 {
+                return Err("Usage: transaction view --id <hex_id>".to_string());
+            }
+            
+            match parts[1] {
+                "view" => {
+                    let id = parse_flag_value(&parts, "--id")?;
+                    if id.len() != 64 {
+                        return Err("Transaction ID must be 64 hexadecimal characters".to_string());
+                    }
+                    if !id.chars().all(|c| c.is_ascii_hexdigit()) {
+                        return Err("Transaction ID must contain only hexadecimal characters".to_string());
+                    }
+                    Ok(Commands::Transaction(TransactionCommands::View { id }))
+                }
+                _ => Err(format!("Unknown transaction command: {}", parts[1])),
+            }
+        }
+        
+        _ => Err(format!("Unknown command: {}", parts[0])),
+    }
+}
+
+fn parse_flag_value(parts: &[&str], flag: &str) -> Result<String, String> {
+    for i in 0..parts.len() {
+        if parts[i] == flag && i + 1 < parts.len() {
+            // Collect all parts until the next flag or end
+            let mut value = String::new();
+            let mut j = i + 1;
+            while j < parts.len() && !parts[j].starts_with("--") {
+                if !value.is_empty() {
+                    value.push(' ');
+                }
+                value.push_str(parts[j]);
+                j += 1;
+            }
+            return Ok(value);
+        }
+    }
+    Err(format!("Missing required flag: {}", flag))
+}
+
+fn execute_command(command: Commands) -> Result<(), String> {
     match command {
-        Commands::Init => handle_init(),
-        Commands::Mine(mine_cmd) => handle_mine(mine_cmd),
-        Commands::Chain(chain_cmd) => handle_chain(chain_cmd),
-        Commands::Wallet(wallet_cmd) => handle_wallet(wallet_cmd),
-        Commands::Transaction(tx_cmd) => handle_transaction(tx_cmd),
+        Commands::Init => {
+            handle_init();
+            Ok(())
+        }
+        Commands::Mine(mine_cmd) => {
+            handle_mine(mine_cmd);
+            Ok(())
+        }
+        Commands::Chain(chain_cmd) => {
+            handle_chain(chain_cmd);
+            Ok(())
+        }
+        Commands::Wallet(wallet_cmd) => {
+            handle_wallet(wallet_cmd);
+            Ok(())
+        }
+        Commands::Transaction(tx_cmd) => {
+            handle_transaction(tx_cmd);
+            Ok(())
+        }
     }
 }
 
@@ -15,7 +273,7 @@ fn handle_init() {
     init_node();
     let node = get_node();
 
-    println!("✓ Node initialized successfully");
+    println!("✓ Node reinitialized successfully");
 
     if node.is_chain_empty() {
         println!("⚠ Blockchain is empty. Use 'mine block' to create the genesis block.");
@@ -30,10 +288,9 @@ fn handle_init() {
 fn handle_mine(command: MineCommands) {
     match command {
         MineCommands::Block => {
-            init_node();
             let node = get_node_mut();
 
-            println!("⛏ Mining new block...");
+            println!("⛏  Mining new block...");
             let block = node.mine();
 
             println!("✓ Block mined successfully!");
@@ -49,8 +306,6 @@ fn handle_mine(command: MineCommands) {
 }
 
 fn handle_chain(command: ChainCommands) {
-    init_node();
-
     match command {
         ChainCommands::Show => {
             let node = get_node();
@@ -132,7 +387,6 @@ fn handle_chain(command: ChainCommands) {
 }
 
 fn handle_wallet(command: WalletCommands) {
-    init_node();
     let node = get_node_mut();
 
     match command {
@@ -220,7 +474,6 @@ fn handle_wallet(command: WalletCommands) {
 }
 
 fn handle_transaction(command: TransactionCommands) {
-    init_node();
     let node = get_node();
 
     match command {
