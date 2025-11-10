@@ -5,34 +5,34 @@ use std::io::{self, Write};
 pub fn run_interactive_mode() {
     // Initialize node once at startup
     init_node();
-    
+
     print_welcome();
-    
+
     loop {
         print!("\n> ");
         io::stdout().flush().unwrap();
-        
+
         let mut input = String::new();
         match io::stdin().read_line(&mut input) {
             Ok(_) => {
                 let input = input.trim();
-                
+
                 if input.is_empty() {
                     continue;
                 }
-                
+
                 // Handle exit commands
                 if input == "exit" || input == "quit" || input == "q" {
                     println!("Goodbye!");
                     break;
                 }
-                
+
                 // Handle help command
                 if input == "help" || input == "?" {
                     print_help();
                     continue;
                 }
-                
+
                 // Parse and execute command
                 match parse_command(input) {
                     Ok(command) => {
@@ -60,13 +60,16 @@ fn print_welcome() {
     println!("║                                                                      ║");
     println!("╚══════════════════════════════════════════════════════════════════════╝");
     println!("\nWelcome! Type 'help' for available commands or 'exit' to quit.\n");
-    
+
     // Show initial status
     let node = get_node();
     if node.is_chain_empty() {
         println!("⚠  Blockchain is empty. Use 'mine block' to create the genesis block.");
     } else {
-        println!("✓  Loaded blockchain with {} blocks", node.blockchain.chain.len());
+        println!(
+            "✓  Loaded blockchain with {} blocks",
+            node.blockchain.chain.len()
+        );
     }
 }
 
@@ -78,16 +81,16 @@ fn print_help() {
     println!("  help, ?                    - Show this help message");
     println!("  exit, quit, q              - Exit the program");
     println!("  init                       - Reinitialize the node");
-    
+
     println!("\n⛏  Mining:");
     println!("  mine block                 - Mine a new block with pending transactions");
-    
+
     println!("\n🔗 Blockchain:");
     println!("  chain show                 - Display the entire blockchain");
     println!("  chain status               - Show blockchain status");
     println!("  chain validate             - Validate blockchain integrity");
     println!("  chain save                 - Save blockchain to disk");
-    
+
     println!("\n💰 Wallet:");
     println!("  wallet new --seed <seed>           - Create a new wallet");
     println!("  wallet address                     - Get new receive address (miner wallet)");
@@ -95,7 +98,7 @@ fn print_help() {
     println!("  wallet send --to <addr> --amount <n> [--message <msg>]");
     println!("                                     - Send transaction");
     println!("  wallet generate-keys [--count <n>] - Generate n keys (default: 5)");
-    
+
     println!("\n📄 Transaction:");
     println!("  transaction view --id <hex_id>     - View transaction details");
     println!();
@@ -103,14 +106,14 @@ fn print_help() {
 
 fn parse_command(input: &str) -> Result<Commands, String> {
     let parts: Vec<&str> = input.split_whitespace().collect();
-    
+
     if parts.is_empty() {
         return Err("Empty command".to_string());
     }
-    
+
     match parts[0] {
         "init" => Ok(Commands::Init),
-        
+
         "mine" => {
             if parts.len() < 2 {
                 return Err("Usage: mine block".to_string());
@@ -120,7 +123,7 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                 _ => Err(format!("Unknown mine command: {}", parts[1])),
             }
         }
-        
+
         "chain" => {
             if parts.len() < 2 {
                 return Err("Usage: chain <show|status|validate|save>".to_string());
@@ -133,12 +136,12 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                 _ => Err(format!("Unknown chain command: {}", parts[1])),
             }
         }
-        
+
         "wallet" => {
             if parts.len() < 2 {
                 return Err("Usage: wallet <new|address|balance|send|generate-keys>".to_string());
             }
-            
+
             match parts[1] {
                 "new" => {
                     let seed = parse_flag_value(&parts, "--seed")?;
@@ -147,9 +150,9 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                     }
                     Ok(Commands::Wallet(WalletCommands::New { seed }))
                 }
-                
+
                 "address" => Ok(Commands::Wallet(WalletCommands::Address)),
-                
+
                 "balance" => {
                     let seed = parse_flag_value(&parts, "--seed")?;
                     if seed.is_empty() {
@@ -157,55 +160,61 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                     }
                     Ok(Commands::Wallet(WalletCommands::Balance { seed }))
                 }
-                
+
                 "send" => {
                     let to = parse_flag_value(&parts, "--to")?;
                     let amount_str = parse_flag_value(&parts, "--amount")?;
-                    
+
                     if to.is_empty() {
                         return Err("Recipient address cannot be empty".to_string());
                     }
-                    
-                    let amount = amount_str.parse::<f64>()
+
+                    let amount = amount_str
+                        .parse::<f64>()
                         .map_err(|_| "Invalid amount format. Must be a number".to_string())?;
-                    
+
                     if amount <= 0.0 {
                         return Err("Amount must be greater than zero".to_string());
                     }
-                    
+
                     let message = parse_flag_value(&parts, "--message").ok();
-                    
-                    Ok(Commands::Wallet(WalletCommands::Send { to, amount, message }))
+
+                    Ok(Commands::Wallet(WalletCommands::Send {
+                        to,
+                        amount,
+                        message,
+                    }))
                 }
-                
+
                 "generate-keys" => {
                     let count = if let Ok(count_str) = parse_flag_value(&parts, "--count") {
-                        count_str.parse::<u32>()
-                            .map_err(|_| "Invalid count format. Must be a positive number".to_string())?
+                        count_str.parse::<u32>().map_err(|_| {
+                            "Invalid count format. Must be a positive number".to_string()
+                        })?
                     } else {
                         5
                     };
-                    
+
                     if count == 0 {
                         return Err("Count must be greater than zero".to_string());
                     }
-                    
+
                     if count > 100 {
                         return Err("Count cannot exceed 100".to_string());
                     }
-                    
+
                     Ok(Commands::Wallet(WalletCommands::GenerateKeys { count }))
                 }
-                
+
                 _ => Err(format!("Unknown wallet command: {}", parts[1])),
             }
         }
-        
+
         "transaction" | "tx" => {
             if parts.len() < 2 {
                 return Err("Usage: transaction view --id <hex_id>".to_string());
             }
-            
+
             match parts[1] {
                 "view" => {
                     let id = parse_flag_value(&parts, "--id")?;
@@ -213,14 +222,16 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                         return Err("Transaction ID must be 64 hexadecimal characters".to_string());
                     }
                     if !id.chars().all(|c| c.is_ascii_hexdigit()) {
-                        return Err("Transaction ID must contain only hexadecimal characters".to_string());
+                        return Err(
+                            "Transaction ID must contain only hexadecimal characters".to_string()
+                        );
                     }
                     Ok(Commands::Transaction(TransactionCommands::View { id }))
                 }
                 _ => Err(format!("Unknown transaction command: {}", parts[1])),
             }
         }
-        
+
         _ => Err(format!("Unknown command: {}", parts[0])),
     }
 }
