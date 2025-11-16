@@ -304,4 +304,45 @@ mod tests {
         assert_eq!(utxos[0].index, 0);
         assert_eq!(utxos[0].output.value, 50.0);
     }
+
+    #[test]
+    fn test_apply_block_genesis() {
+        let mut db = Db::open(":memory:").unwrap();
+        db.init_schema().unwrap();
+
+        use chrono::Utc;
+        
+        // Create a genesis block header
+        let header = BlockHeader {
+            prev_block_hash: [0u8; 32],
+            merkle_root: [1u8; 32],
+            nonce: 12345,
+            timestamp: Utc::now().naive_utc(),
+        };
+
+        // Create a coinbase transaction
+        let tx = Transaction::new(vec![], vec![TxOutput {
+            value: 50.0,
+            address: "miner_address".to_string(),
+        }], Some("Genesis block".to_string()));
+
+        let txid = tx.id();
+
+        // Apply the genesis block
+        db.apply_block(header, &[tx]).unwrap();
+
+        // Verify the transaction was stored
+        let retrieved = db.get_transaction(&txid).unwrap();
+        assert!(retrieved.is_some());
+
+        // Verify UTXOs were created
+        let utxos = db.get_utxos_for_address("miner_address").unwrap();
+        assert_eq!(utxos.len(), 1);
+        assert_eq!(utxos[0].output.value, 50.0);
+
+        // Verify block header was stored
+        let mut stmt = db.conn.prepare("SELECT height FROM block_headers WHERE height = 0").unwrap();
+        let count = stmt.query_map([], |row| row.get::<_, i64>(0)).unwrap().count();
+        assert_eq!(count, 1);
+    }
 }
