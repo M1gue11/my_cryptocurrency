@@ -1,4 +1,4 @@
-use crate::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, WalletCommands};
+use super::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, WalletCommands};
 use crate::model::{TxOutput, Wallet, get_node, get_node_mut, init_node};
 use std::io::{self, Write};
 
@@ -108,12 +108,20 @@ fn print_help() {
     println!("  chain save                 - Save blockchain to disk");
 
     println!("\n💰 Wallet:");
-    println!("  wallet new --seed <seed> --name <name>          - Create a new wallet");
-    println!("  wallet address                     - Get new receive address (miner wallet)");
-    println!("  wallet balance --seed <seed>       - Check wallet balance");
-    println!("  wallet send --to <addr> --amount <n> [--message <msg>]");
-    println!("                                     - Send transaction");
-    println!("  wallet generate-keys [--count <n>] - Generate n keys (default: 5)");
+    println!("  wallet new --seed <seed> [--name <name>]");
+    println!("    - Create a new wallet. If name is provided, wallet is stored in session.");
+
+    println!("\n  wallet address [--name <name>]");
+    println!("    - Get new receive address (miner's wallet by default)");
+
+    println!("\n  wallet balance --seed <seed>");
+    println!("    - Check wallet balance");
+
+    println!("\n  wallet send [--from <name>] --to <addr> --amount <n> [--message <msg>]");
+    println!("    - Send transaction (miner's wallet will send by default)");
+
+    println!("\n  wallet generate-keys [--count <n>] [--name <name>]");
+    println!("    - Generate n keys (default: 5)");
 
     println!("\n📄 Transaction:");
     println!("  transaction view --id <hex_id>     - View transaction details");
