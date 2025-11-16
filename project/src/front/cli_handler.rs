@@ -1,5 +1,8 @@
 use super::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, WalletCommands};
-use crate::model::{TxOutput, Wallet, get_node, get_node_mut, init_node};
+use crate::{
+    front::cli::NodeCommands,
+    model::{TxOutput, Wallet, get_node, get_node_mut, init_node},
+};
 use std::io::{self, Write};
 
 pub fn run_interactive_mode() {
@@ -136,7 +139,16 @@ fn parse_command(input: &str) -> Result<Commands, String> {
     }
 
     match parts[0] {
-        "init" => Ok(Commands::Init),
+        "node" => {
+            if parts.len() < 2 {
+                return Err("Usage: node <init|mempool>".to_string());
+            }
+            match parts[1] {
+                "init" => Ok(Commands::Node(NodeCommands::Init)),
+                "mempool" => Ok(Commands::Node(NodeCommands::Mempool)),
+                _ => Err(format!("Unknown node command: {}", parts[1])),
+            }
+        }
 
         "mine" => {
             if parts.len() < 2 {
@@ -312,8 +324,8 @@ fn execute_command(
     loaded_wallets: &mut Vec<(String, Wallet)>,
 ) -> Result<(), String> {
     match command {
-        Commands::Init => {
-            handle_init();
+        Commands::Node(node_cmd) => {
+            handle_node(node_cmd);
             Ok(())
         }
         Commands::Mine(mine_cmd) => {
@@ -335,19 +347,33 @@ fn execute_command(
     }
 }
 
-fn handle_init() {
-    init_node();
-    let node = get_node();
+fn handle_node(command: NodeCommands) {
+    match command {
+        NodeCommands::Init => {
+            init_node();
+            let node = get_node();
 
-    println!("✓ Node reinitialized successfully");
+            println!("✓ Node reinitialized successfully");
 
-    if node.is_chain_empty() {
-        println!("⚠ Blockchain is empty. Use 'mine block' to create the genesis block.");
-    } else {
-        println!(
-            "✓ Loaded blockchain with {} blocks",
-            node.blockchain.chain.len()
-        );
+            if node.is_chain_empty() {
+                println!("⚠ Blockchain is empty. Use 'mine block' to create the genesis block.");
+            } else {
+                println!(
+                    "✓ Loaded blockchain with {} blocks",
+                    node.blockchain.chain.len()
+                );
+            }
+        }
+        NodeCommands::Mempool => {
+            let node = get_node();
+
+            if node.is_mempool_empty() {
+                println!("⚠  Mempool is empty");
+                return;
+            }
+
+            node.print_mempool();
+        }
     }
 }
 
@@ -394,13 +420,24 @@ fn handle_chain(command: ChainCommands) {
                 println!("  Transactions: {}", block.transactions.len());
 
                 for (j, tx) in block.transactions.iter().enumerate() {
-                    println!("    Transaction #{}", j);
+                    println!("\n    Transaction #{}", j);
                     println!("      ID: {}", hex::encode(tx.id()));
-                    println!("      Inputs: {}", tx.inputs.len());
-                    println!("      Outputs: {}", tx.outputs.len());
                     println!("      Amount: {}", tx.amount());
                     if let Some(msg) = &tx.message {
                         println!("      Message: {}", msg);
+                    }
+                    println!("      Inputs:");
+                    for input in &tx.inputs {
+                        println!(
+                            "            Input Prev TX: {}",
+                            hex::encode(input.prev_tx_id)
+                        );
+                        println!("            Input Output Index: {}\n", input.output_index);
+                    }
+                    println!("      Outputs:");
+                    for output in &tx.outputs {
+                        println!("            Output Value: {} coins", output.value);
+                        println!("            Output Address: {}\n", output.address);
                     }
                 }
                 println!();

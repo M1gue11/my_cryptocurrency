@@ -11,7 +11,8 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Commands {
     /// Initialize and start the node
-    Init,
+    #[command(subcommand)]
+    Node(NodeCommands),
 
     /// Mining operations
     #[command(subcommand)]
@@ -28,6 +29,13 @@ pub enum Commands {
     /// Transaction operations
     #[command(subcommand)]
     Transaction(TransactionCommands),
+}
+
+#[derive(Subcommand)]
+pub enum NodeCommands {
+    Init,
+
+    Mempool,
 }
 
 #[derive(Subcommand)]

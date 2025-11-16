@@ -84,6 +84,10 @@ impl Node {
         self.blockchain.is_empty()
     }
 
+    pub fn is_mempool_empty(&self) -> bool {
+        self.mempool.is_empty()
+    }
+
     pub fn validate_bc(&self) -> Result<bool, String> {
         Node::validate_blockchain(&self.blockchain)
     }
@@ -192,5 +196,12 @@ impl Node {
 
     pub fn print_chain(&self) {
         println!("{:#?}", self.blockchain);
+    }
+
+    pub fn print_mempool(&self) {
+        println!("Mempool Transactions:");
+        for tx in &self.mempool {
+            println!("{:#?}", tx);
+        }
     }
 }
