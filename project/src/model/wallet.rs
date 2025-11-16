@@ -59,7 +59,7 @@ impl Wallet {
         let mut path = BASE_PATH.to_vec();
         path.push(self.current_index);
         let child_hdkey = self.derive_path(&path);
-        // self.current_index += 1;
+        self.current_index += 1;
         child_hdkey.get_address()
     }
 
