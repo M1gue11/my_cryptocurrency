@@ -6,6 +6,7 @@ use crate::{
     security_utils::public_key_to_hex,
 };
 
+#[derive(Clone)]
 pub struct Wallet {
     master_hdkey: HDKey,
     current_index: u32,
@@ -58,7 +59,7 @@ impl Wallet {
         let mut path = BASE_PATH.to_vec();
         path.push(self.current_index);
         let child_hdkey = self.derive_path(&path);
-        self.current_index += 1;
+        // self.current_index += 1;
         child_hdkey.get_address()
     }
 
@@ -93,6 +94,11 @@ impl Wallet {
             }
         }
         None
+    }
+
+    pub fn calculate_balance(&self) -> f64 {
+        let utxos = self.get_wallet_utxos();
+        utxos.iter().map(|u| u.output.value).sum()
     }
 
     pub fn send_tx(

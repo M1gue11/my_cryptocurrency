@@ -1,6 +1,7 @@
 # Cryptocurrency Node Interactive CLI
 
 ## Overview
+
 This is an **interactive** CLI that provides a command-line interface to interact with the cryptocurrency node functionalities, including blockchain management, mining, wallet operations, and transaction handling.
 
 The CLI runs in **interactive mode** (REPL-style), meaning the program starts once and waits for your commands. You can type multiple commands without restarting the program.
@@ -8,6 +9,7 @@ The CLI runs in **interactive mode** (REPL-style), meaning the program starts on
 ## Installation
 
 Build the project:
+
 ```bash
 cd project
 cargo build --release
@@ -18,17 +20,19 @@ The binary will be available at `target/release/project`
 ## Quick Start
 
 1. **Start the interactive CLI**
+
    ```bash
    cargo run
    ```
 
 2. **The program welcomes you and shows the prompt**
+
    ```
    🔗 Cryptocurrency Node Interactive CLI 🔗
-   
+
    Welcome! Type 'help' for available commands or 'exit' to quit.
-   
-   > 
+
+   >
    ```
 
 3. **Type commands at the prompt**
@@ -42,6 +46,7 @@ The binary will be available at `target/release/project`
 ## Interactive Mode
 
 The CLI operates in **interactive mode**:
+
 - The program starts once and waits for your input
 - Type commands one at a time at the `>` prompt
 - The node persists across all commands (no reinitialization needed)
@@ -49,6 +54,7 @@ The CLI operates in **interactive mode**:
 - Type `help` or `?` to see available commands
 
 **Example session:**
+
 ```
 $ cargo run
 
@@ -72,33 +78,45 @@ Goodbye!
 ### General Commands
 
 #### Help
+
 ```
 help
 ```
+
 or
+
 ```
 ?
 ```
+
 Shows all available commands with descriptions and categories.
 
 #### Exit
+
 ```
 exit
 ```
+
 or
+
 ```
 quit
 ```
+
 or
+
 ```
 q
 ```
+
 Exits the interactive CLI gracefully.
 
 #### Reinitialize Node
+
 ```
 init
 ```
+
 Reinitializes and reloads the node. Loads existing blockchain if available.
 
 ---
@@ -106,12 +124,15 @@ Reinitializes and reloads the node. Loads existing blockchain if available.
 ### Mining Operations
 
 #### Mine Block
+
 ```
 mine block
 ```
+
 Mines a new block with pending transactions from the mempool. Automatically saves the blockchain after mining.
 
 **Example:**
+
 ```
 > mine block
 ⛏  Mining new block...
@@ -127,12 +148,15 @@ Mines a new block with pending transactions from the mempool. Automatically save
 ### Blockchain Operations
 
 #### Show Blockchain
+
 ```
 chain show
 ```
+
 Displays the complete blockchain with all blocks and transactions.
 
 **Example:**
+
 ```
 > chain show
 
@@ -146,36 +170,45 @@ Block #0
 ```
 
 #### Validate Blockchain
+
 ```
 chain validate
 ```
+
 Validates the integrity of the blockchain by checking block hashes and proof of work.
 
 **Example:**
+
 ```
 > chain validate
 ✓ Blockchain is valid
 ```
 
 #### Save Blockchain
+
 ```
 chain save
 ```
+
 Manually saves the blockchain to disk (mining operations do this automatically).
 
 **Example:**
+
 ```
 > chain save
 ✓ Blockchain saved to disk
 ```
 
 #### Blockchain Status
+
 ```
 chain status
 ```
+
 Shows blockchain statistics including number of blocks, validity status, and last block information.
 
 **Example:**
+
 ```
 > chain status
 
@@ -191,12 +224,15 @@ Shows blockchain statistics including number of blocks, validity status, and las
 ### Wallet Operations
 
 #### Create New Wallet
+
 ```
 wallet new --seed "your seed phrase here"
 ```
+
 Creates a new wallet from a seed phrase and displays the first address.
 
 **Example:**
+
 ```
 > wallet new --seed "my secure wallet seed"
 ✓ Wallet created successfully
@@ -206,31 +242,37 @@ Creates a new wallet from a seed phrase and displays the first address.
 **Validation:** Seed cannot be empty.
 
 #### Get New Address
+
 ```
 wallet address
 ```
+
 Generates a new receive address from the miner's wallet.
 
 **Example:**
+
 ```
 > wallet address
 ✓ New receive address: 11LsaodnPU7...
 ```
 
 #### Check Balance
+
 ```
 wallet balance --seed "your seed phrase"
 ```
+
 Checks the balance of a wallet by scanning the blockchain for UTXOs.
 
 **Example:**
+
 ```
 > wallet balance --seed "seed do miguel!"
 
 === Wallet Balance ===
   UTXOs: 2
   Total Balance: 150 coins
-  
+
   Details:
     UTXO #0: 100 coins to 112KHrbw...
     UTXO #1: 50 coins to 11Lsaodn...
@@ -239,23 +281,27 @@ Checks the balance of a wallet by scanning the blockchain for UTXOs.
 **Validation:** Seed cannot be empty.
 
 #### Send Transaction
+
 ```
 wallet send --to <address> --amount <value> [--message <text>]
 ```
+
 Creates and sends a transaction from the miner's wallet to a recipient address.
 
 **Example:**
+
 ```
 > wallet send --to 11LsaodnPU7JPi7qiBapAtiAUeG5PWiPZ59 --amount 50 --message "Payment"
 ✓ Transaction created and added to mempool
   To: 11LsaodnPU7JPi...
   Amount: 50 coins
   Message: Payment
-  
+
   Use 'mine block' to include it in the blockchain
 ```
 
 **Validations:**
+
 - Address cannot be empty
 - Amount must be a positive number (> 0)
 - Address format is validated by the wallet module
@@ -263,12 +309,15 @@ Creates and sends a transaction from the miner's wallet to a recipient address.
 **Note:** Transaction will be added to the mempool. Use `mine block` to include it in the blockchain.
 
 #### Generate Keys
+
 ```
 wallet generate-keys [--count <number>]
 ```
+
 Generates multiple keys from the miner's wallet. Default count is 5.
 
 **Example:**
+
 ```
 > wallet generate-keys --count 3
 ✓ Generated 3 keys:
@@ -283,6 +332,7 @@ Key #2
 ```
 
 **Validations:**
+
 - Count must be between 1 and 100
 - Default is 5 if not specified
 
@@ -291,12 +341,15 @@ Key #2
 ### Transaction Operations
 
 #### View Transaction
+
 ```
 transaction view --id <hex_id>
 ```
+
 Views details of a specific transaction by its ID (in hex format).
 
 **Example:**
+
 ```
 > transaction view --id affb544d36f97414f1764b98893a355338bc6cf5d8922adf108a73aad4dc3072
 
@@ -304,9 +357,9 @@ Views details of a specific transaction by its ID (in hex format).
   ID: affb544d36f9...
   Date: 2025-11-09 23:57:18
   Message: Coinbase transaction
-  
+
   Inputs (0):
-  
+
   Outputs (1):
     Output #0
       Value: 100 coins
@@ -373,14 +426,14 @@ Views details of a specific transaction by its ID (in hex format).
 
 The CLI includes comprehensive input validation:
 
-| Command | Validation |
-|---------|-----------|
-| `wallet new --seed` | Seed cannot be empty |
-| `wallet balance --seed` | Seed cannot be empty |
-| `wallet send --amount` | Must be positive number (> 0) |
-| `wallet send --to` | Address cannot be empty, format validated |
-| `wallet generate-keys --count` | Must be 1-100 |
-| `transaction view --id` | Must be exactly 64 hex characters |
+| Command                        | Validation                                |
+| ------------------------------ | ----------------------------------------- |
+| `wallet new --seed`            | Seed cannot be empty                      |
+| `wallet balance --seed`        | Seed cannot be empty                      |
+| `wallet send --amount`         | Must be positive number (> 0)             |
+| `wallet send --to`             | Address cannot be empty, format validated |
+| `wallet generate-keys --count` | Must be 1-100                             |
+| `transaction view --id`        | Must be exactly 64 hex characters         |
 
 All validation errors provide clear, actionable error messages with the ✗ symbol.
 
@@ -401,6 +454,7 @@ block_reward = 100                  # Mining reward in coins
 The default miner wallet uses the seed: `"seed do miguel!"`
 
 To check the miner's balance:
+
 ```
 > wallet balance --seed "seed do miguel!"
 ```
@@ -421,15 +475,19 @@ To check the miner's balance:
 ## Troubleshooting
 
 **Problem:** Command not recognized
+
 - **Solution:** Type `help` to see all available commands
 
 **Problem:** Blockchain is empty
+
 - **Solution:** Use `mine block` to create the genesis block
 
 **Problem:** Transaction fails
+
 - **Solution:** Check that you have sufficient balance with `wallet balance --seed "seed do miguel!"`
 
 **Problem:** Can't exit
+
 - **Solution:** Type `exit`, `quit`, or `q`, or press Ctrl+C
 
 ---
@@ -437,12 +495,14 @@ To check the miner's balance:
 ## Examples of Common Tasks
 
 ### Check if blockchain exists and mine if needed
+
 ```
 > chain status
 > mine block
 ```
 
 ### Send coins to another wallet
+
 ```
 > wallet new --seed "recipient"
 > wallet send --to <address_from_above> --amount 50
@@ -451,6 +511,7 @@ To check the miner's balance:
 ```
 
 ### View a transaction
+
 ```
 > chain show
 [Copy a transaction ID]
@@ -458,6 +519,7 @@ To check the miner's balance:
 ```
 
 ### Generate multiple addresses
+
 ```
 > wallet generate-keys --count 10
 ```

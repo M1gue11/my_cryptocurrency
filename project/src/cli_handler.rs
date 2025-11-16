@@ -3,10 +3,14 @@ use crate::model::{TxOutput, Wallet, get_node, get_node_mut, init_node};
 use std::io::{self, Write};
 
 pub fn run_interactive_mode() {
-    // Initialize node once at startup
     init_node();
 
     print_welcome();
+
+    let mut loaded_wallets: Vec<(String, Wallet)> = {
+        let node = get_node();
+        vec![("miner_wallet".to_string(), node.miner.wallet.clone())]
+    };
 
     loop {
         print!("\n> ");
@@ -21,22 +25,19 @@ pub fn run_interactive_mode() {
                     continue;
                 }
 
-                // Handle exit commands
                 if input == "exit" || input == "quit" || input == "q" {
                     println!("Goodbye!");
                     break;
                 }
 
-                // Handle help command
                 if input == "help" || input == "?" {
                     print_help();
                     continue;
                 }
 
-                // Parse and execute command
                 match parse_command(input) {
                     Ok(command) => {
-                        if let Err(e) = execute_command(command) {
+                        if let Err(e) = execute_command(command, &mut loaded_wallets) {
                             println!("✗ Error: {}", e);
                         }
                     }
@@ -53,15 +54,30 @@ pub fn run_interactive_mode() {
     }
 }
 
+fn resolve_wallet_by_name<'a>(
+    name: Option<String>,
+    loaded_wallets: &'a mut Vec<(String, Wallet)>,
+) -> &'a mut Wallet {
+    let name = match name {
+        Some(n) => n,
+        None => "miner_wallet".to_string(),
+    };
+    for (loaded_name, wallet) in loaded_wallets {
+        if *loaded_name == name {
+            return wallet;
+        }
+    }
+    panic!("Wallet with name '{}' not found", name);
+}
+
 fn print_welcome() {
     println!("\n╔══════════════════════════════════════════════════════════════════════╗");
     println!("║                                                                      ║");
-    println!("║              🔗 Cryptocurrency Node Interactive CLI 🔗               ║");
+    println!("║              🔗 CARAMURU Node Interactive CLI 🔗                     ║");
     println!("║                                                                      ║");
     println!("╚══════════════════════════════════════════════════════════════════════╝");
     println!("\nWelcome! Type 'help' for available commands or 'exit' to quit.\n");
 
-    // Show initial status
     let node = get_node();
     if node.is_chain_empty() {
         println!("⚠  Blockchain is empty. Use 'mine block' to create the genesis block.");
@@ -92,7 +108,7 @@ fn print_help() {
     println!("  chain save                 - Save blockchain to disk");
 
     println!("\n💰 Wallet:");
-    println!("  wallet new --seed <seed>           - Create a new wallet");
+    println!("  wallet new --seed <seed> --name <name>          - Create a new wallet");
     println!("  wallet address                     - Get new receive address (miner wallet)");
     println!("  wallet balance --seed <seed>       - Check wallet balance");
     println!("  wallet send --to <addr> --amount <n> [--message <msg>]");
@@ -148,10 +164,24 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                     if seed.is_empty() {
                         return Err("Seed cannot be empty".to_string());
                     }
-                    Ok(Commands::Wallet(WalletCommands::New { seed }))
+                    let name_result = parse_flag_value(&parts, "--name");
+                    let name = match name_result {
+                        Ok(n) if !n.is_empty() => Some(n),
+                        _ => None,
+                    };
+                    Ok(Commands::Wallet(WalletCommands::New { seed, name }))
                 }
 
-                "address" => Ok(Commands::Wallet(WalletCommands::Address)),
+                "list" => Ok(Commands::Wallet(WalletCommands::List)),
+
+                "address" => {
+                    let name_result = parse_flag_value(&parts, "--name");
+                    let name = match name_result {
+                        Ok(n) if !n.is_empty() => Some(n),
+                        _ => None,
+                    };
+                    Ok(Commands::Wallet(WalletCommands::Address { name }))
+                }
 
                 "balance" => {
                     let seed = parse_flag_value(&parts, "--seed")?;
@@ -164,6 +194,10 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                 "send" => {
                     let to = parse_flag_value(&parts, "--to")?;
                     let amount_str = parse_flag_value(&parts, "--amount")?;
+                    let from = match parse_flag_value(&parts, "--from") {
+                        Ok(n) if !n.is_empty() => Some(n),
+                        _ => None,
+                    };
 
                     if to.is_empty() {
                         return Err("Recipient address cannot be empty".to_string());
@@ -180,6 +214,7 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                     let message = parse_flag_value(&parts, "--message").ok();
 
                     Ok(Commands::Wallet(WalletCommands::Send {
+                        from,
                         to,
                         amount,
                         message,
@@ -195,6 +230,12 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                         5
                     };
 
+                    // wallet name (optional)
+                    let name = match parse_flag_value(&parts, "--name") {
+                        Ok(n) if !n.is_empty() => Some(n),
+                        _ => None,
+                    };
+
                     if count == 0 {
                         return Err("Count must be greater than zero".to_string());
                     }
@@ -203,7 +244,10 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                         return Err("Count cannot exceed 100".to_string());
                     }
 
-                    Ok(Commands::Wallet(WalletCommands::GenerateKeys { count }))
+                    Ok(Commands::Wallet(WalletCommands::GenerateKeys {
+                        count,
+                        name,
+                    }))
                 }
 
                 _ => Err(format!("Unknown wallet command: {}", parts[1])),
@@ -255,7 +299,10 @@ fn parse_flag_value(parts: &[&str], flag: &str) -> Result<String, String> {
     Err(format!("Missing required flag: {}", flag))
 }
 
-fn execute_command(command: Commands) -> Result<(), String> {
+fn execute_command(
+    command: Commands,
+    loaded_wallets: &mut Vec<(String, Wallet)>,
+) -> Result<(), String> {
     match command {
         Commands::Init => {
             handle_init();
@@ -270,7 +317,7 @@ fn execute_command(command: Commands) -> Result<(), String> {
             Ok(())
         }
         Commands::Wallet(wallet_cmd) => {
-            handle_wallet(wallet_cmd);
+            handle_wallet(wallet_cmd, loaded_wallets);
             Ok(())
         }
         Commands::Transaction(tx_cmd) => {
@@ -343,6 +390,7 @@ fn handle_chain(command: ChainCommands) {
                     println!("      ID: {}", hex::encode(tx.id()));
                     println!("      Inputs: {}", tx.inputs.len());
                     println!("      Outputs: {}", tx.outputs.len());
+                    println!("      Amount: {}", tx.amount());
                     if let Some(msg) = &tx.message {
                         println!("      Message: {}", msg);
                     }
@@ -397,20 +445,34 @@ fn handle_chain(command: ChainCommands) {
     }
 }
 
-fn handle_wallet(command: WalletCommands) {
+fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wallet)>) {
     let node = get_node_mut();
 
     match command {
-        WalletCommands::New { seed } => {
+        WalletCommands::New { seed, name } => {
             let mut wallet = Wallet::new(&seed);
             let address = wallet.get_receive_addr();
+
+            if name.is_some() {
+                let name = name.unwrap();
+                loaded_wallets.push((name.clone(), wallet));
+            }
 
             println!("✓ Wallet created successfully");
             println!("  First address: {}", address);
         }
 
-        WalletCommands::Address => {
-            let address = node.miner.wallet.get_receive_addr();
+        WalletCommands::List => {
+            println!("\n=== Loaded Wallets ===\n");
+            for (name, w) in loaded_wallets.iter() {
+                println!("Wallet: {} - Balance: {}", name, w.calculate_balance());
+            }
+        }
+
+        WalletCommands::Address { name } => {
+            // Select wallet, default to miner's wallet
+            let wallet = resolve_wallet_by_name(name, loaded_wallets);
+            let address = wallet.get_receive_addr();
             println!("✓ New receive address: {}", address);
         }
 
@@ -437,6 +499,7 @@ fn handle_wallet(command: WalletCommands) {
         }
 
         WalletCommands::Send {
+            from,
             to,
             amount,
             message,
@@ -445,8 +508,9 @@ fn handle_wallet(command: WalletCommands) {
                 value: amount,
                 address: to.clone(),
             }];
+            let wallet = resolve_wallet_by_name(from, loaded_wallets);
 
-            match node.miner.wallet.send_tx(outputs, message.clone()) {
+            match wallet.send_tx(outputs, message.clone()) {
                 Ok(tx) => match node.receive_transaction(tx) {
                     Ok(_) => {
                         println!("✓ Transaction created and added to mempool");
@@ -467,8 +531,9 @@ fn handle_wallet(command: WalletCommands) {
             }
         }
 
-        WalletCommands::GenerateKeys { count } => {
-            let keys = node.miner.wallet.generate_n_keys(count);
+        WalletCommands::GenerateKeys { count, name } => {
+            let wallet = resolve_wallet_by_name(name, loaded_wallets);
+            let keys = wallet.generate_n_keys(count);
 
             println!("✓ Generated {} keys:\n", count);
             for (i, key) in keys.iter().enumerate() {

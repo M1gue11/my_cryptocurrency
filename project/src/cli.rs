@@ -58,10 +58,19 @@ pub enum WalletCommands {
         /// Seed phrase for wallet generation
         #[arg(short, long)]
         seed: String,
+
+        #[arg(short, long)]
+        name: Option<String>,
     },
 
+    List,
+
     /// Get a new receive address from the miner's wallet
-    Address,
+    Address {
+        /// Name of the wallet to get the address from
+        #[arg(short, long)]
+        name: Option<String>,
+    },
 
     /// Check wallet balance
     Balance {
@@ -72,6 +81,10 @@ pub enum WalletCommands {
 
     /// Send a transaction
     Send {
+        /// Name of the wallet to send from
+        #[arg(short, long)]
+        from: Option<String>,
+
         /// Recipient address
         #[arg(short, long)]
         to: String,
@@ -90,6 +103,10 @@ pub enum WalletCommands {
         /// Number of keys to generate
         #[arg(short, long, default_value = "5")]
         count: u32,
+
+        /// Name of the wallet to generate keys from
+        #[arg(short, long)]
+        name: Option<String>,
     },
 }
 
