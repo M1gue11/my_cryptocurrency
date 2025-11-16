@@ -99,7 +99,10 @@ fn print_help() {
     println!("\n📋 General:");
     println!("  help, ?                    - Show this help message");
     println!("  exit, quit, q              - Exit the program");
-    println!("  init                       - Reinitialize the node");
+
+    println!("\n★  Node:");
+    println!("  node init                       - Reinitialize the node");
+    println!("  node mempool                    - Display transactions in the mempool");
 
     println!("\n⛏  Mining:");
     println!("  mine block                 - Mine a new block with pending transactions");
