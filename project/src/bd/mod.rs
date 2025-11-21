@@ -7,8 +7,8 @@ pub struct Db {
 }
 
 impl Db {
-    pub fn open() -> Result<Self> {
-        let path = &CONFIG.db_path;
+    pub fn open(path: Option<&str>) -> Result<Self> {
+        let path = path.unwrap_or(&CONFIG.db_path);
         let conn = Connection::open(path)?;
         Ok(Db { conn })
     }

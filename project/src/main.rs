@@ -12,7 +12,7 @@ use bd::Db;
 use front::run_interactive_mode;
 
 fn main() {
-    let db = Db::open().unwrap();
+    let db = Db::open(None).unwrap();
     let _ = db.init_schema();
 
     run_interactive_mode();

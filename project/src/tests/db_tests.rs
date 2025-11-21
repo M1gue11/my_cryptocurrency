@@ -7,7 +7,7 @@ mod tests {
 
     #[test]
     fn test_db_creation_and_schema() {
-        let db = Db::open(":memory:").unwrap();
+        let db = Db::open(Some(":memory:")).unwrap();
         db.init_schema().unwrap();
 
         // Verify tables exist by trying to query them
@@ -28,7 +28,7 @@ mod tests {
 
     #[test]
     fn test_mempool_operations() {
-        let db = Db::open(":memory:").unwrap();
+        let db = Db::open(Some(":memory:")).unwrap();
         db.init_schema().unwrap();
 
         // Create a simple transaction
@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn test_get_utxos_for_address() {
-        let db = Db::open(":memory:").unwrap();
+        let db = Db::open(Some(":memory:")).unwrap();
         db.init_schema().unwrap();
 
         let addr = "test_address";
@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_apply_block_genesis() {
-        let mut db = Db::open(":memory:").unwrap();
+        let mut db = Db::open(Some(":memory:")).unwrap();
         db.init_schema().unwrap();
 
         use chrono::Utc;
