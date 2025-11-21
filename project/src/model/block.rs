@@ -74,7 +74,7 @@ impl Block {
         merkle_tree.root()
     }
 
-    pub fn validate(&self) -> Result<bool, String> {
+    pub fn validate(&self) -> Result<(), String> {
         if self.transactions.is_empty() {
             return Err("Block has no transactions".to_string());
         }
@@ -95,13 +95,17 @@ impl Block {
             }
             for input in &tx.inputs {
                 if unique_utxos_map.contains(&input.prev_tx_id) {
-                    return Err("Double spending detected in block transactions".to_string());
+                    return Err(format!(
+                        "Double spending detected in block for UTXO: tx_id: {}, output_index: {}",
+                        digest_to_hex_string(&input.prev_tx_id),
+                        input.output_index
+                    ));
                 }
                 unique_utxos_map.insert(&input.prev_tx_id);
             }
         }
 
-        Ok(true)
+        Ok(())
     }
 }
 

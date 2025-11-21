@@ -91,20 +91,20 @@ impl Node {
         Node::validate_blockchain(&self.blockchain)
     }
 
-    fn submit_block(&mut self, block: Block) -> bool {
-        if self.blockchain.add_block(block) {
-            // cleaning mempool
-            let added_block = self.blockchain.chain.last().unwrap();
+    fn submit_block(&mut self, block: Block) -> Result<(), String> {
+        match self.blockchain.add_block(block) {
+            Err(e) => return Err(e),
+            Ok(()) => {
+                let added_block = self.blockchain.chain.last().unwrap();
 
-            self.mempool.retain(|tx| {
-                !added_block
-                    .transactions
-                    .iter()
-                    .any(|btx| btx.id() == tx.id())
-            });
-            true
-        } else {
-            false
+                self.mempool.retain(|tx| {
+                    !added_block
+                        .transactions
+                        .iter()
+                        .any(|btx| btx.id() == tx.id())
+                });
+                Ok(())
+            }
         }
     }
 
@@ -178,15 +178,17 @@ impl Node {
         Ok(())
     }
 
-    pub fn mine(&mut self) -> &Block {
+    pub fn mine(&mut self) -> Result<&Block, String> {
         let previous_hash = self.blockchain.get_last_block_hash();
 
         let mined_block = self
             .miner
             .mine(&self.mempool, previous_hash, self.difficulty);
 
-        self.submit_block(mined_block);
-        self.blockchain.chain.last().unwrap()
+        match self.submit_block(mined_block) {
+            Ok(()) => Ok(self.blockchain.chain.last().unwrap()),
+            Err(e) => Err(e),
+        }
     }
 
     pub fn save_node(&self) {

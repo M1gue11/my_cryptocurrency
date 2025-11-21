@@ -400,7 +400,13 @@ fn handle_mine(command: MineCommands) {
             let node = get_node_mut();
 
             println!("⛏  Mining new block...");
-            let block = node.mine();
+            let block = match node.mine() {
+                Err(e) => {
+                    println!("✗ Mining failed: {}", e);
+                    return;
+                }
+                Ok(block) => block,
+            };
 
             println!("✓ Block mined successfully!");
             println!("  Block hash: {}", hex::encode(block.header_hash()));
