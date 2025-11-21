@@ -112,10 +112,14 @@ fn print_help() {
     println!("  chain status               - Show blockchain status");
     println!("  chain validate             - Validate blockchain integrity");
     println!("  chain save                 - Save blockchain to disk");
+    println!("  chain rollback --count <n> - Rollback N blocks (for debugging)");
 
     println!("\n💰 Wallet:");
     println!("  wallet new --seed <seed> [--name <name>]");
     println!("    - Create a new wallet. If name is provided, wallet is stored in session.");
+
+    println!("\n  wallet list");
+    println!("    - List all loaded wallets in the current session.");
 
     println!("\n  wallet address [--name <name>]");
     println!("    - Get new receive address (miner's wallet by default)");
@@ -165,13 +169,23 @@ fn parse_command(input: &str) -> Result<Commands, String> {
 
         "chain" => {
             if parts.len() < 2 {
-                return Err("Usage: chain <show|status|validate|save>".to_string());
+                return Err("Usage: chain <show|status|validate|save|rollback>".to_string());
             }
             match parts[1] {
                 "show" => Ok(Commands::Chain(ChainCommands::Show)),
                 "status" => Ok(Commands::Chain(ChainCommands::Status)),
                 "validate" => Ok(Commands::Chain(ChainCommands::Validate)),
                 "save" => Ok(Commands::Chain(ChainCommands::Save)),
+                "rollback" => {
+                    let count_str = parse_flag_value(&parts, "--count")?;
+                    let count = count_str.parse::<u32>().map_err(|_| {
+                        "Invalid count format. Must be a positive number".to_string()
+                    })?;
+                    if count == 0 {
+                        return Err("Count must be greater than zero".to_string());
+                    }
+                    Ok(Commands::Chain(ChainCommands::Rollback { count }))
+                }
                 _ => Err(format!("Unknown chain command: {}", parts[1])),
             }
         }
@@ -489,6 +503,30 @@ fn handle_chain(command: ChainCommands) {
                 println!("  Last Block Date: {}", last_block.header.timestamp);
             }
             println!();
+        }
+
+        ChainCommands::Rollback { count } => {
+            let node = get_node_mut();
+            let initial_blocks = node.blockchain.chain.len();
+
+            match node.rollback_blocks(count) {
+                Ok(()) => {
+                    let final_blocks = node.blockchain.chain.len();
+                    let removed = initial_blocks - final_blocks;
+
+                    println!("✓ Successfully rolled back {} block(s)", removed);
+                    println!("  Previous block count: {}", initial_blocks);
+                    println!("  Current block count: {}", final_blocks);
+                    println!("  Transactions restored to mempool: check with 'node mempool'");
+
+                    // Auto-save after rollback
+                    node.save_node();
+                    println!("✓ Blockchain saved");
+                }
+                Err(e) => {
+                    println!("✗ Rollback failed: {}", e);
+                }
+            }
         }
     }
 }

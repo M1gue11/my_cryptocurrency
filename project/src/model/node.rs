@@ -59,7 +59,6 @@ impl Node {
         for (i, block) in chain_ref.iter().enumerate() {
             if i == 0 {
                 if block.header.prev_block_hash != [0; 32] {
-                    println!("OIIII");
                     return Err("Genesis block has invalid previous hash".to_string());
                 }
                 continue;
@@ -194,14 +193,57 @@ impl Node {
         self.blockchain.persist_chain(None);
     }
 
-    pub fn print_chain(&self) {
-        println!("{:#?}", self.blockchain);
-    }
-
     pub fn print_mempool(&self) {
         println!("Mempool Transactions:");
         for tx in &self.mempool {
             println!("{:#?}", tx);
         }
+    }
+
+    pub fn rollback_blocks(&mut self, count: u32) -> Result<(), String> {
+        if count == 0 {
+            return Err("Count must be greater than zero".to_string());
+        }
+
+        let chain_len = self.blockchain.chain.len();
+        if chain_len == 0 {
+            return Err("Blockchain is empty, nothing to rollback".to_string());
+        }
+
+        let blocks_to_remove = count as usize;
+        if blocks_to_remove >= chain_len {
+            return Err(format!(
+                "Cannot rollback {} blocks. Only {} blocks in the chain",
+                count, chain_len
+            ));
+        }
+
+        // collect transactions from blocks to be removed
+        let mut transactions_to_restore = Vec::new();
+        for i in (chain_len - blocks_to_remove..chain_len).rev() {
+            let block = &self.blockchain.chain[i];
+            // skip coinbase transactions (they have no inputs)
+            for tx in &block.transactions {
+                if !tx.is_coinbase() {
+                    transactions_to_restore.push(tx.clone());
+                }
+            }
+        }
+
+        // remove blocks from the chain
+        self.blockchain.chain.truncate(chain_len - blocks_to_remove);
+
+        // add transactions back to mempool
+        for tx in transactions_to_restore {
+            if !self
+                .mempool
+                .iter()
+                .any(|mempool_tx| mempool_tx.id() == tx.id())
+            {
+                self.mempool.push(tx);
+            }
+        }
+
+        Ok(())
     }
 }

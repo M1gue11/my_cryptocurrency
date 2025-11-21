@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::Transaction;
 use crate::globals::CONFIG;
 use crate::security_utils::hash_starts_with_zero_bits;
@@ -81,15 +83,22 @@ impl Block {
             return Err("Invalid proof of work".to_string());
         }
 
+        if Block::eval_merkle_root_from_transactions(&self.transactions) != self.header.merkle_root
+        {
+            return Err("Invalid Merkle root".to_string());
+        }
+
+        let mut unique_utxos_map = HashSet::new();
         for tx in &self.transactions {
             if !tx.validate() {
                 return Err(format!("Invalid transaction found in block: {:?}", tx));
             }
-        }
-
-        if Block::eval_merkle_root_from_transactions(&self.transactions) != self.header.merkle_root
-        {
-            return Err("Invalid Merkle root".to_string());
+            for input in &tx.inputs {
+                if unique_utxos_map.contains(&input.prev_tx_id) {
+                    return Err("Double spending detected in block transactions".to_string());
+                }
+                unique_utxos_map.insert(&input.prev_tx_id);
+            }
         }
 
         Ok(true)
