@@ -20,14 +20,24 @@ impl Miner {
         let mut seen_utxos: HashSet<(TxId, usize)> = HashSet::new();
         let mut selected_txs: Vec<Transaction> = Vec::new();
         for tx in mempool {
+            let mut double_input = false;
             for input in &tx.inputs {
-                let key = (input.prev_tx_id, input.output_index);
-                if seen_utxos.contains(&key) {
-                    continue;
+                if seen_utxos.contains(&(input.prev_tx_id, input.output_index)) {
+                    double_input = true;
+                    break;
                 }
-                seen_utxos.insert(key);
-                selected_txs.push(tx.clone());
             }
+
+            if double_input {
+                continue;
+            }
+
+            seen_utxos.extend(
+                tx.inputs
+                    .iter()
+                    .map(|input| (input.prev_tx_id, input.output_index)),
+            );
+            selected_txs.push(tx.clone());
         }
         selected_txs
     }

@@ -57,6 +57,13 @@ pub enum ChainCommands {
 
     /// Get blockchain status
     Status,
+
+    /// Rollback the blockchain by N blocks (for debugging)
+    Rollback {
+        /// Number of blocks to rollback
+        #[arg(short, long)]
+        count: u32,
+    },
 }
 
 #[derive(Subcommand)]

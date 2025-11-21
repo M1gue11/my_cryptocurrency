@@ -59,7 +59,6 @@ impl Node {
         for (i, block) in chain_ref.iter().enumerate() {
             if i == 0 {
                 if block.header.prev_block_hash != [0; 32] {
-                    println!("OIIII");
                     return Err("Genesis block has invalid previous hash".to_string());
                 }
                 continue;
@@ -92,20 +91,20 @@ impl Node {
         Node::validate_blockchain(&self.blockchain)
     }
 
-    fn submit_block(&mut self, block: Block) -> bool {
-        if self.blockchain.add_block(block) {
-            // cleaning mempool
-            let added_block = self.blockchain.chain.last().unwrap();
+    fn submit_block(&mut self, block: Block) -> Result<(), String> {
+        match self.blockchain.add_block(block) {
+            Err(e) => return Err(e),
+            Ok(()) => {
+                let added_block = self.blockchain.chain.last().unwrap();
 
-            self.mempool.retain(|tx| {
-                !added_block
-                    .transactions
-                    .iter()
-                    .any(|btx| btx.id() == tx.id())
-            });
-            true
-        } else {
-            false
+                self.mempool.retain(|tx| {
+                    !added_block
+                        .transactions
+                        .iter()
+                        .any(|btx| btx.id() == tx.id())
+                });
+                Ok(())
+            }
         }
     }
 
@@ -179,23 +178,21 @@ impl Node {
         Ok(())
     }
 
-    pub fn mine(&mut self) -> &Block {
+    pub fn mine(&mut self) -> Result<&Block, String> {
         let previous_hash = self.blockchain.get_last_block_hash();
 
         let mined_block = self
             .miner
             .mine(&self.mempool, previous_hash, self.difficulty);
 
-        self.submit_block(mined_block);
-        self.blockchain.chain.last().unwrap()
+        match self.submit_block(mined_block) {
+            Ok(()) => Ok(self.blockchain.chain.last().unwrap()),
+            Err(e) => Err(e),
+        }
     }
 
     pub fn save_node(&self) {
         self.blockchain.persist_chain(None);
-    }
-
-    pub fn print_chain(&self) {
-        println!("{:#?}", self.blockchain);
     }
 
     pub fn print_mempool(&self) {
@@ -203,5 +200,52 @@ impl Node {
         for tx in &self.mempool {
             println!("{:#?}", tx);
         }
+    }
+
+    pub fn rollback_blocks(&mut self, count: u32) -> Result<(), String> {
+        if count == 0 {
+            return Err("Count must be greater than zero".to_string());
+        }
+
+        let chain_len = self.blockchain.chain.len();
+        if chain_len == 0 {
+            return Err("Blockchain is empty, nothing to rollback".to_string());
+        }
+
+        let blocks_to_remove = count as usize;
+        if blocks_to_remove >= chain_len {
+            return Err(format!(
+                "Cannot rollback {} blocks. Only {} blocks in the chain",
+                count, chain_len
+            ));
+        }
+
+        // collect transactions from blocks to be removed
+        let mut transactions_to_restore = Vec::new();
+        for i in (chain_len - blocks_to_remove..chain_len).rev() {
+            let block = &self.blockchain.chain[i];
+            // skip coinbase transactions (they have no inputs)
+            for tx in &block.transactions {
+                if !tx.is_coinbase() {
+                    transactions_to_restore.push(tx.clone());
+                }
+            }
+        }
+
+        // remove blocks from the chain
+        self.blockchain.chain.truncate(chain_len - blocks_to_remove);
+
+        // add transactions back to mempool
+        for tx in transactions_to_restore {
+            if !self
+                .mempool
+                .iter()
+                .any(|mempool_tx| mempool_tx.id() == tx.id())
+            {
+                self.mempool.push(tx);
+            }
+        }
+
+        Ok(())
     }
 }

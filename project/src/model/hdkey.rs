@@ -51,8 +51,8 @@ impl HDKey {
         sk.verifying_key()
     }
 
-    pub fn get_address(&self) -> String {
-        let digest_1 = sha256(self.get_public_key().as_bytes());
+    fn get_address_impl(public_key: &VerifyingKey) -> String {
+        let digest_1 = sha256(public_key.as_bytes());
         let ripemd = Ripemd160::digest(digest_1);
         let mut raw_addr = Vec::with_capacity(2 + ripemd.len() + 4);
         raw_addr.extend_from_slice(&[0x00, 0x00]);
@@ -64,8 +64,16 @@ impl HDKey {
         bs58::encode(address).into_string()
     }
 
+    pub fn get_address(&self) -> String {
+        HDKey::get_address_impl(&self.get_public_key())
+    }
+
     pub fn sign(&self, message: &[u8]) -> Signature {
         sign_hash(&mut SigningKey::from_bytes(&self.private_key), message)
+    }
+
+    pub fn get_address_from_public_key(public_key: &VerifyingKey) -> String {
+        HDKey::get_address_impl(public_key)
     }
 }
 

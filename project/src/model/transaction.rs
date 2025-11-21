@@ -87,6 +87,10 @@ impl Transaction {
         out.extend_from_slice(self.message.as_ref().unwrap_or(&String::new()).as_bytes());
         out
     }
+
+    pub fn is_coinbase(&self) -> bool {
+        self.inputs.is_empty()
+    }
 }
 
 impl std::fmt::Display for Transaction {

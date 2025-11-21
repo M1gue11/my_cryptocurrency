@@ -29,25 +29,19 @@ impl Blockchain {
         self.chain.is_empty()
     }
 
-    pub fn add_block(&mut self, block: Block) -> bool {
+    pub fn add_block(&mut self, block: Block) -> Result<(), String> {
         let last_block_hash = self.get_last_block_hash();
 
         if block.header.prev_block_hash != last_block_hash {
-            println!("ERROR: Previous block hash does not match!");
-            return false;
+            return Err("Previous block hash does not match".to_string());
         }
 
         let block_validation = block.validate();
-        if block_validation.is_err() {
-            println!(
-                "ERROR: Block validation failed! {}",
-                block_validation.err().unwrap()
-            );
-            return false;
-        }
-
-        self.chain.push(block);
-        return true;
+        match block_validation {
+            Ok(()) => self.chain.push(block),
+            Err(e) => return Err(e),
+        };
+        Ok(())
     }
 
     pub fn persist_chain(&self, path: Option<String>) {
