@@ -425,7 +425,7 @@ fn handle_chain(command: ChainCommands) {
         ChainCommands::Show => {
             let node = get_node();
             if node.is_chain_empty() {
-                println!("⚠ Blockchain is empty");
+                println!("⚠  Blockchain is empty");
                 return;
             }
 

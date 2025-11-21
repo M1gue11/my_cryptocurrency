@@ -10,7 +10,7 @@ pub mod wallet;
 pub use block::Block;
 pub use blockchain::Blockchain;
 pub use hdkey::HDKey;
-pub use io::{TxInput, TxOutput};
+pub use io::{TxInput, TxOutput, UTXO};
 pub use miner::Miner;
 pub use node::{Node, get_node, get_node_mut, init_node};
 pub use transaction::Transaction;

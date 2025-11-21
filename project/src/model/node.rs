@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use crate::bd::Db;
 use crate::globals::CONFIG;
 use crate::model::io::UTXO;
 use crate::model::transaction::TxId;
@@ -103,6 +104,10 @@ impl Node {
                         .iter()
                         .any(|btx| btx.id() == tx.id())
                 });
+                let mut db = Db::open().unwrap();
+                db.apply_block(added_block.clone(), &added_block.transactions)
+                    .map_err(|e| e.to_string())?;
+
                 Ok(())
             }
         }
