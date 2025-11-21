@@ -7,6 +7,7 @@ pub struct Settings {
     pub difficulty: usize,
     pub persisted_chain_path: String,
     pub block_reward: f64,
+    pub db_path: String,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {

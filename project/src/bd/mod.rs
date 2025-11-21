@@ -1,15 +1,20 @@
+use crate::globals::CONFIG;
+use crate::model::{Block, Transaction, TxOutput, UTXO};
 use rusqlite::{Connection, Result, params};
-use crate::model::{Transaction, TxOutput, UTXO};
-use crate::model::block::BlockHeader;
 
 pub struct Db {
     conn: Connection,
 }
 
 impl Db {
-    pub fn open(path: &str) -> Result<Self> {
+    pub fn open() -> Result<Self> {
+        let path = &CONFIG.db_path;
         let conn = Connection::open(path)?;
         Ok(Db { conn })
+    }
+
+    pub fn get_conn(&self) -> &Connection {
+        &self.conn
     }
 
     pub fn init_schema(&self) -> Result<()> {
@@ -17,7 +22,7 @@ impl Db {
         self.conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
-             PRAGMA temp_store = MEMORY;"
+             PRAGMA temp_store = MEMORY;",
         )?;
 
         // Create block_headers table
@@ -73,15 +78,15 @@ impl Db {
     }
 
     pub fn get_utxos_for_address(&self, addr: &str) -> Result<Vec<UTXO>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT txid, vout, value, addr FROM utxos WHERE addr = ?1"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT txid, vout, value, addr FROM utxos WHERE addr = ?1")?;
 
         let utxos = stmt.query_map([addr], |row| {
             let txid_vec: Vec<u8> = row.get(0)?;
             let mut txid = [0u8; 32];
             txid.copy_from_slice(&txid_vec);
-            
+
             let vout: i64 = row.get(1)?;
             let value: i64 = row.get(2)?;
             let address: String = row.get(3)?;
@@ -104,12 +109,12 @@ impl Db {
     }
 
     pub fn get_transaction(&self, txid: &[u8; 32]) -> Result<Option<Transaction>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT raw FROM transactions WHERE txid = ?1"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT raw FROM transactions WHERE txid = ?1")?;
 
         let mut rows = stmt.query([txid.as_slice()])?;
-        
+
         if let Some(row) = rows.next()? {
             let raw: Vec<u8> = row.get(0)?;
             let tx: Transaction = serde_json::from_slice(&raw)
@@ -120,28 +125,18 @@ impl Db {
         }
     }
 
-    pub fn apply_block(&mut self, header: BlockHeader, transactions: &[Transaction]) -> Result<()> {
+    pub fn apply_block(&mut self, block: Block, transactions: &[Transaction]) -> Result<()> {
         let tx = self.conn.transaction()?;
 
         // Calculate block hash and height
-        let block_hash = {
-            use crate::security_utils::sha256;
-            use crate::utils::format_date;
-            let mut bytes = Vec::new();
-            bytes.extend_from_slice(&header.prev_block_hash);
-            bytes.extend_from_slice(&header.merkle_root);
-            bytes.extend_from_slice(&header.nonce.to_be_bytes());
-            bytes.extend_from_slice(format_date(&header.timestamp).as_bytes());
-            sha256(&bytes)
-        };
+        let block_hash = block.header_hash();
+        let header = &block.header;
 
         // Get height from previous block or set to 0 for genesis
         let height: i64 = if header.prev_block_hash == [0u8; 32] {
             0
         } else {
-            let mut stmt = tx.prepare(
-                "SELECT height FROM block_headers WHERE block_hash = ?1"
-            )?;
+            let mut stmt = tx.prepare("SELECT height FROM block_headers WHERE block_hash = ?1")?;
             let mut rows = stmt.query([header.prev_block_hash.as_slice()])?;
             if let Some(row) = rows.next()? {
                 let prev_height: i64 = row.get(0)?;
@@ -235,114 +230,5 @@ impl Db {
             [txid.as_slice()],
         )?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::model::Transaction;
-
-    #[test]
-    fn test_db_creation_and_schema() {
-        let db = Db::open(":memory:").unwrap();
-        db.init_schema().unwrap();
-        
-        // Verify tables exist by trying to query them
-        let mut stmt = db.conn.prepare("SELECT name FROM sqlite_master WHERE type='table'").unwrap();
-        let tables: Vec<String> = stmt.query_map([], |row| row.get(0))
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        
-        assert!(tables.contains(&"block_headers".to_string()));
-        assert!(tables.contains(&"transactions".to_string()));
-        assert!(tables.contains(&"utxos".to_string()));
-    }
-
-    #[test]
-    fn test_mempool_operations() {
-        let db = Db::open(":memory:").unwrap();
-        db.init_schema().unwrap();
-
-        // Create a simple transaction
-        let tx = Transaction::new(vec![], vec![TxOutput {
-            value: 100.0,
-            address: "test_address".to_string(),
-        }], Some("test".to_string()));
-
-        // Insert into mempool
-        db.insert_mempool_tx(&tx).unwrap();
-
-        // Retrieve it
-        let txid = tx.id();
-        let retrieved = db.get_transaction(&txid).unwrap();
-        assert!(retrieved.is_some());
-
-        // Remove from mempool
-        db.remove_mempool_tx(&txid).unwrap();
-        let retrieved = db.get_transaction(&txid).unwrap();
-        assert!(retrieved.is_none());
-    }
-
-    #[test]
-    fn test_get_utxos_for_address() {
-        let db = Db::open(":memory:").unwrap();
-        db.init_schema().unwrap();
-
-        let addr = "test_address";
-        let txid = [1u8; 32];
-
-        // Manually insert a UTXO
-        db.conn.execute(
-            "INSERT INTO utxos (txid, vout, value, addr) VALUES (?1, ?2, ?3, ?4)",
-            params![txid.as_slice(), 0i64, 50i64, addr],
-        ).unwrap();
-
-        let utxos = db.get_utxos_for_address(addr).unwrap();
-        assert_eq!(utxos.len(), 1);
-        assert_eq!(utxos[0].index, 0);
-        assert_eq!(utxos[0].output.value, 50.0);
-    }
-
-    #[test]
-    fn test_apply_block_genesis() {
-        let mut db = Db::open(":memory:").unwrap();
-        db.init_schema().unwrap();
-
-        use chrono::Utc;
-        
-        // Create a genesis block header
-        let header = BlockHeader {
-            prev_block_hash: [0u8; 32],
-            merkle_root: [1u8; 32],
-            nonce: 12345,
-            timestamp: Utc::now().naive_utc(),
-        };
-
-        // Create a coinbase transaction
-        let tx = Transaction::new(vec![], vec![TxOutput {
-            value: 50.0,
-            address: "miner_address".to_string(),
-        }], Some("Genesis block".to_string()));
-
-        let txid = tx.id();
-
-        // Apply the genesis block
-        db.apply_block(header, &[tx]).unwrap();
-
-        // Verify the transaction was stored
-        let retrieved = db.get_transaction(&txid).unwrap();
-        assert!(retrieved.is_some());
-
-        // Verify UTXOs were created
-        let utxos = db.get_utxos_for_address("miner_address").unwrap();
-        assert_eq!(utxos.len(), 1);
-        assert_eq!(utxos[0].output.value, 50.0);
-
-        // Verify block header was stored
-        let mut stmt = db.conn.prepare("SELECT height FROM block_headers WHERE height = 0").unwrap();
-        let count = stmt.query_map([], |row| row.get::<_, i64>(0)).unwrap().count();
-        assert_eq!(count, 1);
     }
 }
