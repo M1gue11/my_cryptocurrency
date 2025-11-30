@@ -1,4 +1,5 @@
 use crate::globals::CONFIG;
+use crate::model::transaction::TxId;
 use crate::model::{Block, Transaction, TxOutput, UTXO};
 use rusqlite::{Connection, Result, params};
 
@@ -7,6 +8,7 @@ pub struct Db {
 }
 
 impl Db {
+    // improve db interface
     pub fn open(path: Option<&str>) -> Result<Self> {
         let path = path.unwrap_or(&CONFIG.db_path);
         let conn = Connection::open(path)?;
@@ -207,6 +209,30 @@ impl Db {
 
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn get_utxo(&self, txid: TxId, vout: usize) -> Result<Option<UTXO>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT * FROM utxos WHERE txid = ?1 AND vout = ?2")?;
+
+        let mut rows = stmt.query(params![txid.as_slice(), vout as i64])?;
+
+        if let Some(row) = rows.next()? {
+            let value: i64 = row.get(0)?;
+            let address: String = row.get(1)?;
+
+            Ok(Some(UTXO {
+                tx_id: txid,
+                index: vout,
+                output: TxOutput {
+                    value: value as f64,
+                    address,
+                },
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn insert_mempool_tx(&self, tx: &Transaction) -> Result<()> {
