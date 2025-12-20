@@ -222,17 +222,22 @@ impl Db {
     pub fn get_utxo(&self, txid: TxId, vout: usize) -> Result<Option<UTXO>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT * FROM utxos WHERE txid = ?1 AND vout = ?2")?;
+            .prepare("SELECT txid, vout, value, addr FROM utxos WHERE txid = ?1 AND vout = ?2")?;
 
         let mut rows = stmt.query(params![txid.as_slice(), vout as i64])?;
 
         if let Some(row) = rows.next()? {
-            let value: i64 = row.get(0)?;
-            let address: String = row.get(1)?;
+            let txid_vec: Vec<u8> = row.get(0)?;
+            let mut txid_result = [0u8; 32];
+            txid_result.copy_from_slice(&txid_vec);
+
+            let vout_result: i64 = row.get(1)?;
+            let value: i64 = row.get(2)?;
+            let address: String = row.get(3)?;
 
             Ok(Some(UTXO {
-                tx_id: txid,
-                index: vout,
+                tx_id: txid_result,
+                index: vout_result as usize,
                 output: TxOutput {
                     value: value as f64,
                     address,

@@ -9,6 +9,8 @@ pub struct Miner {
     pub wallet: Wallet,
 }
 
+const USE_STUPID_MINER: bool = true;
+
 impl Miner {
     pub fn new() -> Self {
         Miner {
@@ -27,11 +29,9 @@ impl Miner {
                     break;
                 }
             }
-
             if double_input {
                 continue;
             }
-
             seen_utxos.extend(
                 tx.inputs
                     .iter()
@@ -44,6 +44,9 @@ impl Miner {
 
     fn build_block(&mut self, mempool: &Vec<Transaction>, previous_hash: [u8; 32]) -> Block {
         let mut block_txs = self.chose_transactions(mempool);
+        if USE_STUPID_MINER {
+            block_txs = mempool.clone();
+        }
 
         let reward_tx = Transaction::new_coinbase(self.wallet.get_receive_addr());
         block_txs.insert(0, reward_tx);

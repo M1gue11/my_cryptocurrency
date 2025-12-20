@@ -104,19 +104,17 @@ impl Block {
                     ));
                 }
 
-                let is_input_utxo = db.get_utxo(input.prev_tx_id, input.output_index);
-                if is_input_utxo.is_err() {
+                let input_utxo = db.get_utxo(input.prev_tx_id, input.output_index);
+                if input_utxo.is_err() {
                     return Err(format!(
                         "Transaction input is not a valid UTXO: tx_id: {}, output_index: {}",
                         digest_to_hex_string(&input.prev_tx_id),
                         input.output_index
                     ));
                 }
-
-                unique_utxos_map.insert(&input.prev_tx_id);
+                unique_utxos_map.insert(input.prev_tx_id);
             }
         }
-
         Ok(())
     }
 }
