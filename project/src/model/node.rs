@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::BufWriter;
 
 use crate::bd::Db;
 use crate::globals::CONFIG;
@@ -6,6 +8,8 @@ use crate::model::io::UTXO;
 use crate::model::transaction::TxId;
 use crate::model::{Block, Blockchain, Miner, Transaction};
 use crate::security_utils::digest_to_hex_string;
+
+const MEMPOOL_FILE: &str = "mempool.json";
 
 pub struct Node {
     pub miner: Miner,
@@ -49,10 +53,41 @@ impl Node {
 
         Node {
             blockchain: bc,
-            mempool: Vec::new(),
+            mempool: Node::load_mempool(),
             miner: Miner::new(),
             difficulty: CONFIG.difficulty,
         }
+    }
+
+    fn persist_mempool(&self) {
+        let path = CONFIG.persisted_chain_path.to_string();
+        let dir_path = std::path::Path::new(&path);
+        if !dir_path.exists() {
+            std::fs::create_dir_all(&dir_path)
+                .expect("Failed to create directory for mempool file");
+        }
+
+        let file = File::create(format!("{}/{}", path, MEMPOOL_FILE))
+            .expect("Failed to create blockchain file");
+        let writer = BufWriter::new(file);
+        serde_json::to_writer(writer, &self.mempool).expect("Failed to write blockchain to file");
+    }
+
+    fn load_mempool() -> Vec<Transaction> {
+        let path = CONFIG.persisted_chain_path.to_string();
+        let file_path = format!("{}/{}", path, MEMPOOL_FILE);
+
+        let file = match File::open(&file_path) {
+            Ok(f) => f,
+            Err(_) => {
+                println!("No existing mempool file found.");
+                return Vec::new();
+            }
+        };
+        let reader = std::io::BufReader::new(file);
+        let mempool: Vec<Transaction> =
+            serde_json::from_reader(reader).expect("Failed to read mempool from file");
+        mempool
     }
 
     fn validate_blockchain(bc: &Blockchain) -> Result<bool, String> {
@@ -198,6 +233,7 @@ impl Node {
 
     pub fn save_node(&self) {
         self.blockchain.persist_chain(None);
+        self.persist_mempool();
     }
 
     pub fn print_mempool(&self) {
