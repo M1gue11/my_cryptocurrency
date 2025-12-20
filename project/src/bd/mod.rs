@@ -11,7 +11,15 @@ impl Db {
     // improve db interface
     pub fn open(path: Option<&str>) -> Result<Self> {
         let path = path.unwrap_or(&CONFIG.db_path);
-        let conn = Connection::open(path)?;
+        let db_path = std::path::Path::new(path);
+        if let Some(parent) = db_path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)
+                    .expect("Failed to create directory for database file!");
+            }
+        }
+
+        let conn = Connection::open(db_path)?;
         Ok(Db { conn })
     }
 
