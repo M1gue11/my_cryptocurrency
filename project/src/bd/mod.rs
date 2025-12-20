@@ -73,9 +73,24 @@ impl Db {
             [],
         )?;
 
+        // Create tx_addresses table to track which addresses are used in transactions
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS tx_addresses (
+                txid BLOB NOT NULL,
+                addr TEXT NOT NULL,
+                PRIMARY KEY (txid, addr)
+            ) WITHOUT ROWID",
+            [],
+        )?;
+
         // Create indices
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_utxos_addr ON utxos(addr)",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tx_addresses_addr ON tx_addresses(addr)",
             [],
         )?;
 
@@ -199,7 +214,7 @@ impl Db {
                 )?;
             }
 
-            // Add new UTXOs (outputs)
+            // Add new UTXOs (outputs) and track addresses
             for (vout, output) in transaction.outputs.iter().enumerate() {
                 tx.execute(
                     "INSERT INTO utxos (txid, vout, value, addr, script)
@@ -211,6 +226,13 @@ impl Db {
                         &output.address,
                         Vec::<u8>::new() // script placeholder
                     ],
+                )?;
+
+                // Track address usage in this transaction
+                tx.execute(
+                    "INSERT OR IGNORE INTO tx_addresses (txid, addr)
+                     VALUES (?1, ?2)",
+                    params![txid.as_slice(), &output.address],
                 )?;
             }
         }
@@ -269,5 +291,50 @@ impl Db {
             [txid.as_slice()],
         )?;
         Ok(())
+    }
+
+    // Get all transactions that use a specific address
+    pub fn get_transactions_for_address(&self, addr: &str) -> Result<Vec<[u8; 32]>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT txid FROM tx_addresses WHERE addr = ?1")?;
+
+        let txids = stmt.query_map([addr], |row| {
+            let txid_vec: Vec<u8> = row.get(0)?;
+            let mut txid = [0u8; 32];
+            txid.copy_from_slice(&txid_vec);
+            Ok(txid)
+        })?;
+
+        let mut result = Vec::new();
+        for txid in txids {
+            result.push(txid?);
+        }
+        Ok(result)
+    }
+
+    // Check if an address has been used in any transaction
+    pub fn has_address_been_used(&self, addr: &str) -> Result<bool> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT 1 FROM tx_addresses WHERE addr = ?1 LIMIT 1")?;
+
+        let has_address = stmt.exists([addr])?;
+        Ok(has_address)
+    }
+
+    // Get all addresses used in a specific transaction
+    pub fn get_addresses_in_transaction(&self, txid: &[u8; 32]) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT addr FROM tx_addresses WHERE txid = ?1")?;
+
+        let addresses = stmt.query_map([txid.as_slice()], |row| row.get(0))?;
+
+        let mut result = Vec::new();
+        for addr in addresses {
+            result.push(addr?);
+        }
+        Ok(result)
     }
 }
