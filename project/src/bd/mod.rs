@@ -153,11 +153,9 @@ impl Db {
     pub fn apply_block(&mut self, block: Block, transactions: &[Transaction]) -> Result<()> {
         let tx = self.conn.transaction()?;
 
-        // Calculate block hash and height
         let block_hash = block.header_hash();
         let header = &block.header;
 
-        // Get height from previous block or set to 0 for genesis
         let height: i64 = if header.prev_block_hash == [0u8; 32] {
             0
         } else {
@@ -171,7 +169,6 @@ impl Db {
             }
         };
 
-        // Insert block header
         let timestamp = header.timestamp.and_utc().timestamp();
         tx.execute(
             "INSERT INTO block_headers (block_hash, prev_hash, merkle_root, nonce, height, timestamp)
@@ -186,7 +183,6 @@ impl Db {
             ],
         )?;
 
-        // Process each transaction
         for transaction in transactions {
             let txid = transaction.id();
             let raw = serde_json::to_vec(transaction)
@@ -320,6 +316,22 @@ impl Db {
             .prepare("SELECT 1 FROM tx_addresses WHERE addr = ?1 LIMIT 1")?;
 
         let has_address = stmt.exists([addr])?;
+        Ok(has_address)
+    }
+
+    pub fn has_any_address_been_used(&self, addrs: &[String]) -> Result<bool> {
+        println!("Checking addresses: {:?}", addrs);
+        let mut query = String::from("SELECT 1 FROM tx_addresses WHERE addr IN (");
+        let placeholders: Vec<String> = (0..addrs.len()).map(|_| "?".to_string()).collect();
+        query.push_str(&placeholders.join(", "));
+        query.push_str(") LIMIT 1");
+
+        let mut stmt = self.conn.prepare(&query)?;
+
+        let params: Vec<&dyn rusqlite::ToSql> =
+            addrs.iter().map(|a| a as &dyn rusqlite::ToSql).collect();
+
+        let has_address = stmt.exists(rusqlite::params_from_iter(params))?;
         Ok(has_address)
     }
 

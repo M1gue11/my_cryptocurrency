@@ -625,7 +625,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
 
         WalletCommands::GenerateKeys { count, name } => {
             let wallet = resolve_wallet_by_name(name, loaded_wallets);
-            let keys = wallet.generate_n_keys(count);
+            let keys = wallet.generate_n_keys(count, None);
 
             println!("✓ Generated {} keys:\n", count);
             for (i, key) in keys.iter().enumerate() {

@@ -1,3 +1,4 @@
+use crate::bd::Db;
 use crate::model::get_node;
 // use crate::globals::NODE;
 use crate::model::io::UTXO;
@@ -11,6 +12,8 @@ pub struct Wallet {
     master_hdkey: HDKey,
     current_index: u32,
 }
+
+const GAP_LIMIT: u32 = 20;
 
 /** purpose / account / change / index */
 const BASE_PATH: [u32; 4] = [111, 0, 0, 0];
@@ -31,26 +34,40 @@ impl Wallet {
         node
     }
 
-    pub fn generate_n_keys(&self, n: u32) -> Vec<HDKey> {
+    pub fn generate_n_keys(&self, n: u32, offset: Option<u32>) -> Vec<HDKey> {
         let mut keys = Vec::with_capacity(n as usize);
         for i in 0..n {
             let mut full_path = BASE_PATH.to_vec();
-            full_path.push(i);
+            full_path.push(i + offset.unwrap_or(0));
             let child_hdkey = self.derive_path(&full_path);
             keys.push(child_hdkey);
         }
         keys
     }
 
+    /** Returns the index of the address if owned by the wallet, otherwise None */
     pub fn owns_address(&self, address: &str) -> Option<u32> {
-        let limit = self.current_index + 100;
-        for i in 0..limit {
-            let mut full_path = BASE_PATH.to_vec();
-            full_path.push(i);
-            let candidate = self.derive_path(&full_path);
-            if &candidate.get_address() == address {
-                return Some(i);
+        let mut keys = self.generate_n_keys(GAP_LIMIT, None);
+        let db = Db::open(None);
+        if db.is_err() {
+            panic!("Failed to open database at wallet address ownership check");
+        }
+        let mut gap_count = 1;
+        loop {
+            let index = keys.iter().position(|k| k.get_address() == address);
+            if let Some(i) = index {
+                return Some((i as u32) + GAP_LIMIT * (gap_count - 1));
             }
+            let addresses = keys
+                .iter()
+                .map(|k| k.get_address())
+                .collect::<Vec<String>>();
+            let any_address_in_bc = db.as_ref().unwrap().has_any_address_been_used(&addresses);
+            if any_address_in_bc.is_err() || !any_address_in_bc.unwrap() {
+                break;
+            }
+            keys = self.generate_n_keys(GAP_LIMIT, Some(GAP_LIMIT * gap_count));
+            gap_count += 1;
         }
         None
     }
