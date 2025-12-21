@@ -78,6 +78,64 @@ mod tests {
     }
 
     #[test]
+    fn test_get_utxos_for_addresses_empty_list() {
+        let db = Db::open(Some(":memory:")).unwrap();
+        db.init_schema().unwrap();
+
+        let utxos = db.get_utxos_for_addresses(&Vec::new()).unwrap();
+        assert!(utxos.is_empty());
+    }
+
+    #[test]
+    fn test_get_utxos_for_addresses_multiple() {
+        let db = Db::open(Some(":memory:")).unwrap();
+        db.init_schema().unwrap();
+
+        let addr1 = "addr_one".to_string();
+        let addr2 = "addr_two".to_string();
+        let other_addr = "other".to_string();
+
+        let txid1 = [1u8; 32];
+        let txid2 = [2u8; 32];
+        let txid3 = [3u8; 32];
+
+        // Insert UTXOs for multiple addresses and one that should be filtered out
+        db.get_conn()
+            .execute(
+                "INSERT INTO utxos (txid, vout, value, addr) VALUES (?1, ?2, ?3, ?4)",
+                params![txid1.as_slice(), 0i64, 25i64, &addr1],
+            )
+            .unwrap();
+
+        db.get_conn()
+            .execute(
+                "INSERT INTO utxos (txid, vout, value, addr) VALUES (?1, ?2, ?3, ?4)",
+                params![txid2.as_slice(), 1i64, 75i64, &addr2],
+            )
+            .unwrap();
+
+        db.get_conn()
+            .execute(
+                "INSERT INTO utxos (txid, vout, value, addr) VALUES (?1, ?2, ?3, ?4)",
+                params![txid3.as_slice(), 0i64, 10i64, &other_addr],
+            )
+            .unwrap();
+
+        let mut utxos = db
+            .get_utxos_for_addresses(&vec![addr1.clone(), addr2.clone()])
+            .unwrap();
+
+        // Sort to make assertions deterministic
+        utxos.sort_by(|a, b| a.output.address.cmp(&b.output.address).then(a.index.cmp(&b.index)));
+
+        assert_eq!(utxos.len(), 2);
+        assert_eq!(utxos[0].output.address, addr1);
+        assert_eq!(utxos[0].output.value, 25.0);
+        assert_eq!(utxos[1].output.address, addr2);
+        assert_eq!(utxos[1].output.value, 75.0);
+    }
+
+    #[test]
     fn test_apply_block_genesis() {
         let mut db = Db::open(Some(":memory:")).unwrap();
         db.init_schema().unwrap();

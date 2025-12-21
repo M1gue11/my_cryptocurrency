@@ -45,31 +45,55 @@ impl Wallet {
         keys
     }
 
-    /** Returns the index of the address if owned by the wallet, otherwise None */
+    /**
+     * Use gap limit strategy to check if the wallet owns the given address
+     * Returns: Returns the index of the address if owned by the wallet, otherwise None
+     */
     pub fn owns_address(&self, address: &str) -> Option<u32> {
-        let mut keys = self.generate_n_keys(GAP_LIMIT, None);
         let db = Db::open(None);
         if db.is_err() {
             panic!("Failed to open database at wallet address ownership check");
         }
-        let mut gap_count = 1;
+        let mut gap_count = 0;
         loop {
-            let index = keys.iter().position(|k| k.get_address() == address);
+            let batch = self.generate_n_keys(GAP_LIMIT, Some(GAP_LIMIT * gap_count));
+            // verify if the address is in the current batch
+            let index = batch.iter().position(|k| k.get_address() == address);
             if let Some(i) = index {
-                return Some((i as u32) + GAP_LIMIT * (gap_count - 1));
+                return Some((i as u32) + GAP_LIMIT * gap_count);
             }
-            let addresses = keys
-                .iter()
-                .map(|k| k.get_address())
-                .collect::<Vec<String>>();
+            // if not, check if any address in the batch has been used in the blockchain
+            let addresses: Vec<String> = batch.iter().map(|k| k.get_address()).collect();
             let any_address_in_bc = db.as_ref().unwrap().has_any_address_been_used(&addresses);
             if any_address_in_bc.is_err() || !any_address_in_bc.unwrap() {
                 break;
             }
-            keys = self.generate_n_keys(GAP_LIMIT, Some(GAP_LIMIT * gap_count));
             gap_count += 1;
         }
         None
+    }
+
+    fn list_used_gaps(&self) -> Vec<HDKey> {
+        let db = Db::open(None);
+        if db.is_err() {
+            panic!("Failed to open database at wallet address ownership check");
+        }
+        let mut gap_count = 0;
+        let mut keys: Vec<HDKey> = Vec::with_capacity(GAP_LIMIT as usize);
+        loop {
+            let batch: Vec<HDKey> = self.generate_n_keys(GAP_LIMIT, Some(GAP_LIMIT * gap_count));
+            let addresses: Vec<String> = batch.iter().map(|k| k.get_address()).collect();
+
+            let any_address_in_bc = db.as_ref().unwrap().has_any_address_been_used(&addresses);
+
+            // If no address was used, do not add this batch and stop
+            if any_address_in_bc.is_err() || !any_address_in_bc.unwrap() {
+                break;
+            }
+            keys.extend(batch);
+            gap_count += 1;
+        }
+        keys
     }
 
     pub fn get_receive_addr(&mut self) -> String {
@@ -90,13 +114,14 @@ impl Wallet {
     }
 
     pub fn get_wallet_utxos(&self) -> Vec<UTXO> {
-        let node = get_node();
-        let utxos = node.scan_utxos();
-        let wallet_utxos = utxos
-            .into_iter()
-            .filter(|u| self.owns_address(&u.output.address).is_some())
-            .collect::<Vec<UTXO>>();
-        wallet_utxos
+        let db = Db::open(None).unwrap();
+        let keys = self.list_used_gaps();
+        let addresses = keys
+            .iter()
+            .map(|k| k.get_address())
+            .collect::<Vec<String>>();
+        let utxos = db.get_utxos_for_addresses(&addresses).unwrap_or_default();
+        utxos
     }
 
     pub fn select_utxos(&self, amount: f64) -> Option<Vec<UTXO>> {

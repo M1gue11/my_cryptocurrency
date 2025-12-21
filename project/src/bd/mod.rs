@@ -133,6 +133,46 @@ impl Db {
         Ok(result)
     }
 
+    pub fn get_utxos_for_addresses(&self, addrs: &[String]) -> Result<Vec<UTXO>> {
+        if addrs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut query = String::from("SELECT txid, vout, value, addr FROM utxos WHERE addr IN (");
+        let placeholders: Vec<String> = (0..addrs.len()).map(|_| "?".to_string()).collect();
+        query.push_str(&placeholders.join(", "));
+        query.push(')');
+
+        let mut stmt = self.conn.prepare(&query)?;
+        let params: Vec<&dyn rusqlite::ToSql> =
+            addrs.iter().map(|a| a as &dyn rusqlite::ToSql).collect();
+
+        let utxos = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+            let txid_vec: Vec<u8> = row.get(0)?;
+            let mut txid = [0u8; 32];
+            txid.copy_from_slice(&txid_vec);
+
+            let vout: i64 = row.get(1)?;
+            let value: i64 = row.get(2)?;
+            let address: String = row.get(3)?;
+
+            Ok(UTXO {
+                tx_id: txid,
+                index: vout as usize,
+                output: TxOutput {
+                    value: value as f64,
+                    address,
+                },
+            })
+        })?;
+
+        let mut result = Vec::new();
+        for utxo in utxos {
+            result.push(utxo?);
+        }
+        Ok(result)
+    }
+
     pub fn get_transaction(&self, txid: &[u8; 32]) -> Result<Option<Transaction>> {
         let mut stmt = self
             .conn
@@ -320,7 +360,6 @@ impl Db {
     }
 
     pub fn has_any_address_been_used(&self, addrs: &[String]) -> Result<bool> {
-        println!("Checking addresses: {:?}", addrs);
         let mut query = String::from("SELECT 1 FROM tx_addresses WHERE addr IN (");
         let placeholders: Vec<String> = (0..addrs.len()).map(|_| "?".to_string()).collect();
         query.push_str(&placeholders.join(", "));
