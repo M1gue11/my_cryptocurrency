@@ -136,8 +136,13 @@ fn ensure_parent_dir(path: &str, is_memory: bool) -> Result<()> {
     let db_path = std::path::Path::new(path);
     if let Some(parent) = db_path.parent() {
         if !parent.exists() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                rusqlite::Error::ModuleError(format!(
+                    "failed to create database parent directory '{}': {}",
+                    parent.display(),
+                    e
+                ))
+            })?;
         }
     }
     Ok(())
