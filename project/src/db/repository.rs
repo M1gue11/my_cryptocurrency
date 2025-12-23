@@ -19,24 +19,7 @@ impl LedgerRepository {
             .conn
             .prepare("SELECT txid, vout, value, addr FROM utxos WHERE addr = ?1")?;
 
-        let utxos = stmt.query_map([addr], |row| {
-            let txid_vec: Vec<u8> = row.get(0)?;
-            let mut txid = [0u8; 32];
-            txid.copy_from_slice(&txid_vec);
-
-            let vout: i64 = row.get(1)?;
-            let value: i64 = row.get(2)?;
-            let address: String = row.get(3)?;
-
-            Ok(UTXO {
-                tx_id: txid,
-                index: vout as usize,
-                output: TxOutput {
-                    value: value as f64,
-                    address,
-                },
-            })
-        })?;
+        let utxos = stmt.query_map([addr], |row| build_utxo_from_row(row))?;
 
         let mut result = Vec::new();
         for utxo in utxos {
@@ -60,22 +43,7 @@ impl LedgerRepository {
             addrs.iter().map(|a| a as &dyn rusqlite::ToSql).collect();
 
         let utxos = stmt.query_map(rusqlite::params_from_iter(params), |row| {
-            let txid_vec: Vec<u8> = row.get(0)?;
-            let mut txid = [0u8; 32];
-            txid.copy_from_slice(&txid_vec);
-
-            let vout: i64 = row.get(1)?;
-            let value: i64 = row.get(2)?;
-            let address: String = row.get(3)?;
-
-            Ok(UTXO {
-                tx_id: txid,
-                index: vout as usize,
-                output: TxOutput {
-                    value: value as f64,
-                    address,
-                },
-            })
+            build_utxo_from_row(row)
         })?;
 
         let mut result = Vec::new();
@@ -197,22 +165,7 @@ impl LedgerRepository {
         let mut rows = stmt.query(params![txid.as_slice(), vout as i64])?;
 
         if let Some(row) = rows.next()? {
-            let txid_vec: Vec<u8> = row.get(0)?;
-            let mut txid_result = [0u8; 32];
-            txid_result.copy_from_slice(&txid_vec);
-
-            let vout_result: i64 = row.get(1)?;
-            let value: i64 = row.get(2)?;
-            let address: String = row.get(3)?;
-
-            Ok(UTXO {
-                tx_id: txid_result,
-                index: vout_result as usize,
-                output: TxOutput {
-                    value: value as f64,
-                    address,
-                },
-            })
+            build_utxo_from_row(&row)
         } else {
             Err(rusqlite::Error::QueryReturnedNoRows)
         }
@@ -300,4 +253,23 @@ impl LedgerRepository {
         }
         Ok(result)
     }
+}
+
+fn build_utxo_from_row(row: &rusqlite::Row) -> rusqlite::Result<UTXO> {
+    let txid_vec: Vec<u8> = row.get(0)?;
+    let mut txid = [0u8; 32];
+    txid.copy_from_slice(&txid_vec);
+
+    let vout: i64 = row.get(1)?;
+    let value: i64 = row.get(2)?;
+    let address: String = row.get(3)?;
+
+    Ok(UTXO {
+        tx_id: txid,
+        index: vout as usize,
+        output: TxOutput {
+            value: value as f64,
+            address,
+        },
+    })
 }
