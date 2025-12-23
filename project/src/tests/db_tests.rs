@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::bd::Db;
+    use crate::db::Db;
     use crate::model::block::BlockHeader;
     use crate::model::{Block, Transaction, TxOutput};
     use rusqlite::params;
@@ -126,7 +126,12 @@ mod tests {
             .unwrap();
 
         // Sort to make assertions deterministic
-        utxos.sort_by(|a, b| a.output.address.cmp(&b.output.address).then(a.index.cmp(&b.index)));
+        utxos.sort_by(|a, b| {
+            a.output
+                .address
+                .cmp(&b.output.address)
+                .then(a.index.cmp(&b.index))
+        });
 
         assert_eq!(utxos.len(), 2);
         assert_eq!(utxos[0].output.address, addr1);

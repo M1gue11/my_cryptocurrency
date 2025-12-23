@@ -1,4 +1,4 @@
-mod bd;
+mod db;
 mod front;
 mod globals;
 mod model;
@@ -8,7 +8,7 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-use bd::Db;
+use db::Db;
 use front::run_interactive_mode;
 
 fn main() {

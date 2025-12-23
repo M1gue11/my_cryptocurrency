@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufWriter;
 
-use crate::bd::Db;
+use crate::db::Db;
 use crate::globals::CONFIG;
 use crate::model::io::UTXO;
 use crate::model::transaction::TxId;

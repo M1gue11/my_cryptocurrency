@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::Transaction;
-use crate::bd::Db;
+use crate::db::Db;
 use crate::globals::CONFIG;
 use crate::security_utils::hash_starts_with_zero_bits;
 use crate::{
