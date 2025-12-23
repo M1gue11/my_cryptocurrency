@@ -8,12 +8,11 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-use bd::Db;
+use bd::init_db;
 use front::run_interactive_mode;
 
 fn main() {
-    let db = Db::open(None).unwrap();
-    let _ = db.init_schema();
+    init_db(None).expect("Failed to initialize database");
 
     run_interactive_mode();
 }

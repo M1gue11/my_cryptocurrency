@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufWriter;
 
-use crate::bd::Db;
 use crate::globals::CONFIG;
 use crate::model::io::UTXO;
 use crate::model::transaction::TxId;
@@ -139,8 +138,9 @@ impl Node {
                         .iter()
                         .any(|btx| btx.id() == tx.id())
                 });
-                let mut db = Db::open(None).unwrap();
-                db.apply_block(added_block.clone(), &added_block.transactions)
+                crate::bd::get_db()
+                    .ledger()
+                    .apply_block(added_block.clone(), &added_block.transactions)
                     .map_err(|e| e.to_string())?;
 
                 Ok(())
