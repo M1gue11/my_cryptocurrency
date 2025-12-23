@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::Transaction;
-use crate::db::Db;
+use crate::db::repository::LedgerRepository;
 use crate::globals::CONFIG;
 use crate::security_utils::hash_starts_with_zero_bits;
 use crate::{
@@ -90,7 +90,7 @@ impl Block {
         }
 
         let mut unique_utxos_map = HashSet::new();
-        let db = Db::open(None).unwrap();
+        let repo = LedgerRepository::new();
         for tx in &self.transactions {
             if !tx.validate() {
                 return Err(format!("Invalid transaction found in block: {:?}", tx));
@@ -103,7 +103,7 @@ impl Block {
                         input.output_index
                     ));
                 }
-                let input_utxo = db.get_utxo(input.prev_tx_id, input.output_index);
+                let input_utxo = repo.get_utxo(input.prev_tx_id, input.output_index);
                 if input_utxo.is_err() {
                     return Err(format!(
                         "Transaction input is not a valid UTXO: tx_id: {}, output_index: {}",

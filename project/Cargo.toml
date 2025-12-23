@@ -17,3 +17,6 @@ ripemd = "0.1.3"
 bs58 = "0.5.1"
 clap = { version = "4.5", features = ["derive"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+r2d2 = "0.8.10"
+# Align with rusqlite 0.32 to avoid libsqlite3-sys conflicts
+r2d2_sqlite = "0.25"

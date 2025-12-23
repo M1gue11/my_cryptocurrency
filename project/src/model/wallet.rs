@@ -1,4 +1,4 @@
-use crate::db::Db;
+use crate::db::repository::LedgerRepository;
 use crate::model::get_node;
 // use crate::globals::NODE;
 use crate::model::io::UTXO;
@@ -50,10 +50,7 @@ impl Wallet {
      * Returns: Returns the index of the address if owned by the wallet, otherwise None
      */
     pub fn owns_address(&self, address: &str) -> Option<u32> {
-        let db = Db::open(None);
-        if db.is_err() {
-            panic!("Failed to open database at wallet address ownership check");
-        }
+        let repo = LedgerRepository::new();
         let mut gap_count = 0;
         loop {
             let batch = self.generate_n_keys(GAP_LIMIT, Some(GAP_LIMIT * gap_count));
@@ -64,7 +61,7 @@ impl Wallet {
             }
             // if not, check if any address in the batch has been used in the blockchain
             let addresses: Vec<String> = batch.iter().map(|k| k.get_address()).collect();
-            let any_address_in_bc = db.as_ref().unwrap().has_any_address_been_used(&addresses);
+            let any_address_in_bc = repo.has_any_address_been_used(&addresses);
             if any_address_in_bc.is_err() || !any_address_in_bc.unwrap() {
                 break;
             }
@@ -74,17 +71,14 @@ impl Wallet {
     }
 
     fn list_used_gaps(&self) -> Vec<HDKey> {
-        let db = Db::open(None);
-        if db.is_err() {
-            panic!("Failed to open database at wallet address ownership check");
-        }
+        let repo = LedgerRepository::new();
         let mut gap_count = 0;
         let mut keys: Vec<HDKey> = Vec::with_capacity(GAP_LIMIT as usize);
         loop {
             let batch: Vec<HDKey> = self.generate_n_keys(GAP_LIMIT, Some(GAP_LIMIT * gap_count));
             let addresses: Vec<String> = batch.iter().map(|k| k.get_address()).collect();
 
-            let any_address_in_bc = db.as_ref().unwrap().has_any_address_been_used(&addresses);
+            let any_address_in_bc = repo.has_any_address_been_used(&addresses);
 
             // If no address was used, do not add this batch and stop
             if any_address_in_bc.is_err() || !any_address_in_bc.unwrap() {
@@ -114,13 +108,13 @@ impl Wallet {
     }
 
     pub fn get_wallet_utxos(&self) -> Vec<UTXO> {
-        let db = Db::open(None).unwrap();
+        let repo = LedgerRepository::new();
         let keys = self.list_used_gaps();
         let addresses = keys
             .iter()
             .map(|k| k.get_address())
             .collect::<Vec<String>>();
-        let utxos = db.get_utxos_for_addresses(&addresses).unwrap_or_default();
+        let utxos = repo.get_utxos_for_addresses(&addresses).unwrap_or_default();
         utxos
     }
 

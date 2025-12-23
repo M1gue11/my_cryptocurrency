@@ -9,7 +9,7 @@ pub struct Miner {
     pub wallet: Wallet,
 }
 
-const USE_STUPID_MINER: bool = true;
+const USE_STUPID_MINER: bool = false;
 
 impl Miner {
     pub fn new() -> Self {

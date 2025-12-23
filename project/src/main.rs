@@ -8,12 +8,10 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-use db::Db;
+use crate::db::db::init_db;
 use front::run_interactive_mode;
 
 fn main() {
-    let db = Db::open(None).unwrap();
-    let _ = db.init_schema();
-
+    init_db();
     run_interactive_mode();
 }
