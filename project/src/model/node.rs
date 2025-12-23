@@ -4,8 +4,6 @@ use std::io::BufWriter;
 
 use crate::db::repository::LedgerRepository;
 use crate::globals::CONFIG;
-use crate::model::io::UTXO;
-use crate::model::transaction::TxId;
 use crate::model::{Block, Blockchain, Miner, Transaction};
 use crate::security_utils::digest_to_hex_string;
 
@@ -160,35 +158,29 @@ impl Node {
         None
     }
 
-    pub fn scan_utxos(&self) -> Vec<UTXO> {
-        let mut utxos = Vec::new();
-        for block in &self.blockchain.chain {
-            for tx in &block.transactions {
-                for (output_index, output) in tx.outputs.iter().enumerate() {
-                    utxos.push(UTXO {
-                        tx_id: tx.id(),
-                        index: output_index,
-                        output: output.clone(),
-                    });
-                }
-                for input in &tx.inputs {
-                    utxos.retain(|o| o.tx_id != input.prev_tx_id);
-                }
-            }
-        }
-        utxos
-    }
-
     pub fn is_all_inputs_utxos(&self, tx: &Transaction) -> Result<(), String> {
-        let utxos = self.scan_utxos();
-        let utxos_map: HashSet<(TxId, usize)> =
+        let repo = LedgerRepository::new();
+        let inputs_ids = tx
+            .inputs
+            .iter()
+            .map(|i| (i.prev_tx_id, i.output_index))
+            .collect::<Vec<_>>();
+        let utxos = repo
+            .get_utxos_from_ids(&inputs_ids)
+            .map_err(|e| return e.to_string())?;
+
+        if utxos.len() != inputs_ids.len() {
+            return Err("One or more transaction inputs are not valid UTXOs".to_string());
+        }
+
+        let valid_utxos_map: HashSet<([u8; 32], usize)> =
             HashSet::from_iter(utxos.iter().map(|u| (u.tx_id, u.index)));
-        for input in &tx.inputs {
-            if !utxos_map.contains(&(input.prev_tx_id, input.output_index)) {
+        for (txid, vout) in inputs_ids {
+            if !valid_utxos_map.contains(&(txid, vout)) {
                 return Err(format!(
                     "Transaction input is not a valid UTXO: tx_id: {}, output_index: {}",
-                    digest_to_hex_string(&input.prev_tx_id),
-                    input.output_index
+                    digest_to_hex_string(&txid),
+                    vout
                 ));
             }
         }

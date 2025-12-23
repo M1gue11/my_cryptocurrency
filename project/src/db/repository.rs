@@ -53,7 +53,53 @@ impl LedgerRepository {
         Ok(result)
     }
 
-    pub fn get_transaction(&self, txid: &[u8; 32]) -> Result<Option<Transaction>> {
+    pub fn get_utxos_from_ids(&self, ids: &[(TxId, usize)]) -> Result<Vec<UTXO>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut query = String::from("SELECT txid, vout, value, addr FROM utxos WHERE ");
+        let conditions: Vec<String> = (0..ids.len())
+            .map(|i| format!("(txid = ?{} AND vout = ?{})", i * 2 + 1, i * 2 + 2))
+            .collect();
+        query.push_str(&conditions.join(" OR "));
+
+        println!("Prepared query: {}", query);
+        let mut stmt = self.conn.prepare(&query)?;
+
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        for (txid, vout) in ids {
+            params.push(Box::new(txid.to_vec()));
+            params.push(Box::new(*vout as i64));
+        }
+
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let utxos = stmt.query_map(rusqlite::params_from_iter(params_refs), |row| {
+            build_utxo_from_row(row)
+        })?;
+
+        let mut result = Vec::new();
+        for utxo in utxos {
+            result.push(utxo?);
+        }
+        Ok(result)
+    }
+
+    pub fn get_all_utxos(&self, limit: Option<usize>) -> Result<Vec<UTXO>> {
+        let query = format!(
+            "SELECT txid, vout, value, addr FROM utxos LIMIT {}",
+            limit.unwrap_or_else(|| 20)
+        );
+        let mut stmt = self.conn.prepare(&query)?;
+        let utxos = stmt.query_map([], |row| build_utxo_from_row(row))?;
+        let mut result = Vec::new();
+        for utxo in utxos {
+            result.push(utxo?);
+        }
+        Ok(result)
+    }
+
+    pub fn get_transaction(&self, txid: &[u8; 32]) -> Result<Transaction> {
         let mut stmt = self
             .conn
             .prepare("SELECT raw FROM transactions WHERE txid = ?1")?;
@@ -64,9 +110,9 @@ impl LedgerRepository {
             let raw: Vec<u8> = row.get(0)?;
             let tx: Transaction = serde_json::from_slice(&raw)
                 .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-            Ok(Some(tx))
+            Ok(tx)
         } else {
-            Ok(None)
+            Err(rusqlite::Error::QueryReturnedNoRows)
         }
     }
 

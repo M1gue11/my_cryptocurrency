@@ -1,5 +1,6 @@
 use super::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, WalletCommands};
 use crate::{
+    db::repository::LedgerRepository,
     front::cli::NodeCommands,
     model::{TxOutput, Wallet, get_node, get_node_mut, init_node},
 };
@@ -113,6 +114,8 @@ fn print_help() {
     println!("  chain validate             - Validate blockchain integrity");
     println!("  chain save                 - Save blockchain to disk");
     println!("  chain rollback --count <n> - Rollback N blocks (for debugging)");
+    println!("  chain utxos [--limit <n>]  - Show at most <n> UTXOs");
+    println!("    - Limit is optional, default is 10");
 
     println!("\n💰 Wallet:");
     println!("  wallet new --seed <seed> [--name <name>]");
@@ -185,6 +188,17 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                         return Err("Count must be greater than zero".to_string());
                     }
                     Ok(Commands::Chain(ChainCommands::Rollback { count }))
+                }
+                "utxos" => {
+                    let limit = if let Ok(limit_str) = parse_flag_value(&parts, "--limit") {
+                        limit_str.parse::<u32>().map_err(|_| {
+                            "Invalid limit format. Must be a positive number".to_string()
+                        })?
+                    } else {
+                        20
+                    };
+
+                    Ok(Commands::Chain(ChainCommands::Utxos { limit }))
                 }
                 _ => Err(format!("Unknown chain command: {}", parts[1])),
             }
@@ -533,6 +547,59 @@ fn handle_chain(command: ChainCommands) {
                     println!("✗ Rollback failed: {}", e);
                 }
             }
+        }
+
+        ChainCommands::Utxos { limit } => {
+            let repo = LedgerRepository::new();
+            let utxos = repo.get_all_utxos(Some(limit as usize));
+
+            if utxos.is_err() {
+                println!("⚠  No UTXOs found in the blockchain");
+                return;
+            }
+
+            let utxo_list = utxos.unwrap();
+            println!("\n=== UTXOs (showing up to {}) ===\n", limit);
+
+            println!(
+                "┌──────┬──────────────────┬───────┬──────────────┬────────────────────────────────────────────────┐"
+            );
+            println!(
+                "│  #   │     TX ID        │ Index │    Value     │                   Address                      │"
+            );
+            println!(
+                "├──────┼──────────────────┼───────┼──────────────┼────────────────────────────────────────────────┤"
+            );
+
+            for (i, utxo) in utxo_list.iter().take(limit as usize).enumerate() {
+                let tx_id_hex = hex::encode(utxo.tx_id);
+                let tx_id_short = format!("{}...{} ", &tx_id_hex[..6], &tx_id_hex[58..]);
+
+                println!(
+                    "│ {:>4} │ {} │ {:>5} │ {:>12.2} │ {:46} │",
+                    i + 1,
+                    tx_id_short,
+                    utxo.index,
+                    utxo.output.value,
+                    utxo.output.address
+                );
+            }
+
+            println!(
+                "└──────┴──────────────────┴───────┴──────────────┴────────────────────────────────────────────────┘"
+            );
+
+            let total: f64 = utxo_list
+                .iter()
+                .take(limit as usize)
+                .map(|u| u.output.value)
+                .sum();
+            println!(
+                "\nTotal: {:.2} coins across {} UTXOs",
+                total,
+                utxo_list.len().min(limit as usize)
+            );
+            println!();
         }
     }
 }

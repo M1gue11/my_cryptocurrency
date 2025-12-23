@@ -64,6 +64,12 @@ pub enum ChainCommands {
         #[arg(short, long)]
         count: u32,
     },
+
+    Utxos {
+        /// Limit the number of UTXOs displayed
+        #[arg(short, long, default_value_t = 20)]
+        limit: u32,
+    },
 }
 
 #[derive(Subcommand)]
