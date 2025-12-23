@@ -1,5 +1,7 @@
 use super::Block;
-use crate::globals::CONFIG;
+use crate::{
+    db::repository::LedgerRepository, globals::CONFIG, security_utils::digest_to_hex_string,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -29,6 +31,7 @@ impl Blockchain {
         self.chain.is_empty()
     }
 
+    /** Validate the recently mined block and if valid, add it to the chain */
     pub fn add_block(&mut self, block: Block) -> Result<(), String> {
         let last_block_hash = self.get_last_block_hash();
 
@@ -36,11 +39,23 @@ impl Blockchain {
             return Err("Previous block hash does not match".to_string());
         }
 
-        let block_validation = block.validate();
-        match block_validation {
-            Ok(()) => self.chain.push(block),
-            Err(e) => return Err(e),
-        };
+        if let Err(e) = block.validate() {
+            return Err(format!("Block validation failed: {}", e));
+        }
+        let repo = LedgerRepository::new();
+        for tx in &block.transactions {
+            for input in &tx.inputs {
+                let input_utxo = repo.get_utxo(input.prev_tx_id, input.output_index);
+                if input_utxo.is_err() {
+                    return Err(format!(
+                        "Transaction input is not a valid UTXO: tx_id: {}, output_index: {}",
+                        digest_to_hex_string(&input.prev_tx_id),
+                        input.output_index
+                    ));
+                }
+            }
+        }
+        self.chain.push(block);
         Ok(())
     }
 

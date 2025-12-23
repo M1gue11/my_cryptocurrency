@@ -90,31 +90,31 @@ impl Node {
         mempool
     }
 
-    fn validate_blockchain(_: &Blockchain) -> Result<bool, String> {
-        // TODO: implement full blockchain validation. We cannot use the db to validate the chain here
+    fn validate_blockchain(bc: &Blockchain) -> Result<bool, String> {
+        let chain_ref = &bc.chain;
+        for (i, block) in chain_ref.iter().enumerate() {
+            if i == 0 {
+                if block.header.prev_block_hash != [0; 32] {
+                    return Err("Genesis block has invalid previous hash".to_string());
+                }
+                continue;
+            }
+            let prev_block = &chain_ref[i - 1];
+
+            // TODO: implement full blockchain validation. We cannot use the db to validate the chain here
+            // we should validate UTXOs at the block height
+            if let Err(e) = block.validate() {
+                return Err(e);
+            }
+
+            if block.header.prev_block_hash != prev_block.header_hash() {
+                return Err(format!(
+                    "Block {} has invalid previous block hash",
+                    digest_to_hex_string(&block.id())
+                ));
+            }
+        }
         Ok(true)
-        // let chain_ref = &bc.chain;
-        // for (i, block) in chain_ref.iter().enumerate() {
-        //     if i == 0 {
-        //         if block.header.prev_block_hash != [0; 32] {
-        //             return Err("Genesis block has invalid previous hash".to_string());
-        //         }
-        //         continue;
-        //     }
-        //     let prev_block = &chain_ref[i - 1];
-
-        //     if let Err(e) = block.validate() {
-        //         return Err(e);
-        //     }
-
-        //     if block.header.prev_block_hash != prev_block.header_hash() {
-        //         return Err(format!(
-        //             "Block {} has invalid previous block hash",
-        //             digest_to_hex_string(&block.id())
-        //         ));
-        //     }
-        // }
-        // Ok(true)
     }
 
     pub fn is_chain_empty(&self) -> bool {
