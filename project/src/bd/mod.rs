@@ -277,7 +277,7 @@ impl Db {
         Ok(())
     }
 
-    pub fn get_utxo(&self, txid: TxId, vout: usize) -> Result<Option<UTXO>> {
+    pub fn get_utxo(&self, txid: TxId, vout: usize) -> Result<UTXO> {
         let mut stmt = self
             .conn
             .prepare("SELECT txid, vout, value, addr FROM utxos WHERE txid = ?1 AND vout = ?2")?;
@@ -293,16 +293,16 @@ impl Db {
             let value: i64 = row.get(2)?;
             let address: String = row.get(3)?;
 
-            Ok(Some(UTXO {
+            Ok(UTXO {
                 tx_id: txid_result,
                 index: vout_result as usize,
                 output: TxOutput {
                     value: value as f64,
                     address,
                 },
-            }))
+            })
         } else {
-            Ok(None)
+            Err(rusqlite::Error::QueryReturnedNoRows)
         }
     }
 

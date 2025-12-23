@@ -103,7 +103,6 @@ impl Block {
                         input.output_index
                     ));
                 }
-
                 let input_utxo = db.get_utxo(input.prev_tx_id, input.output_index);
                 if input_utxo.is_err() {
                     return Err(format!(
