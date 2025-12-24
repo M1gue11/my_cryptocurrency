@@ -91,6 +91,12 @@ impl Transaction {
     pub fn is_coinbase(&self) -> bool {
         self.inputs.is_empty()
     }
+
+    pub fn calculate_fee(&self, referenced_outputs: &Vec<TxOutput>) -> f64 {
+        let input_sum: f64 = referenced_outputs.iter().map(|o| o.value).sum();
+        let output_sum: f64 = self.outputs.iter().map(|o| o.value).sum();
+        input_sum - output_sum
+    }
 }
 
 impl std::fmt::Display for Transaction {
