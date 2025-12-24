@@ -709,8 +709,6 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
 }
 
 fn handle_transaction(command: TransactionCommands) {
-    let node = get_node();
-
     match command {
         TransactionCommands::View { id } => {
             let tx_id_bytes = match hex::decode(&id) {
@@ -725,8 +723,9 @@ fn handle_transaction(command: TransactionCommands) {
                 }
             };
 
-            match node.find_transaction(&tx_id_bytes) {
-                Some(tx) => {
+            let repo = LedgerRepository::new();
+            match repo.get_transaction(&tx_id_bytes) {
+                Ok(tx) => {
                     println!("\n=== Transaction Details ===");
                     println!("  ID: {}", hex::encode(tx.id()));
                     println!("  Date: {}", tx.date);
@@ -751,7 +750,7 @@ fn handle_transaction(command: TransactionCommands) {
                     }
                     println!();
                 }
-                None => {
+                Err(_) => {
                     println!("✗ Transaction not found");
                 }
             }

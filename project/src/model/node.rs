@@ -4,6 +4,7 @@ use std::io::BufWriter;
 
 use crate::db::repository::LedgerRepository;
 use crate::globals::CONFIG;
+use crate::model::transaction::TxId;
 use crate::model::{Block, Blockchain, Miner, Transaction};
 use crate::security_utils::digest_to_hex_string;
 
@@ -127,6 +128,33 @@ impl Node {
         Node::validate_blockchain(&self.blockchain)
     }
 
+    /** Invalidate mempool transactions that are already included in the blockchain or are no longer valid */
+    fn invalidate_mempool(&mut self) {
+        let repo = LedgerRepository::new();
+        self.mempool.retain(|tx| {
+            if let Err(_) = repo.get_transaction(&tx.id()) {
+                true
+            } else {
+                false
+            }
+        });
+        let txs_to_remove: Vec<TxId> = self
+            .mempool
+            .iter()
+            .enumerate()
+            .filter_map(|(_, tx)| {
+                if let Err(_) = self.is_all_inputs_utxos(tx) {
+                    Some(tx.id())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let txs_to_remove_set: HashSet<TxId> = HashSet::from_iter(txs_to_remove);
+        self.mempool
+            .retain(|tx| !txs_to_remove_set.contains(&tx.id()));
+    }
+
     fn submit_block(&mut self, block: Block) -> Result<(), String> {
         match self.blockchain.add_block(block) {
             Err(e) => return Err(e),
@@ -142,20 +170,10 @@ impl Node {
                 let mut repo = LedgerRepository::new();
                 repo.apply_block(added_block.clone(), &added_block.transactions)
                     .map_err(|e| e.to_string())?;
+                self.invalidate_mempool();
                 Ok(())
             }
         }
-    }
-
-    pub fn find_transaction(&self, tx_id: &[u8; 32]) -> Option<&Transaction> {
-        for block in &self.blockchain.chain {
-            for tx in &block.transactions {
-                if &tx.id() == tx_id {
-                    return Some(tx);
-                }
-            }
-        }
-        None
     }
 
     pub fn is_all_inputs_utxos(&self, tx: &Transaction) -> Result<(), String> {
@@ -199,7 +217,8 @@ impl Node {
             return Err("Transaction already in mempool".to_string());
         }
 
-        if self.find_transaction(&tx.id()).is_some() {
+        let repo = LedgerRepository::new();
+        if repo.get_transaction(&tx.id()).is_ok() {
             return Err("Transaction already in blockchain!".to_string());
         }
 

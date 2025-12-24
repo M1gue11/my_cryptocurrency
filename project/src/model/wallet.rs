@@ -1,6 +1,4 @@
 use crate::db::repository::LedgerRepository;
-use crate::model::get_node;
-// use crate::globals::NODE;
 use crate::model::io::UTXO;
 use crate::{
     model::{HDKey, Transaction, TxInput, TxOutput},
@@ -36,9 +34,10 @@ impl Wallet {
 
     pub fn generate_n_keys(&self, n: u32, offset: Option<u32>) -> Vec<HDKey> {
         let mut keys = Vec::with_capacity(n as usize);
+        let start_index = offset.unwrap_or(0);
         for i in 0..n {
             let mut full_path = BASE_PATH.to_vec();
-            full_path.push(i + offset.unwrap_or(0));
+            full_path.push(i + start_index);
             let child_hdkey = self.derive_path(&full_path);
             keys.push(child_hdkey);
         }
@@ -118,8 +117,29 @@ impl Wallet {
         utxos
     }
 
+    /// Selects UTXOs from the wallet to cover the specified amount.
+    ///
+    /// This function implements a greedy coin selection algorithm:
+    /// 1. Retrieves all available UTXOs from the wallet
+    /// 2. Sorts UTXOs in descending order by value (largest first)
+    /// 3. Accumulates UTXOs until the total meets or exceeds the required amount
+    ///
+    /// # Arguments
+    /// * `amount` - The minimum value required to be covered by selected UTXOs
+    ///
+    /// # Returns
+    /// * `Some(Vec<UTXO>)` - A vector of selected UTXOs if sufficient funds are available
+    /// * `None` - If the wallet doesn't have enough funds to cover the amount
     pub fn select_utxos(&self, amount: f64) -> Option<Vec<UTXO>> {
-        let utxos = self.get_wallet_utxos();
+        let mut utxos = self.get_wallet_utxos();
+        // Sort UTXOs in descending order by value (largest first)
+        utxos.sort_by(|a, b| {
+            b.output
+                .value
+                .partial_cmp(&a.output.value)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
         let mut selected = Vec::new();
         let mut total = 0.0;
         for utxo in utxos {
@@ -129,6 +149,7 @@ impl Wallet {
                 return Some(selected);
             }
         }
+        // Insufficient funds
         None
     }
 
@@ -138,10 +159,11 @@ impl Wallet {
     }
 
     pub fn send_tx(
-        &self,
-        outputs: Vec<TxOutput>,
+        &mut self,
+        mut outputs: Vec<TxOutput>,
         message: Option<String>,
     ) -> Result<Transaction, &'static str> {
+        // Validate output addresses
         let is_outputs_valid = outputs
             .iter()
             .map(|o| &o.address)
@@ -150,22 +172,27 @@ impl Wallet {
             return Err("One or more output addresses are invalid");
         }
 
+        // Calculate total needed and select UTXOs
         let total_needed: f64 = outputs.iter().map(|o| o.value).sum();
-        let utxos_to_spend = self.select_utxos(total_needed);
+        let utxos_to_spend = match self.select_utxos(total_needed) {
+            Some(utxos) => utxos,
+            None => return Err("Insufficient funds"),
+        };
 
-        if utxos_to_spend.is_none() {
-            return Err("Insufficient funds");
+        // Calculate change and add change output if necessary
+        let change = utxos_to_spend.iter().map(|u| u.output.value).sum::<f64>() - total_needed;
+        if change > 0.0 {
+            let change_address = self.get_change_addr();
+            let change_output = TxOutput {
+                address: change_address,
+                value: change,
+            };
+            outputs.push(change_output);
         }
 
+        // Create inputs from selected UTXOs
         let mut inputs = Vec::new();
-        let node = get_node();
-
-        for utxo in utxos_to_spend.unwrap() {
-            let output_tx = node.find_transaction(&utxo.tx_id);
-            if output_tx.is_none() {
-                return Err("UTXO origin transaction not found");
-            }
-
+        for utxo in utxos_to_spend {
             let input = TxInput {
                 prev_tx_id: utxo.tx_id,
                 output_index: utxo.index,
@@ -175,21 +202,19 @@ impl Wallet {
             inputs.push((input, utxo.output.address, utxo.index));
         }
 
+        // Create the transaction and sign inputs
         let mut tx = Transaction::new(
             inputs.iter().map(|(inp, _, _)| inp.clone()).collect(),
             outputs,
             message,
         );
         let tx_bytes = &tx.as_bytes();
-
-        for (i, (_input, addr, _index)) in inputs.into_iter().enumerate() {
+        for (i, (_, addr, _)) in inputs.into_iter().enumerate() {
             if let Some(derivation_index) = self.owns_address(&addr) {
                 let mut path = BASE_PATH.to_vec();
                 path.push(derivation_index);
                 let child_hdkey = self.derive_path(&path);
-
                 let sig = child_hdkey.sign(tx_bytes);
-
                 tx.inputs[i].signature = hex::encode(sig.to_bytes());
                 tx.inputs[i].public_key = public_key_to_hex(&child_hdkey.get_public_key());
             } else {
