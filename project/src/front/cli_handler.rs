@@ -2,7 +2,7 @@ use super::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, Wal
 use crate::{
     db::repository::LedgerRepository,
     front::cli::NodeCommands,
-    model::{TxOutput, Wallet, get_node, get_node_mut, init_node},
+    model::{TxOutput, Wallet, get_node, get_node_mut, init_node, wallet::DerivationType},
 };
 use std::io::{self, Write};
 
@@ -133,8 +133,10 @@ fn print_help() {
     println!("\n  wallet send [--from <name>] --to <addr> --amount <n> [--message <msg>]");
     println!("    - Send transaction (miner's wallet will send by default)");
 
-    println!("\n  wallet generate-keys [--count <n>] [--name <name>]");
-    println!("    - Generate n keys (default: 5)");
+    println!("\n  wallet generate-keys [--count <n>] [--name <name>] [--type <0|1>]");
+    println!("    - Generate n keys (default: 5). ");
+    println!("    - If name is provided, uses that wallet. ");
+    println!("    - Type 0 = receive, 1 = change. ");
 
     println!("\n📄 Transaction:");
     println!("  transaction view --id <hex_id>     - View transaction details");
@@ -295,9 +297,22 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                         return Err("Count cannot exceed 100".to_string());
                     }
 
+                    let type_ = if let Ok(type_str) = parse_flag_value(&parts, "--type") {
+                        let t = type_str.parse::<u32>().map_err(|_| {
+                            "Invalid type format. Must be 0 (receive) or 1 (change)".to_string()
+                        })?;
+                        if t > 1 {
+                            return Err("Type must be 0 (receive) or 1 (change)".to_string());
+                        }
+                        Some(t)
+                    } else {
+                        None
+                    };
+
                     Ok(Commands::Wallet(WalletCommands::GenerateKeys {
                         count,
                         name,
+                        type_,
                     }))
                 }
 
@@ -690,9 +705,19 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
             }
         }
 
-        WalletCommands::GenerateKeys { count, name } => {
+        WalletCommands::GenerateKeys { count, name, type_ } => {
             let wallet = resolve_wallet_by_name(name, loaded_wallets);
-            let keys = wallet.generate_n_keys(count, None);
+            let keys = wallet.generate_n_keys(
+                count,
+                None,
+                type_.map(|t| {
+                    if t == 0 {
+                        DerivationType::Receive
+                    } else {
+                        DerivationType::Change
+                    }
+                }),
+            );
 
             println!("✓ Generated {} keys:\n", count);
             for (i, key) in keys.iter().enumerate() {

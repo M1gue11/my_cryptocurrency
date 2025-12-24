@@ -128,6 +128,10 @@ pub enum WalletCommands {
         /// Name of the wallet to generate keys from
         #[arg(short, long)]
         name: Option<String>,
+
+        /// Type of derivation (0 = receive, 1 = change)
+        #[arg(short, long, default_value = "0")]
+        type_: Option<u32>,
     },
 }
 

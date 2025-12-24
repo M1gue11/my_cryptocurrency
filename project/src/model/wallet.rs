@@ -13,6 +13,12 @@ pub struct Wallet {
 
 const GAP_LIMIT: u32 = 20;
 
+#[derive(Clone)]
+pub enum DerivationType {
+    Receive = 0,
+    Change = 1,
+}
+
 /** purpose / account / change / index */
 const BASE_PATH: [u32; 4] = [111, 0, 0, 0];
 impl Wallet {
@@ -24,6 +30,12 @@ impl Wallet {
         }
     }
 
+    fn get_base_path(&self, d_type: &DerivationType) -> Vec<u32> {
+        let mut base = BASE_PATH.to_vec();
+        base[2] = d_type.clone() as u32;
+        base
+    }
+
     pub fn derive_path(&self, path: &[u32]) -> HDKey {
         let mut node = self.master_hdkey.clone();
         for &i in path {
@@ -32,11 +44,17 @@ impl Wallet {
         node
     }
 
-    pub fn generate_n_keys(&self, n: u32, offset: Option<u32>) -> Vec<HDKey> {
+    pub fn generate_n_keys(
+        &self,
+        n: u32,
+        offset: Option<u32>,
+        d_type: Option<DerivationType>,
+    ) -> Vec<HDKey> {
+        let derivation_type = d_type.unwrap_or(DerivationType::Receive);
         let mut keys = Vec::with_capacity(n as usize);
         let start_index = offset.unwrap_or(0);
         for i in 0..n {
-            let mut full_path = BASE_PATH.to_vec();
+            let mut full_path = self.get_base_path(&derivation_type);
             full_path.push(i + start_index);
             let child_hdkey = self.derive_path(&full_path);
             keys.push(child_hdkey);
@@ -44,49 +62,57 @@ impl Wallet {
         keys
     }
 
-    /**
-     * Use gap limit strategy to check if the wallet owns the given address
-     * Returns: Returns the index of the address if owned by the wallet, otherwise None
-     */
-    pub fn owns_address(&self, address: &str) -> Option<u32> {
-        let repo = LedgerRepository::new();
-        let mut gap_count = 0;
-        loop {
-            let batch = self.generate_n_keys(GAP_LIMIT, Some(GAP_LIMIT * gap_count));
-            // verify if the address is in the current batch
-            let index = batch.iter().position(|k| k.get_address() == address);
-            if let Some(i) = index {
-                return Some((i as u32) + GAP_LIMIT * gap_count);
-            }
-            // if not, check if any address in the batch has been used in the blockchain
-            let addresses: Vec<String> = batch.iter().map(|k| k.get_address()).collect();
-            let any_address_in_bc = repo.has_any_address_been_used(&addresses);
-            if any_address_in_bc.is_err() || !any_address_in_bc.unwrap() {
-                break;
-            }
-            gap_count += 1;
-        }
-        None
-    }
-
-    fn list_used_gaps(&self) -> Vec<HDKey> {
+    fn generate_used_keys_for_type(&self, d_type: DerivationType) -> Vec<HDKey> {
         let repo = LedgerRepository::new();
         let mut gap_count = 0;
         let mut keys: Vec<HDKey> = Vec::with_capacity(GAP_LIMIT as usize);
-        loop {
-            let batch: Vec<HDKey> = self.generate_n_keys(GAP_LIMIT, Some(GAP_LIMIT * gap_count));
-            let addresses: Vec<String> = batch.iter().map(|k| k.get_address()).collect();
 
+        loop {
+            let mut batch = Vec::new();
+            for i in 0..GAP_LIMIT {
+                let mut path = self.get_base_path(&d_type);
+                path.push(i + GAP_LIMIT * gap_count);
+                batch.push(self.derive_path(&path));
+            }
+
+            let addresses: Vec<String> = batch.iter().map(|k| k.get_address()).collect();
             let any_address_in_bc = repo.has_any_address_been_used(&addresses);
 
-            // If no address was used, do not add this batch and stop
+            // If no address was used, stop iterating
             if any_address_in_bc.is_err() || !any_address_in_bc.unwrap() {
                 break;
             }
+
             keys.extend(batch);
             gap_count += 1;
         }
+
         keys
+    }
+
+    /// Generates all keys (both receive and change) derived from used addresses using the gap limit strategy.
+    fn generate_all_used_keys(&self) -> Vec<HDKey> {
+        let mut keys = self.generate_used_keys_for_type(DerivationType::Receive);
+        keys.extend(self.generate_used_keys_for_type(DerivationType::Change));
+        keys
+    }
+
+    /// Checks if the wallet owns the given address using the gap limit strategy.
+    /// # Returns
+    /// * `Some(u32)` - The derivation index if the wallet owns this address
+    /// * `None` - If the address is not owned by this wallet
+    pub fn owns_address(&self, address: &str) -> Option<u32> {
+        let keys = self.generate_all_used_keys();
+        keys.iter()
+            .position(|k| k.get_address() == address)
+            .map(|i| i as u32)
+    }
+
+    /// Lists all keys derived from addresses that have been used in the blockchain.
+    /// # Returns
+    /// A vector of HDKey objects for all addresses detected as used in the blockchain
+    fn list_used_gaps(&self) -> Vec<HDKey> {
+        self.generate_all_used_keys()
     }
 
     pub fn get_receive_addr(&mut self) -> String {
