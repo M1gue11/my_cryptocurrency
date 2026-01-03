@@ -104,6 +104,7 @@ fn print_help() {
     println!("\n★  Node:");
     println!("  node init                       - Reinitialize the node");
     println!("  node mempool                    - Display transactions in the mempool");
+    println!("  node clear-mempool              - Clear all transactions in the mempool");
 
     println!("\n⛏  Mining:");
     println!("  mine block                 - Mine a new block with pending transactions");
@@ -153,11 +154,12 @@ fn parse_command(input: &str) -> Result<Commands, String> {
     match parts[0] {
         "node" => {
             if parts.len() < 2 {
-                return Err("Usage: node <init|mempool>".to_string());
+                return Err("Usage: node <init|mempool|clear-mempool>".to_string());
             }
             match parts[1] {
                 "init" => Ok(Commands::Node(NodeCommands::Init)),
                 "mempool" => Ok(Commands::Node(NodeCommands::Mempool)),
+                "clear-mempool" => Ok(Commands::Node(NodeCommands::ClearMempool)),
                 _ => Err(format!("Unknown node command: {}", parts[1])),
             }
         }
@@ -419,6 +421,13 @@ fn handle_node(command: NodeCommands) {
             }
 
             node.print_mempool();
+        }
+
+        NodeCommands::ClearMempool => {
+            let node = get_node_mut();
+            node.clear_mempool();
+            node.save_node();
+            println!("✓ Mempool cleared");
         }
     }
 }
@@ -684,7 +693,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
             }];
             let wallet = resolve_wallet_by_name(from, loaded_wallets);
 
-            match wallet.send_tx(outputs, message.clone()) {
+            match wallet.send_tx(outputs, Option::None, message.clone()) {
                 Ok(tx) => match node.receive_transaction(tx) {
                     Ok(_) => {
                         println!("✓ Transaction created and added to mempool");

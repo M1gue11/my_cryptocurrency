@@ -256,6 +256,10 @@ impl Node {
         }
     }
 
+    pub fn clear_mempool(&mut self) {
+        self.mempool.clear();
+    }
+
     pub fn rollback_blocks(&mut self, _count: u32) -> Result<(), String> {
         Err("Rollback functionality is currently disabled.".to_string())
         // if count == 0 {

@@ -36,6 +36,8 @@ pub enum NodeCommands {
     Init,
 
     Mempool,
+
+    ClearMempool,
 }
 
 #[derive(Subcommand)]
