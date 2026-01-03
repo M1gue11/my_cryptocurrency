@@ -1,4 +1,5 @@
 use crate::db::repository::LedgerRepository;
+use crate::model::MempoolTx;
 use crate::model::io::UTXO;
 use crate::{
     model::{HDKey, Transaction, TxInput, TxOutput},
@@ -188,7 +189,7 @@ impl Wallet {
         &mut self,
         mut outputs: Vec<TxOutput>,
         message: Option<String>,
-    ) -> Result<Transaction, &'static str> {
+    ) -> Result<MempoolTx, &'static str> {
         // Validate output addresses
         let is_outputs_valid = outputs
             .iter()
@@ -201,7 +202,7 @@ impl Wallet {
         // Calculate total needed and select UTXOs
         let total_needed: f64 = outputs.iter().map(|o| o.value).sum();
         let utxos_to_spend = match self.select_utxos(total_needed) {
-            Some(utxos) => utxos,
+            Some(ref utxos) => utxos.clone(),
             None => return Err("Insufficient funds"),
         };
 
@@ -218,36 +219,40 @@ impl Wallet {
 
         // Create inputs from selected UTXOs
         let mut inputs = Vec::new();
-        for utxo in utxos_to_spend {
+        for utxo in &utxos_to_spend {
+            // Use a reference to avoid moving
             let input = TxInput {
                 prev_tx_id: utxo.tx_id,
                 output_index: utxo.index,
                 signature: "".to_string(), // will be signed later
                 public_key: String::new(), // will be filled later
             };
-            inputs.push((input, utxo.output.address, utxo.index));
+            inputs.push((input, utxo.output.address.clone(), utxo.index));
         }
 
         // Create the transaction and sign inputs
-        let mut tx = Transaction::new(
-            inputs.iter().map(|(inp, _, _)| inp.clone()).collect(),
-            outputs,
-            message,
+        let mut mem_tx = MempoolTx::new(
+            Transaction::new(
+                inputs.iter().map(|(inp, _, _)| inp.clone()).collect(),
+                outputs,
+                message,
+            ),
+            utxos_to_spend,
         );
-        let tx_bytes = &tx.as_bytes();
+        let tx_bytes = &mem_tx.tx.as_bytes();
         for (i, (_, addr, _)) in inputs.into_iter().enumerate() {
             if let Some(derivation_index) = self.owns_address(&addr) {
                 let mut path = BASE_PATH.to_vec();
                 path.push(derivation_index);
                 let child_hdkey = self.derive_path(&path);
                 let sig = child_hdkey.sign(tx_bytes);
-                tx.inputs[i].signature = hex::encode(sig.to_bytes());
-                tx.inputs[i].public_key = public_key_to_hex(&child_hdkey.get_public_key());
+                mem_tx.tx.inputs[i].signature = hex::encode(sig.to_bytes());
+                mem_tx.tx.inputs[i].public_key = public_key_to_hex(&child_hdkey.get_public_key());
             } else {
                 return Err("Address not owned by wallet");
             }
         }
 
-        Ok(tx)
+        Ok(mem_tx)
     }
 }

@@ -64,7 +64,6 @@ impl LedgerRepository {
             .collect();
         query.push_str(&conditions.join(" OR "));
 
-        println!("Prepared query: {}", query);
         let mut stmt = self.conn.prepare(&query)?;
 
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();

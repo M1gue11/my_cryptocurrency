@@ -8,6 +8,7 @@ pub struct Settings {
     pub persisted_chain_path: String,
     pub block_reward: f64,
     pub db_path: String,
+    pub max_txs_per_block: usize,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {

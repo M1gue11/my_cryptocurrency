@@ -5,7 +5,7 @@ use std::io::BufWriter;
 use crate::db::repository::LedgerRepository;
 use crate::globals::CONFIG;
 use crate::model::transaction::TxId;
-use crate::model::{Block, Blockchain, Miner, Transaction};
+use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction};
 use crate::security_utils::digest_to_hex_string;
 
 const MEMPOOL_FILE: &str = "mempool.json";
@@ -13,7 +13,7 @@ const MEMPOOL_FILE: &str = "mempool.json";
 pub struct Node {
     pub miner: Miner,
     pub blockchain: Blockchain,
-    mempool: Vec<Transaction>,
+    mempool: Vec<MempoolTx>,
     difficulty: usize,
 }
 
@@ -72,7 +72,7 @@ impl Node {
         serde_json::to_writer(writer, &self.mempool).expect("Failed to write blockchain to file");
     }
 
-    fn load_mempool() -> Vec<Transaction> {
+    fn load_mempool() -> Vec<MempoolTx> {
         let path = CONFIG.persisted_chain_path.to_string();
         let file_path = format!("{}/{}", path, MEMPOOL_FILE);
 
@@ -84,7 +84,7 @@ impl Node {
             }
         };
         let reader = std::io::BufReader::new(file);
-        let mempool: Vec<Transaction> =
+        let mempool: Vec<MempoolTx> =
             serde_json::from_reader(reader).expect("Failed to read mempool from file");
         mempool
     }
@@ -132,7 +132,7 @@ impl Node {
     fn invalidate_mempool(&mut self) {
         let repo = LedgerRepository::new();
         self.mempool.retain(|tx| {
-            if let Err(_) = repo.get_transaction(&tx.id()) {
+            if let Err(_) = repo.get_transaction(&tx.tx.id()) {
                 true
             } else {
                 false
@@ -142,9 +142,9 @@ impl Node {
             .mempool
             .iter()
             .enumerate()
-            .filter_map(|(_, tx)| {
-                if let Err(_) = self.is_all_inputs_utxos(tx) {
-                    Some(tx.id())
+            .filter_map(|(_, mem_tx)| {
+                if let Err(_) = self.is_all_inputs_utxos(&mem_tx.tx) {
+                    Some(mem_tx.tx.id())
                 } else {
                     None
                 }
@@ -152,7 +152,7 @@ impl Node {
             .collect();
         let txs_to_remove_set: HashSet<TxId> = HashSet::from_iter(txs_to_remove);
         self.mempool
-            .retain(|tx| !txs_to_remove_set.contains(&tx.id()));
+            .retain(|mem_tx| !txs_to_remove_set.contains(&mem_tx.tx.id()));
     }
 
     fn submit_block(&mut self, block: Block) -> Result<(), String> {
@@ -161,11 +161,11 @@ impl Node {
             Ok(()) => {
                 let added_block = self.blockchain.chain.last().unwrap();
 
-                self.mempool.retain(|tx| {
+                self.mempool.retain(|mem_tx| {
                     !added_block
                         .transactions
                         .iter()
-                        .any(|btx| btx.id() == tx.id())
+                        .any(|btx| btx.id() == mem_tx.tx.id())
                 });
                 let mut repo = LedgerRepository::new();
                 repo.apply_block(added_block.clone(), &added_block.transactions)
@@ -205,14 +205,15 @@ impl Node {
         Ok(())
     }
 
-    pub fn receive_transaction(&mut self, tx: Transaction) -> Result<(), String> {
+    pub fn receive_transaction(&mut self, mem_txs: MempoolTx) -> Result<(), String> {
+        let tx = &mem_txs.tx;
         if !tx.validate() {
             return Err("Invalid transaction signature".to_string());
         }
         if self
             .mempool
             .iter()
-            .any(|mempool_tx| mempool_tx.id() == tx.id())
+            .any(|mempool_tx| mempool_tx.tx.id() == tx.id())
         {
             return Err("Transaction already in mempool".to_string());
         }
@@ -226,7 +227,7 @@ impl Node {
             return Err(e);
         }
 
-        self.mempool.push(tx);
+        self.mempool.push(mem_txs);
         Ok(())
     }
 
@@ -250,55 +251,56 @@ impl Node {
 
     pub fn print_mempool(&self) {
         println!("Mempool Transactions:");
-        for tx in &self.mempool {
-            println!("{:#?}", tx);
+        for mem_tx in &self.mempool {
+            println!("{:#?}", mem_tx.tx);
         }
     }
 
-    pub fn rollback_blocks(&mut self, count: u32) -> Result<(), String> {
-        if count == 0 {
-            return Err("Count must be greater than zero".to_string());
-        }
+    pub fn rollback_blocks(&mut self, _count: u32) -> Result<(), String> {
+        Err("Rollback functionality is currently disabled.".to_string())
+        // if count == 0 {
+        //     return Err("Count must be greater than zero".to_string());
+        // }
 
-        let chain_len = self.blockchain.chain.len();
-        if chain_len == 0 {
-            return Err("Blockchain is empty, nothing to rollback".to_string());
-        }
+        // let chain_len = self.blockchain.chain.len();
+        // if chain_len == 0 {
+        //     return Err("Blockchain is empty, nothing to rollback".to_string());
+        // }
 
-        let blocks_to_remove = count as usize;
-        if blocks_to_remove >= chain_len {
-            return Err(format!(
-                "Cannot rollback {} blocks. Only {} blocks in the chain",
-                count, chain_len
-            ));
-        }
+        // let blocks_to_remove = count as usize;
+        // if blocks_to_remove >= chain_len {
+        //     return Err(format!(
+        //         "Cannot rollback {} blocks. Only {} blocks in the chain",
+        //         count, chain_len
+        //     ));
+        // }
 
-        // collect transactions from blocks to be removed
-        let mut transactions_to_restore = Vec::new();
-        for i in (chain_len - blocks_to_remove..chain_len).rev() {
-            let block = &self.blockchain.chain[i];
-            // skip coinbase transactions (they have no inputs)
-            for tx in &block.transactions {
-                if !tx.is_coinbase() {
-                    transactions_to_restore.push(tx.clone());
-                }
-            }
-        }
+        // // collect transactions from blocks to be removed
+        // let mut transactions_to_restore = Vec::new();
+        // for i in (chain_len - blocks_to_remove..chain_len).rev() {
+        //     let block = &self.blockchain.chain[i];
+        //     // skip coinbase transactions (they have no inputs)
+        //     for tx in &block.transactions {
+        //         if !tx.is_coinbase() {
+        //             transactions_to_restore.push(tx.clone());
+        //         }
+        //     }
+        // }
 
-        // remove blocks from the chain
-        self.blockchain.chain.truncate(chain_len - blocks_to_remove);
+        // // remove blocks from the chain
+        // self.blockchain.chain.truncate(chain_len - blocks_to_remove);
 
-        // add transactions back to mempool
-        for tx in transactions_to_restore {
-            if !self
-                .mempool
-                .iter()
-                .any(|mempool_tx| mempool_tx.id() == tx.id())
-            {
-                self.mempool.push(tx);
-            }
-        }
+        // // add transactions back to mempool
+        // for tx in transactions_to_restore {
+        //     if !self
+        //         .mempool
+        //         .iter()
+        //         .any(|mempool_tx| mempool_tx.tx.id() == tx.id())
+        //     {
+        //         self.mempool.push(tx);
+        //     }
+        // }
 
-        Ok(())
+        // Ok(())
     }
 }

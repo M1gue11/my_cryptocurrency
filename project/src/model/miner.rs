@@ -1,15 +1,14 @@
 use std::collections::HashSet;
 
 use crate::{
-    model::{Block, Transaction, Wallet, transaction::TxId},
+    globals::CONFIG,
+    model::{Block, MempoolTx, Transaction, Wallet, transaction::TxId},
     security_utils::hash_starts_with_zero_bits,
 };
 
 pub struct Miner {
     pub wallet: Wallet,
 }
-
-const USE_STUPID_MINER: bool = false;
 
 impl Miner {
     pub fn new() -> Self {
@@ -18,10 +17,11 @@ impl Miner {
         }
     }
 
-    fn chose_transactions(&self, mempool: &Vec<Transaction>) -> Vec<Transaction> {
+    fn get_legit_txs<'a>(&self, mempool: &'a Vec<MempoolTx>) -> Vec<&'a MempoolTx> {
         let mut seen_utxos: HashSet<(TxId, usize)> = HashSet::new();
-        let mut selected_txs: Vec<Transaction> = Vec::new();
-        for tx in mempool {
+        let mut selected_txs: Vec<&MempoolTx> = Vec::new();
+        for mem_tx in mempool {
+            let tx = &mem_tx.tx;
             let mut double_input = false;
             for input in &tx.inputs {
                 if seen_utxos.contains(&(input.prev_tx_id, input.output_index)) {
@@ -37,17 +37,26 @@ impl Miner {
                     .iter()
                     .map(|input| (input.prev_tx_id, input.output_index)),
             );
-            selected_txs.push(tx.clone());
+            selected_txs.push(mem_tx);
         }
         selected_txs
     }
 
-    fn build_block(&mut self, mempool: &Vec<Transaction>, previous_hash: [u8; 32]) -> Block {
-        let mut block_txs = self.chose_transactions(mempool);
-        if USE_STUPID_MINER {
-            block_txs = mempool.clone();
-        }
+    fn build_block(&mut self, mempool: &Vec<MempoolTx>, previous_hash: [u8; 32]) -> Block {
+        let mut txs = self.get_legit_txs(mempool);
 
+        // Sort transactions descending by fee
+        txs.sort_by(|a, b| {
+            let fee_a: f64 = a.calculate_fee();
+            let fee_b: f64 = b.calculate_fee();
+            fee_b.partial_cmp(&fee_a).unwrap()
+        });
+
+        // Select transactions up to the maximum allowed per block
+        // TODO:
+        txs.truncate(CONFIG.max_txs_per_block);
+
+        let mut block_txs: Vec<Transaction> = txs.iter().map(|mtx| mtx.tx.clone()).collect();
         let reward_tx = Transaction::new_coinbase(self.wallet.get_receive_addr());
         block_txs.insert(0, reward_tx);
 
@@ -65,7 +74,7 @@ impl Miner {
 
     pub fn mine(
         &mut self,
-        mempool: &Vec<Transaction>,
+        mempool: &Vec<MempoolTx>,
         previous_hash: [u8; 32],
         difficulty: usize,
     ) -> Block {

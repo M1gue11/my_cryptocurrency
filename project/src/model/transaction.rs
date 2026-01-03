@@ -1,6 +1,6 @@
 use crate::{
     globals::CONFIG,
-    model::{TxInput, TxOutput},
+    model::{TxInput, TxOutput, UTXO},
     security_utils::{
         digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
         verify_signature,
@@ -91,12 +91,6 @@ impl Transaction {
     pub fn is_coinbase(&self) -> bool {
         self.inputs.is_empty()
     }
-
-    pub fn calculate_fee(&self, referenced_outputs: &Vec<TxOutput>) -> f64 {
-        let input_sum: f64 = referenced_outputs.iter().map(|o| o.value).sum();
-        let output_sum: f64 = self.outputs.iter().map(|o| o.value).sum();
-        input_sum - output_sum
-    }
 }
 
 impl std::fmt::Display for Transaction {
@@ -122,5 +116,22 @@ impl std::fmt::Debug for Transaction {
             .field("date", &self.date)
             .field("message", &self.message)
             .finish()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MempoolTx {
+    pub tx: Transaction,
+    pub utxos: Vec<UTXO>,
+}
+impl MempoolTx {
+    pub fn new(tx: Transaction, utxos: Vec<UTXO>) -> Self {
+        MempoolTx { tx, utxos }
+    }
+
+    pub fn calculate_fee(&self) -> f64 {
+        let input_sum: f64 = self.utxos.iter().map(|u| u.output.value).sum();
+        let output_sum: f64 = self.tx.outputs.iter().map(|o| o.value).sum();
+        input_sum - output_sum
     }
 }
