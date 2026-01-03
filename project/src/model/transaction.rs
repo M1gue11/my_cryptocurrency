@@ -33,15 +33,15 @@ impl Transaction {
         sha256(&self.as_bytes())
     }
 
-    pub fn new_coinbase(miner_address: String) -> Self {
+    pub fn new_coinbase(miner_address: String, fees: f64) -> Self {
         let date = Utc::now().naive_utc();
         let inputs = Vec::new();
-        let reward_amount = CONFIG.block_reward;
+        let reward_amount = CONFIG.block_reward + fees;
         let outputs = vec![TxOutput {
             value: reward_amount,
             address: miner_address,
         }];
-        let message = Some("Coinbase transaction".to_string());
+        let message = Some("Coinbase and fees".to_string());
 
         Transaction {
             date,

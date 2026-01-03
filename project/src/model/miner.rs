@@ -56,8 +56,9 @@ impl Miner {
         // TODO:
         txs.truncate(CONFIG.max_txs_per_block);
 
+        let total_fees: f64 = txs.iter().map(|mtx| mtx.calculate_fee()).sum();
         let mut block_txs: Vec<Transaction> = txs.iter().map(|mtx| mtx.tx.clone()).collect();
-        let reward_tx = Transaction::new_coinbase(self.wallet.get_receive_addr());
+        let reward_tx = Transaction::new_coinbase(self.wallet.get_receive_addr(), total_fees);
         block_txs.insert(0, reward_tx);
 
         let mut new_block = Block::new(previous_hash);
