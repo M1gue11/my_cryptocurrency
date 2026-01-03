@@ -188,6 +188,7 @@ impl Wallet {
     pub fn send_tx(
         &mut self,
         mut outputs: Vec<TxOutput>,
+        fee: Option<f64>,
         message: Option<String>,
     ) -> Result<MempoolTx, &'static str> {
         // Validate output addresses
@@ -200,7 +201,7 @@ impl Wallet {
         }
 
         // Calculate total needed and select UTXOs
-        let total_needed: f64 = outputs.iter().map(|o| o.value).sum();
+        let total_needed: f64 = outputs.iter().map(|o| o.value).sum::<f64>() + fee.unwrap_or(0.0);
         let utxos_to_spend = match self.select_utxos(total_needed) {
             Some(ref utxos) => utxos.clone(),
             None => return Err("Insufficient funds"),

@@ -131,7 +131,9 @@ fn print_help() {
     println!("\n  wallet balance --seed <seed>");
     println!("    - Check wallet balance");
 
-    println!("\n  wallet send [--from <name>] --to <addr> --amount <n> [--message <msg>]");
+    println!(
+        "\n  wallet send [--from <name>] --to <addr> --amount <n> [--fee <fee>] [--message <msg>]"
+    );
     println!("    - Send transaction (miner's wallet will send by default)");
 
     println!("\n  wallet generate-keys [--count <n>] [--name <name>] [--type <0|1>]");
@@ -266,12 +268,24 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                         return Err("Amount must be greater than zero".to_string());
                     }
 
+                    let fee = match parse_flag_value(&parts, "--fee") {
+                        Ok(fee_str) => {
+                            let f = fee_str
+                                .parse::<f64>()
+                                .map_err(|_| "Invalid fee format. Must be a number".to_string())?;
+                            if f < 0.0 {
+                                return Err("Fee cannot be negative".to_string());
+                            }
+                            Some(f)
+                        }
+                        Err(_) => None,
+                    };
                     let message = parse_flag_value(&parts, "--message").ok();
-
                     Ok(Commands::Wallet(WalletCommands::Send {
                         from,
                         to,
                         amount,
+                        fee,
                         message,
                     }))
                 }
@@ -685,6 +699,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
             from,
             to,
             amount,
+            fee,
             message,
         } => {
             let outputs = vec![TxOutput {
@@ -693,7 +708,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
             }];
             let wallet = resolve_wallet_by_name(from, loaded_wallets);
 
-            match wallet.send_tx(outputs, Option::None, message.clone()) {
+            match wallet.send_tx(outputs, fee, message.clone()) {
                 Ok(tx) => match node.receive_transaction(tx) {
                     Ok(_) => {
                         println!("✓ Transaction created and added to mempool");

@@ -116,6 +116,10 @@ pub enum WalletCommands {
         #[arg(short, long)]
         amount: f64,
 
+        /// Transaction fee
+        #[arg(short, long)]
+        fee: Option<f64>,
+
         /// Optional message
         #[arg(short, long)]
         message: Option<String>,
