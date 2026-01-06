@@ -51,8 +51,7 @@ impl Transaction {
         }
     }
 
-    pub fn validate(&self) -> bool {
-        // TODO: improve error messages
+    pub fn validate(&self) -> Result<(), ed25519_dalek::ed25519::Error> {
         let partial_tx = Transaction {
             inputs: self.inputs.iter().map(|i| i.get_partial()).collect(),
             outputs: self.outputs.clone(),
@@ -63,12 +62,12 @@ impl Transaction {
         for input in &self.inputs {
             let pubkey = load_public_key_from_hex(&input.public_key);
             let sig = load_signature_from_hex(&input.signature);
-
-            if !verify_signature(&pubkey, &partial_tx_bytes, sig) {
-                return false;
+            match verify_signature(&pubkey, &partial_tx_bytes, sig) {
+                Ok(_) => {}
+                Err(e) => return Err(e),
             }
         }
-        true
+        Ok(())
     }
 
     pub fn amount(&self) -> f64 {

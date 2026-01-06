@@ -207,8 +207,8 @@ impl Node {
 
     pub fn receive_transaction(&mut self, mem_txs: MempoolTx) -> Result<(), String> {
         let tx = &mem_txs.tx;
-        if !tx.validate() {
-            return Err("Invalid transaction signature".to_string());
+        if let Err(e) = tx.validate() {
+            return Err(e.to_string());
         }
         if self
             .mempool

@@ -15,9 +15,13 @@ pub fn sign_hash(signing_key: &mut SigningKey, message: &[u8]) -> Signature {
     signing_key.try_sign(&hash).expect("Failed to sign message")
 }
 
-pub fn verify_signature(public_key: &VerifyingKey, message: &[u8], signature: Signature) -> bool {
+pub fn verify_signature(
+    public_key: &VerifyingKey,
+    message: &[u8],
+    signature: Signature,
+) -> Result<(), ed25519_dalek::ed25519::Error> {
     let hash = sha256(message);
-    public_key.verify(&hash, &signature).is_ok()
+    public_key.verify(&hash, &signature)
 }
 
 pub fn load_signature_from_hex(hex: &str) -> Signature {

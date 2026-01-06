@@ -98,8 +98,8 @@ impl Block {
 
         let mut unique_utxos_map = HashSet::new();
         for tx in &self.transactions {
-            if !tx.validate() {
-                return Err(format!("Invalid transaction found in block: {:?}", tx));
+            if let Err(e) = tx.validate() {
+                return Err(e.to_string());
             }
             for input in &tx.inputs {
                 if unique_utxos_map.contains(&input.prev_tx_id) {
