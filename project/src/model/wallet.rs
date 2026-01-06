@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::db::repository::LedgerRepository;
 use crate::model::MempoolTx;
 use crate::model::io::UTXO;
@@ -9,7 +11,8 @@ use crate::{
 #[derive(Clone)]
 pub struct Wallet {
     master_hdkey: HDKey,
-    current_index: u32,
+    curr_rcv_idx: u32,
+    curr_chg_idx: u32,
 }
 
 const GAP_LIMIT: u32 = 20;
@@ -25,10 +28,16 @@ const BASE_PATH: [u32; 4] = [111, 0, 0, 0];
 impl Wallet {
     pub fn new(seed: &str) -> Self {
         let hdkey = HDKey::new(seed.as_bytes());
-        Wallet {
+        let mut w = Wallet {
             master_hdkey: hdkey,
-            current_index: 0,
-        }
+            curr_rcv_idx: 0,
+            curr_chg_idx: 0,
+        };
+        let rcv_idx = w.get_last_used_index_for_type(DerivationType::Receive);
+        let chg_idx = w.get_last_used_index_for_type(DerivationType::Change);
+        w.curr_chg_idx = chg_idx.unwrap_or(0);
+        w.curr_rcv_idx = rcv_idx.unwrap_or(0);
+        w
     }
 
     fn get_base_path(&self, d_type: &DerivationType) -> Vec<u32> {
@@ -45,6 +54,7 @@ impl Wallet {
         node
     }
 
+    /// Generates `n` keys starting from an optional offset for the specified derivation type.
     pub fn generate_n_keys(
         &self,
         n: u32,
@@ -54,15 +64,16 @@ impl Wallet {
         let derivation_type = d_type.unwrap_or(DerivationType::Receive);
         let mut keys = Vec::with_capacity(n as usize);
         let start_index = offset.unwrap_or(0);
-        for i in 0..n {
+        for i in start_index..(start_index + n) {
             let mut full_path = self.get_base_path(&derivation_type);
-            full_path.push(i + start_index);
+            full_path.push(i);
             let child_hdkey = self.derive_path(&full_path);
             keys.push(child_hdkey);
         }
         keys
     }
 
+    /// Generates all keys derived from used addresses for the specified derivation type using the gap limit strategy.
     fn generate_used_keys_for_type(&self, d_type: DerivationType) -> Vec<HDKey> {
         let repo = LedgerRepository::new();
         let mut gap_count = 0;
@@ -89,6 +100,43 @@ impl Wallet {
         }
 
         keys
+    }
+
+    /// Gets the last used derivation index for the specified derivation type.
+    fn get_last_used_index_for_type(&self, d_type: DerivationType) -> Option<u32> {
+        let keys = self.generate_used_keys_for_type(d_type);
+        if keys.is_empty() || keys.len() < GAP_LIMIT as usize {
+            return None;
+        }
+        let last_gap = &keys[keys.len() - GAP_LIMIT as usize..];
+        println!("Checking last gap of {} addresses", last_gap.len());
+        println!(
+            "{:?}",
+            last_gap
+                .iter()
+                .map(|k| k.get_address())
+                .collect::<Vec<String>>()
+        );
+        let addrs: Vec<String> = last_gap.iter().map(|k| k.get_address()).collect();
+        let repo = LedgerRepository::new();
+        let used_addrs: Vec<String> = match repo.get_used_addresses(&addrs) {
+            Ok(uas) => uas.iter().map(|ua| ua.1.clone()).collect(),
+            Err(_) => return None,
+        };
+        if used_addrs.is_empty() {
+            return None;
+        }
+        println!("Used addresses in last gap: {:?}", used_addrs.clone());
+        let ua_set: HashSet<String> = HashSet::from_iter(used_addrs);
+        for (i, key) in last_gap.iter().enumerate().rev() {
+            println!("Checking address: {}", key.get_address());
+            if ua_set.contains(&key.get_address()) {
+                let derivation_index = (last_gap.len() - GAP_LIMIT as usize + i) as u32;
+                println!("Last used derivation index for: {}", derivation_index);
+                return Some(derivation_index + 1); // next index
+            }
+        }
+        None
     }
 
     /// Generates all keys (both receive and change) derived from used addresses using the gap limit strategy.
@@ -121,15 +169,15 @@ impl Wallet {
     /// A new receiving address as a String
     pub fn get_receive_addr(&mut self) -> String {
         let mut path = BASE_PATH.to_vec();
-        path.push(self.current_index);
+        path.push(self.curr_rcv_idx);
         let child_hdkey = self.derive_path(&path);
-        self.current_index += 1;
+        self.curr_rcv_idx += 1;
         child_hdkey.get_address()
     }
 
     pub fn get_curr_addr(&self) -> String {
         let mut path = BASE_PATH.to_vec();
-        path.push(self.current_index);
+        path.push(self.curr_rcv_idx);
         let child_hdkey = self.derive_path(&path);
         child_hdkey.get_address()
     }
@@ -137,9 +185,9 @@ impl Wallet {
     pub fn get_change_addr(&mut self) -> String {
         let mut path = BASE_PATH.to_vec();
         path[2] = 1; // change
-        path.push(self.current_index);
+        path.push(self.curr_rcv_idx);
         let child_hdkey = self.derive_path(&path);
-        self.current_index += 1;
+        self.curr_chg_idx += 1;
         child_hdkey.get_address()
     }
 

@@ -284,6 +284,31 @@ impl LedgerRepository {
         Ok(has_address)
     }
 
+    pub fn get_used_addresses(&self, addrs: &[String]) -> Result<Vec<(TxId, String)>> {
+        let mut query = String::from("SELECT txid, addr FROM tx_addresses WHERE addr IN (");
+        let placeholders: Vec<String> = (0..addrs.len()).map(|_| "?".to_string()).collect();
+        query.push_str(&placeholders.join(", "));
+        query.push_str(")");
+
+        let mut stmt = self.conn.prepare(&query)?;
+
+        let params: Vec<&dyn rusqlite::ToSql> =
+            addrs.iter().map(|a| a as &dyn rusqlite::ToSql).collect();
+
+        let used_addresses = stmt.query_map(rusqlite::params_from_iter(params), |row| {
+            let txid_vec: Vec<u8> = row.get(0)?;
+            let mut txid = [0u8; 32];
+            txid.copy_from_slice(&txid_vec);
+            let addr: String = row.get(1)?;
+            Ok((txid, addr))
+        })?;
+        let mut result = Vec::new();
+        for ua in used_addresses {
+            result.push(ua?);
+        }
+        Ok(result)
+    }
+
     // Get all addresses used in a specific transaction
     pub fn get_addresses_in_transaction(&self, txid: &[u8; 32]) -> Result<Vec<String>> {
         let mut stmt = self
@@ -291,7 +316,6 @@ impl LedgerRepository {
             .prepare("SELECT DISTINCT addr FROM tx_addresses WHERE txid = ?1")?;
 
         let addresses = stmt.query_map([txid.as_slice()], |row| row.get(0))?;
-
         let mut result = Vec::new();
         for addr in addresses {
             result.push(addr?);
