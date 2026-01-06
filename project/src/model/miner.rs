@@ -44,17 +44,28 @@ impl Miner {
 
     fn build_block(&mut self, mempool: &Vec<MempoolTx>, previous_hash: [u8; 32]) -> Block {
         let mut txs = self.get_legit_txs(mempool);
-
-        // Sort transactions descending by fee
+        // Sort transactions descending by fee_rate
         txs.sort_by(|a, b| {
-            let fee_a: f64 = a.calculate_fee();
-            let fee_b: f64 = b.calculate_fee();
-            fee_b.partial_cmp(&fee_a).unwrap()
+            let fee_rate_a: f64 = a.calculate_fee_per_byte();
+            let fee_rate_b: f64 = b.calculate_fee_per_byte();
+            fee_rate_b.partial_cmp(&fee_rate_a).unwrap()
         });
-
-        // Select transactions up to the maximum allowed per block
-        // TODO:
-        txs.truncate(CONFIG.max_txs_per_block);
+        let estimated_coinbase_tx_size =
+            Transaction::new_coinbase(self.wallet.get_curr_addr(), 0.0)
+                .as_bytes()
+                .len();
+        let max_block_size_bytes =
+            (CONFIG.max_block_size_kb * 1000.0) as usize - estimated_coinbase_tx_size;
+        let mut cutoff_index = 0;
+        let mut curr_block_size_bytes = 0;
+        for (i, mtx) in txs.iter().enumerate() {
+            curr_block_size_bytes += mtx.tx.as_bytes().len();
+            cutoff_index = i;
+            if curr_block_size_bytes > max_block_size_bytes {
+                break;
+            }
+        }
+        txs.truncate(cutoff_index);
 
         let total_fees: f64 = txs.iter().map(|mtx| mtx.calculate_fee()).sum();
         let mut block_txs: Vec<Transaction> = txs.iter().map(|mtx| mtx.tx.clone()).collect();

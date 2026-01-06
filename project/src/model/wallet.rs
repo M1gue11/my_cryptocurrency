@@ -116,11 +116,21 @@ impl Wallet {
         self.generate_all_used_keys()
     }
 
+    /// Gets a new receiving address from the wallet, incrementing the current index.
+    /// # Returns
+    /// A new receiving address as a String
     pub fn get_receive_addr(&mut self) -> String {
         let mut path = BASE_PATH.to_vec();
         path.push(self.current_index);
         let child_hdkey = self.derive_path(&path);
         self.current_index += 1;
+        child_hdkey.get_address()
+    }
+
+    pub fn get_curr_addr(&self) -> String {
+        let mut path = BASE_PATH.to_vec();
+        path.push(self.current_index);
+        let child_hdkey = self.derive_path(&path);
         child_hdkey.get_address()
     }
 

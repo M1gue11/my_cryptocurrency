@@ -41,7 +41,7 @@ impl Transaction {
             value: reward_amount,
             address: miner_address,
         }];
-        let message = Some("Coinbase and fees".to_string());
+        let message = None;
 
         Transaction {
             date,
@@ -114,6 +114,8 @@ impl std::fmt::Debug for Transaction {
             .field("outputs", &self.outputs)
             .field("date", &self.date)
             .field("message", &self.message)
+            .field("is coinbase", &self.is_coinbase())
+            .field("size in bytes", &self.as_bytes().len())
             .finish()
     }
 }
@@ -132,5 +134,11 @@ impl MempoolTx {
         let input_sum: f64 = self.utxos.iter().map(|u| u.output.value).sum();
         let output_sum: f64 = self.tx.outputs.iter().map(|o| o.value).sum();
         input_sum - output_sum
+    }
+
+    pub fn calculate_fee_per_byte(&self) -> f64 {
+        let fee = self.calculate_fee();
+        let tx_size = self.tx.as_bytes().len() as f64;
+        fee / tx_size
     }
 }

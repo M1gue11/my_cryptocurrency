@@ -483,7 +483,7 @@ fn handle_chain(command: ChainCommands) {
 
             println!("\n=== Blockchain ===\n");
             for (i, block) in node.blockchain.chain.iter().enumerate() {
-                println!("Block #{}", i);
+                println!("Block #{} Size: {} bytes", i, block.size());
                 println!("  Hash: {}", hex::encode(block.header_hash()));
                 println!(
                     "  Previous Hash: {}",
@@ -495,7 +495,11 @@ fn handle_chain(command: ChainCommands) {
                 println!("  Transactions: {}", block.transactions.len());
 
                 for (j, tx) in block.transactions.iter().enumerate() {
-                    println!("\n    Transaction #{}", j);
+                    println!(
+                        "\n    Transaction #{} Size: {} bytes",
+                        j,
+                        tx.as_bytes().len()
+                    );
                     println!("      ID: {}", hex::encode(tx.id()));
                     println!("      Amount: {}", tx.amount());
                     if let Some(msg) = &tx.message {
@@ -718,6 +722,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
                             println!("  Message: {}", msg);
                         }
                         println!("\n  Use 'mine block' to include it in the blockchain");
+                        node.persist_mempool();
                     }
                     Err(e) => {
                         println!("✗ Error receiving transaction: {}", e);

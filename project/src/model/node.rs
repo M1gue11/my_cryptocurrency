@@ -58,7 +58,7 @@ impl Node {
         }
     }
 
-    fn persist_mempool(&self) {
+    pub fn persist_mempool(&self) {
         let path = CONFIG.persisted_chain_path.to_string();
         let dir_path = std::path::Path::new(&path);
         if !dir_path.exists() {

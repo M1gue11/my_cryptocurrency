@@ -57,6 +57,18 @@ impl Block {
         out
     }
 
+    pub fn size(&self) -> usize {
+        let mut size = 0;
+        size += self.header.prev_block_hash.len();
+        size += self.header.merkle_root.len();
+        size += std::mem::size_of_val(&self.header.nonce);
+        size += std::mem::size_of_val(&self.header.timestamp);
+        for tx in &self.transactions {
+            size += tx.as_bytes().len();
+        }
+        size
+    }
+
     pub fn header_hash(&self) -> [u8; 32] {
         sha256(&self.header_bytes())
     }
@@ -85,6 +97,13 @@ impl Block {
     pub fn validate(&self) -> Result<(), String> {
         if self.transactions.is_empty() {
             return Err("Block has no transactions".to_string());
+        }
+
+        if self.size() > (CONFIG.max_block_size_kb * 1000.0) as usize {
+            return Err(format!(
+                "Block size exceeds maximum limit: {} bytes",
+                self.size()
+            ));
         }
 
         if !hash_starts_with_zero_bits(&self.header_hash(), CONFIG.difficulty) {
