@@ -100,8 +100,6 @@ impl Node {
             }
             let prev_block = &chain_ref[i - 1];
 
-            // TODO: implement full blockchain validation. We cannot use the db to validate the chain here
-            // we should validate UTXOs at the block height
             if let Err(e) = block.validate() {
                 return Err(e);
             }
