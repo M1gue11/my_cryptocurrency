@@ -109,14 +109,6 @@ impl Wallet {
             return None;
         }
         let last_gap = &keys[keys.len() - GAP_LIMIT as usize..];
-        println!("Checking last gap of {} addresses", last_gap.len());
-        println!(
-            "{:?}",
-            last_gap
-                .iter()
-                .map(|k| k.get_address())
-                .collect::<Vec<String>>()
-        );
         let addrs: Vec<String> = last_gap.iter().map(|k| k.get_address()).collect();
         let repo = LedgerRepository::new();
         let used_addrs: Vec<String> = match repo.get_used_addresses(&addrs) {
@@ -126,13 +118,10 @@ impl Wallet {
         if used_addrs.is_empty() {
             return None;
         }
-        println!("Used addresses in last gap: {:?}", used_addrs.clone());
         let ua_set: HashSet<String> = HashSet::from_iter(used_addrs);
         for (i, key) in last_gap.iter().enumerate().rev() {
-            println!("Checking address: {}", key.get_address());
             if ua_set.contains(&key.get_address()) {
                 let derivation_index = (last_gap.len() - GAP_LIMIT as usize + i) as u32;
-                println!("Last used derivation index for: {}", derivation_index);
                 return Some(derivation_index + 1); // next index
             }
         }
