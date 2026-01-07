@@ -63,13 +63,21 @@ impl Miner {
         let mut cutoff_index = 0;
         let mut curr_block_size_bytes = 0;
         for (i, mtx) in txs.iter().enumerate() {
-            curr_block_size_bytes += mtx.tx.as_bytes().len();
-            cutoff_index = i;
-            if curr_block_size_bytes > max_block_size_bytes {
+            let tx_size = mtx.tx.as_bytes().len();
+            if curr_block_size_bytes + tx_size > max_block_size_bytes {
                 break;
             }
+            curr_block_size_bytes += tx_size;
+            cutoff_index = i;
         }
-        txs.truncate(cutoff_index);
+        println!(
+            "Current block size (bytes): {} / {}",
+            curr_block_size_bytes, max_block_size_bytes
+        );
+        println!("Cutoff index: {}", cutoff_index);
+        txs.truncate(cutoff_index + 1);
+
+        println!("Transactions selected for block: {}", txs.len());
 
         let total_fees: f64 = txs.iter().map(|mtx| mtx.calculate_fee()).sum();
         let mut block_txs: Vec<Transaction> = txs.iter().map(|mtx| mtx.tx.clone()).collect();
