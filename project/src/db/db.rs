@@ -125,5 +125,5 @@ pub fn init_db() {
 
 #[allow(static_mut_refs)]
 pub fn get_db() -> &'static Db {
-    unsafe { DB.as_ref().expect("Node não inicializado") }
+    unsafe { DB.as_ref().expect("Db não inicializado") }
 }

@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::db::repository::LedgerRepository;
 use crate::model::MempoolTx;
 use crate::model::io::UTXO;
+use crate::security_utils::keystore::Seed;
 use crate::{
     model::{HDKey, Transaction, TxInput, TxOutput},
     security_utils::public_key_to_hex,
@@ -26,8 +27,8 @@ pub enum DerivationType {
 /** purpose / account / change / index */
 const BASE_PATH: [u32; 4] = [111, 0, 0, 0];
 impl Wallet {
-    pub fn new(seed: &str) -> Self {
-        let hdkey = HDKey::new(seed.as_bytes());
+    pub fn new(seed: Seed) -> Self {
+        let hdkey = HDKey::new(&seed);
         let mut w = Wallet {
             master_hdkey: hdkey,
             curr_rcv_idx: 0,
