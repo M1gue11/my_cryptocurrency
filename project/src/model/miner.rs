@@ -13,7 +13,11 @@ pub struct Miner {
 impl Miner {
     pub fn new() -> Self {
         Miner {
-            wallet: Wallet::new("seed do miguel!"),
+            wallet: Wallet::from_keystore_file(
+                &CONFIG.miner_wallet_seed_path,
+                &CONFIG.miner_wallet_password,
+            )
+            .unwrap(),
         }
     }
 

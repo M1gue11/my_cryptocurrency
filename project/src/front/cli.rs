@@ -78,9 +78,11 @@ pub enum ChainCommands {
 pub enum WalletCommands {
     /// Create a new wallet
     New {
-        /// Seed phrase for wallet generation
         #[arg(short, long)]
-        seed: String,
+        password: String,
+
+        #[arg(short, long)]
+        path: String,
 
         #[arg(short, long)]
         name: Option<String>,

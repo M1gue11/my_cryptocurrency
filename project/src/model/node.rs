@@ -7,6 +7,7 @@ use crate::globals::CONFIG;
 use crate::model::transaction::TxId;
 use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction};
 use crate::security_utils::digest_to_hex_string;
+use crate::utils;
 
 const MEMPOOL_FILE: &str = "mempool.json";
 
@@ -60,11 +61,8 @@ impl Node {
 
     pub fn persist_mempool(&self) {
         let path = CONFIG.persisted_chain_path.to_string();
-        let dir_path = std::path::Path::new(&path);
-        if !dir_path.exists() {
-            std::fs::create_dir_all(&dir_path)
-                .expect("Failed to create directory for mempool file");
-        }
+        utils::assert_parent_dir_exists(&path)
+            .expect("Failed to create parent directories for blockchain file");
 
         let file = File::create(format!("{}/{}", path, MEMPOOL_FILE))
             .expect("Failed to create blockchain file");

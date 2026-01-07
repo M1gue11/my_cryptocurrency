@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::db::repository::LedgerRepository;
 use crate::model::MempoolTx;
 use crate::model::io::UTXO;
+use crate::security_utils::Keystore;
 use crate::security_utils::keystore::Seed;
 use crate::{
     model::{HDKey, Transaction, TxInput, TxOutput},
@@ -27,7 +28,15 @@ pub enum DerivationType {
 /** purpose / account / change / index */
 const BASE_PATH: [u32; 4] = [111, 0, 0, 0];
 impl Wallet {
-    pub fn new(seed: Seed) -> Self {
+    pub fn new(password: &str, keystore_path: &str) -> Self {
+        let seed = match Keystore::new_seed(password, keystore_path) {
+            Ok(s) => s,
+            Err(e) => panic!("Failed to create new keystore: {}", e),
+        };
+        Wallet::from_seed(seed)
+    }
+
+    pub fn from_seed(seed: Seed) -> Self {
         let hdkey = HDKey::new(&seed);
         let mut w = Wallet {
             master_hdkey: hdkey,
@@ -39,6 +48,12 @@ impl Wallet {
         w.curr_chg_idx = chg_idx.unwrap_or(0);
         w.curr_rcv_idx = rcv_idx.unwrap_or(0);
         w
+    }
+
+    pub fn from_keystore_file(keystore_path: &str, password: &str) -> Result<Self, String> {
+        let ks = Keystore::load_from_file(keystore_path)?;
+        let seed = ks.decrypt_seed(password)?;
+        Ok(Wallet::from_seed(seed))
     }
 
     fn get_base_path(&self, d_type: &DerivationType) -> Vec<u32> {

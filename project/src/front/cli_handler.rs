@@ -119,7 +119,7 @@ fn print_help() {
     println!("    - Limit is optional, default is 10");
 
     println!("\n💰 Wallet:");
-    println!("  wallet new --seed <seed> [--name <name>]");
+    println!("  wallet new --password <password> --path <keystore_path> [--name <name>]");
     println!("    - Create a new wallet. If name is provided, wallet is stored in session.");
 
     println!("\n  wallet list");
@@ -217,16 +217,26 @@ fn parse_command(input: &str) -> Result<Commands, String> {
 
             match parts[1] {
                 "new" => {
-                    let seed = parse_flag_value(&parts, "--seed")?;
-                    if seed.is_empty() {
-                        return Err("Seed cannot be empty".to_string());
+                    let password = parse_flag_value(&parts, "--password")?;
+                    if password.is_empty() {
+                        return Err("Password cannot be empty".to_string());
                     }
+
+                    let path = parse_flag_value(&parts, "--path")?;
+                    if path.is_empty() {
+                        return Err("Path cannot be empty".to_string());
+                    }
+
                     let name_result = parse_flag_value(&parts, "--name");
                     let name = match name_result {
                         Ok(n) if !n.is_empty() => Some(n),
                         _ => None,
                     };
-                    Ok(Commands::Wallet(WalletCommands::New { seed, name }))
+                    Ok(Commands::Wallet(WalletCommands::New {
+                        name,
+                        path,
+                        password,
+                    }))
                 }
 
                 "list" => Ok(Commands::Wallet(WalletCommands::List)),
@@ -650,10 +660,21 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
     let node = get_node_mut();
 
     match command {
-        WalletCommands::New { seed, name } => {
-            let mut wallet = Wallet::new(&seed);
-            let address = wallet.get_receive_addr();
+        WalletCommands::New {
+            password,
+            path,
+            name,
+        } => {
+            let mut wallet = match Wallet::from_keystore_file(&path, &password) {
+                Ok(w) => w,
+                Err(e) => {
+                    println!("✗ Unable to load wallet from keystore: {}.", e);
+                    println!("Creating a new keystore instead...");
+                    Wallet::new(&password, &path)
+                }
+            };
 
+            let address = wallet.get_receive_addr();
             if name.is_some() {
                 let name = name.unwrap();
                 loaded_wallets.push((name.clone(), wallet));
@@ -678,25 +699,25 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
         }
 
         WalletCommands::Balance { seed } => {
-            let wallet = Wallet::new(&seed);
-            let utxos = wallet.get_wallet_utxos();
+            // let wallet = Wallet::new(&seed);
+            // let utxos = wallet.get_wallet_utxos();
 
-            let total: f64 = utxos.iter().map(|u| u.output.value).sum();
+            // let total: f64 = utxos.iter().map(|u| u.output.value).sum();
 
-            println!("\n=== Wallet Balance ===");
-            println!("  UTXOs: {}", utxos.len());
-            println!("  Total Balance: {} coins", total);
+            // println!("\n=== Wallet Balance ===");
+            // println!("  UTXOs: {}", utxos.len());
+            // println!("  Total Balance: {} coins", total);
 
-            if !utxos.is_empty() {
-                println!("\n  Details:");
-                for (i, utxo) in utxos.iter().enumerate() {
-                    println!(
-                        "    UTXO #{}: {} coins to {}",
-                        i, utxo.output.value, utxo.output.address
-                    );
-                }
-            }
-            println!();
+            // if !utxos.is_empty() {
+            //     println!("\n  Details:");
+            //     for (i, utxo) in utxos.iter().enumerate() {
+            //         println!(
+            //             "    UTXO #{}: {} coins to {}",
+            //             i, utxo.output.value, utxo.output.address
+            //         );
+            //     }
+            // }
+            // println!();
         }
 
         WalletCommands::Send {

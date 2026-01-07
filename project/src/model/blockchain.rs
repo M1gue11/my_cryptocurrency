@@ -1,6 +1,6 @@
 use super::Block;
 use crate::{
-    db::repository::LedgerRepository, globals::CONFIG, security_utils::digest_to_hex_string,
+    db::repository::LedgerRepository, globals::CONFIG, security_utils::digest_to_hex_string, utils,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -61,11 +61,8 @@ impl Blockchain {
 
     pub fn persist_chain(&self, path: Option<String>) {
         let path = path.unwrap_or_else(|| CONFIG.persisted_chain_path.to_string());
-        let dir_path = std::path::Path::new(&path);
-        if !dir_path.exists() {
-            std::fs::create_dir_all(&dir_path)
-                .expect("Failed to create directory for blockchain file");
-        }
+        utils::assert_parent_dir_exists(&path)
+            .expect("Failed to create parent directories for blockchain file");
 
         let file = File::create(format!("{}/{}", path, BLOCKCHAIN_FILE))
             .expect("Failed to create blockchain file");
