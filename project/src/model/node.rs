@@ -232,7 +232,7 @@ impl Node {
 
         let mined_block = self
             .miner
-            .mine(&self.mempool, previous_hash, self.difficulty);
+            .mine(&self.mempool, previous_hash, self.difficulty)?;
 
         match self.submit_block(mined_block) {
             Ok(()) => Ok(self.blockchain.chain.last().unwrap()),

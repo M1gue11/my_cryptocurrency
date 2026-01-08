@@ -11,6 +11,7 @@ pub struct Settings {
     pub max_block_size_kb: f32,
     pub miner_wallet_seed_path: String,
     pub miner_wallet_password: String,
+    pub max_mining_attempts: u32,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {

@@ -90,10 +90,14 @@ impl Miner {
         new_block
     }
 
-    fn mine_block(&self, block: &mut Block, difficulty: usize) {
+    fn mine_block(&self, block: &mut Block, difficulty: usize) -> Result<(), String> {
         while !hash_starts_with_zero_bits(&block.header_hash(), difficulty) {
+            if block.header.nonce == u32::MAX {
+                return Err("Failed to mine block: exhausted all nonce values".to_string());
+            }
             block.header.nonce += 1;
         }
+        Ok(())
     }
 
     pub fn mine(
@@ -101,9 +105,27 @@ impl Miner {
         mempool: &Vec<MempoolTx>,
         previous_hash: [u8; 32],
         difficulty: usize,
-    ) -> Block {
-        let mut block_to_mine = self.build_block(mempool, previous_hash);
-        self.mine_block(&mut block_to_mine, difficulty);
-        block_to_mine
+    ) -> Result<Block, String> {
+        let mut attempts = 0;
+        loop {
+            if attempts >= CONFIG.max_mining_attempts {
+                return Err(format!(
+                    "Failed to mine block: exceeded maximum attempts ({})",
+                    CONFIG.max_mining_attempts
+                ));
+            }
+            let mut block_to_mine = self.build_block(mempool, previous_hash);
+            match self.mine_block(&mut block_to_mine, difficulty) {
+                Ok(()) => return Ok(block_to_mine),
+                Err(e) => {
+                    attempts += 1;
+                    println!(
+                        "Warning: {} (attempt {}/{}) Retrying with new timestamp...",
+                        e, attempts, CONFIG.max_mining_attempts
+                    );
+                    continue;
+                }
+            }
+        }
     }
 }
