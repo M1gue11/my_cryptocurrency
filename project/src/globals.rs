@@ -5,10 +5,10 @@ use serde::Deserialize;
 pub struct Settings {
     /// Difficulty level for mining in number of leading zero bits
     pub difficulty: usize,
-    pub persisted_chain_path: String,
-    pub block_reward: f64,
-    pub db_path: String,
     pub max_block_size_kb: f32,
+    pub block_reward: f64,
+    pub persisted_chain_path: String,
+    pub db_path: String,
     pub miner_wallet_seed_path: String,
     pub miner_wallet_password: String,
     pub max_mining_attempts: u32,
