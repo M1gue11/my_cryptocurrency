@@ -7,8 +7,6 @@ use crate::{
 use std::io::{self, Write};
 
 pub fn run_interactive_mode() {
-    init_node();
-
     print_welcome();
 
     let mut loaded_wallets: Vec<(String, Wallet)> = {
