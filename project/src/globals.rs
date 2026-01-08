@@ -28,7 +28,7 @@ pub struct ConsensusRules {
 pub static CONSENSUS_RULES: Lazy<ConsensusRules> = Lazy::new(|| ConsensusRules {
     difficulty: 8,
     max_block_size_kb: 1.0,
-    block_reward: 100,
+    block_reward: 1 * COIN,
 });
 
 pub const COIN: i64 = 1_000_000;

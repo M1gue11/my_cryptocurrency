@@ -126,8 +126,9 @@ fn print_help() {
     println!("\n  wallet address [--name <name>]");
     println!("    - Get new receive address (miner's wallet by default)");
 
-    println!("\n  wallet balance --seed <seed>");
+    println!("\n  wallet balance [--name <name>]");
     println!("    - Check wallet balance");
+    println!("    - Defaults to miner's wallet if no name is provided");
 
     println!(
         "\n  wallet send [--from <name>] --to <addr> --amount <n> [--fee <fee>] [--message <msg>]"
@@ -249,11 +250,13 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                 }
 
                 "balance" => {
-                    let seed = parse_flag_value(&parts, "--seed")?;
-                    if seed.is_empty() {
-                        return Err("Seed cannot be empty".to_string());
-                    }
-                    Ok(Commands::Wallet(WalletCommands::Balance { seed }))
+                    let wallet_name = match parse_flag_value(&parts, "--name") {
+                        Ok(n) if !n.is_empty() => Some(n),
+                        _ => None,
+                    };
+                    Ok(Commands::Wallet(WalletCommands::Balance {
+                        name: wallet_name,
+                    }))
                 }
 
                 "send" => {
@@ -523,7 +526,7 @@ fn handle_chain(command: ChainCommands) {
                     }
                     println!("      Outputs:");
                     for output in &tx.outputs {
-                        println!("            Output Value: {} coins", output.value);
+                        println!("            Output Value: {} units", output.value);
                         println!("            Output Address: {}\n", output.address);
                     }
                 }
@@ -645,7 +648,7 @@ fn handle_chain(command: ChainCommands) {
                 .map(|u| u.output.value)
                 .sum();
             println!(
-                "\nTotal: {:.2} coins across {} UTXOs",
+                "\nTotal: {} units across {} UTXOs",
                 total,
                 utxo_list.len().min(limit as usize)
             );
@@ -696,26 +699,26 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
             println!("✓ New receive address: {}", address);
         }
 
-        WalletCommands::Balance { seed } => {
-            // let wallet = Wallet::new(&seed);
-            // let utxos = wallet.get_wallet_utxos();
+        WalletCommands::Balance { name } => {
+            let wallet = resolve_wallet_by_name(name, loaded_wallets);
+            let utxos = wallet.get_wallet_utxos();
 
-            // let total: f64 = utxos.iter().map(|u| u.output.value).sum();
+            let total: i64 = utxos.iter().map(|u| u.output.value).sum();
 
-            // println!("\n=== Wallet Balance ===");
-            // println!("  UTXOs: {}", utxos.len());
-            // println!("  Total Balance: {} coins", total);
+            println!("\n=== Wallet Balance ===");
+            println!("  UTXOs: {}", utxos.len());
+            println!("  Total Balance: {} coins", total);
 
-            // if !utxos.is_empty() {
-            //     println!("\n  Details:");
-            //     for (i, utxo) in utxos.iter().enumerate() {
-            //         println!(
-            //             "    UTXO #{}: {} coins to {}",
-            //             i, utxo.output.value, utxo.output.address
-            //         );
-            //     }
-            // }
-            // println!();
+            if !utxos.is_empty() {
+                println!("\n  Details:");
+                for (i, utxo) in utxos.iter().enumerate() {
+                    println!(
+                        "    UTXO #{}: {} coins to {}",
+                        i, utxo.output.value, utxo.output.address
+                    );
+                }
+            }
+            println!();
         }
 
         WalletCommands::Send {
@@ -818,7 +821,7 @@ fn handle_transaction(command: TransactionCommands) {
                     println!("\n  Outputs ({}):", tx.outputs.len());
                     for (i, output) in tx.outputs.iter().enumerate() {
                         println!("    Output #{}", i);
-                        println!("      Value: {} coins", output.value);
+                        println!("      Value: {} units", output.value);
                         println!("      Address: {}", output.address);
                     }
                     println!();

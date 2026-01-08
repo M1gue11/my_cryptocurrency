@@ -99,9 +99,9 @@ pub enum WalletCommands {
 
     /// Check wallet balance
     Balance {
-        /// Wallet seed phrase
+        /// Wallet name
         #[arg(short, long)]
-        seed: String,
+        name: Option<String>,
     },
 
     /// Send a transaction
