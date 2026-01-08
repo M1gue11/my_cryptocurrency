@@ -60,13 +60,6 @@ pub enum ChainCommands {
     /// Get blockchain status
     Status,
 
-    /// Rollback the blockchain by N blocks (for debugging)
-    Rollback {
-        /// Number of blocks to rollback
-        #[arg(short, long)]
-        count: u32,
-    },
-
     Utxos {
         /// Limit the number of UTXOs displayed
         #[arg(short, long, default_value_t = 20)]

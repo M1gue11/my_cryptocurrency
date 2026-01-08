@@ -112,7 +112,6 @@ fn print_help() {
     println!("  chain status               - Show blockchain status");
     println!("  chain validate             - Validate blockchain integrity");
     println!("  chain save                 - Save blockchain to disk");
-    println!("  chain rollback --count <n> - Rollback N blocks (for debugging)");
     println!("  chain utxos [--limit <n>]  - Show at most <n> UTXOs");
     println!("    - Limit is optional, default is 10");
 
@@ -184,16 +183,6 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                 "status" => Ok(Commands::Chain(ChainCommands::Status)),
                 "validate" => Ok(Commands::Chain(ChainCommands::Validate)),
                 "save" => Ok(Commands::Chain(ChainCommands::Save)),
-                "rollback" => {
-                    let count_str = parse_flag_value(&parts, "--count")?;
-                    let count = count_str.parse::<u32>().map_err(|_| {
-                        "Invalid count format. Must be a positive number".to_string()
-                    })?;
-                    if count == 0 {
-                        return Err("Count must be greater than zero".to_string());
-                    }
-                    Ok(Commands::Chain(ChainCommands::Rollback { count }))
-                }
                 "utxos" => {
                     let limit = if let Ok(limit_str) = parse_flag_value(&parts, "--limit") {
                         limit_str.parse::<u32>().map_err(|_| {
@@ -576,30 +565,6 @@ fn handle_chain(command: ChainCommands) {
                 println!("  Last Block Date: {}", last_block.header.timestamp);
             }
             println!();
-        }
-
-        ChainCommands::Rollback { count } => {
-            let node = get_node_mut();
-            let initial_blocks = node.blockchain.chain.len();
-
-            match node.rollback_blocks(count) {
-                Ok(()) => {
-                    let final_blocks = node.blockchain.chain.len();
-                    let removed = initial_blocks - final_blocks;
-
-                    println!("✓ Successfully rolled back {} block(s)", removed);
-                    println!("  Previous block count: {}", initial_blocks);
-                    println!("  Current block count: {}", final_blocks);
-                    println!("  Transactions restored to mempool: check with 'node mempool'");
-
-                    // Auto-save after rollback
-                    node.save_node();
-                    println!("✓ Blockchain saved");
-                }
-                Err(e) => {
-                    println!("✗ Rollback failed: {}", e);
-                }
-            }
         }
 
         ChainCommands::Utxos { limit } => {
