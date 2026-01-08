@@ -11,7 +11,8 @@ pub fn run_interactive_mode() {
 
     let mut loaded_wallets: Vec<(String, Wallet)> = {
         let node = get_node();
-        vec![("miner_wallet".to_string(), node.miner.wallet.clone())]
+        let node_guard = node.read().expect("Failed to acquire read lock");
+        vec![("miner_wallet".to_string(), node_guard.miner.wallet.clone())]
     };
 
     loop {
@@ -81,12 +82,13 @@ fn print_welcome() {
     println!("\nWelcome! Type 'help' for available commands or 'exit' to quit.\n");
 
     let node = get_node();
-    if node.is_chain_empty() {
+    let node_guard = node.read().expect("Failed to acquire read lock");
+    if node_guard.is_chain_empty() {
         println!("⚠  Blockchain is empty. Use 'mine block' to create the genesis block.");
     } else {
         println!(
             "✓  Loaded blockchain with {} blocks",
-            node.blockchain.chain.len()
+            node_guard.blockchain.chain.len()
         );
     }
 }
@@ -414,33 +416,36 @@ fn handle_node(command: NodeCommands) {
         NodeCommands::Init => {
             init_node();
             let node = get_node();
+            let node_guard = node.read().expect("Failed to acquire read lock");
 
             println!("✓ Node reinitialized successfully");
 
-            if node.is_chain_empty() {
+            if node_guard.is_chain_empty() {
                 println!("⚠ Blockchain is empty. Use 'mine block' to create the genesis block.");
             } else {
                 println!(
                     "✓ Loaded blockchain with {} blocks",
-                    node.blockchain.chain.len()
+                    node_guard.blockchain.chain.len()
                 );
             }
         }
         NodeCommands::Mempool => {
             let node = get_node();
+            let node_guard = node.read().expect("Failed to acquire read lock");
 
-            if node.is_mempool_empty() {
+            if node_guard.is_mempool_empty() {
                 println!("⚠  Mempool is empty");
                 return;
             }
 
-            node.print_mempool();
+            node_guard.print_mempool();
         }
 
         NodeCommands::ClearMempool => {
             let node = get_node_mut();
-            node.clear_mempool();
-            node.save_node();
+            let mut node_guard = node.write().expect("Failed to acquire write lock");
+            node_guard.clear_mempool();
+            node_guard.save_node();
             println!("✓ Mempool cleared");
         }
     }
@@ -450,9 +455,10 @@ fn handle_mine(command: MineCommands) {
     match command {
         MineCommands::Block => {
             let node = get_node_mut();
+            let mut node_guard = node.write().expect("Failed to acquire write lock");
 
             println!("⛏  Mining new block...");
-            let block = match node.mine() {
+            let block = match node_guard.mine() {
                 Err(e) => {
                     println!("✗ Mining failed: {}", e);
                     return;
@@ -466,7 +472,7 @@ fn handle_mine(command: MineCommands) {
             println!("  Nonce: {}", block.header.nonce);
 
             // Save blockchain after mining
-            node.save_node();
+            node_guard.save_node();
             println!("✓ Blockchain saved");
         }
     }
@@ -476,13 +482,14 @@ fn handle_chain(command: ChainCommands) {
     match command {
         ChainCommands::Show => {
             let node = get_node();
-            if node.is_chain_empty() {
+            let node_guard = node.read().expect("Failed to acquire read lock");
+            if node_guard.is_chain_empty() {
                 println!("⚠  Blockchain is empty");
                 return;
             }
 
             println!("\n=== Blockchain ===\n");
-            for (i, block) in node.blockchain.chain.iter().enumerate() {
+            for (i, block) in node_guard.blockchain.chain.iter().enumerate() {
                 println!("Block #{} Size: {} bytes", i, block.size());
                 println!("  Hash: {}", hex::encode(block.header_hash()));
                 println!(
@@ -525,7 +532,8 @@ fn handle_chain(command: ChainCommands) {
 
         ChainCommands::Validate => {
             let node = get_node();
-            let validation = node.validate_bc();
+            let node_guard = node.read().expect("Failed to acquire read lock");
+            let validation = node_guard.validate_bc();
 
             match validation {
                 Ok(is_valid) => {
@@ -543,21 +551,23 @@ fn handle_chain(command: ChainCommands) {
 
         ChainCommands::Save => {
             let node = get_node();
-            node.save_node();
+            let node_guard = node.read().expect("Failed to acquire read lock");
+            node_guard.save_node();
             println!("✓ Blockchain saved to disk");
         }
 
         ChainCommands::Status => {
             let node = get_node();
-            let block_count = node.blockchain.chain.len();
-            let validation = node.validate_bc();
+            let node_guard = node.read().expect("Failed to acquire read lock");
+            let block_count = node_guard.blockchain.chain.len();
+            let validation = node_guard.validate_bc();
 
             println!("\n=== Blockchain Status ===");
             println!("  Blocks: {}", block_count);
             println!("  Valid: {}", if validation.is_ok() { "Yes" } else { "No" });
 
             if block_count > 0 {
-                let last_block = node.blockchain.chain.last().unwrap();
+                let last_block = node_guard.blockchain.chain.last().unwrap();
                 println!(
                     "  Last Block Hash: {}",
                     hex::encode(last_block.header_hash())
@@ -624,6 +634,7 @@ fn handle_chain(command: ChainCommands) {
 
 fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wallet)>) {
     let node = get_node_mut();
+    let mut node_guard = node.write().expect("Failed to acquire write lock");
 
     match command {
         WalletCommands::New {
@@ -700,7 +711,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
             let wallet = resolve_wallet_by_name(from, loaded_wallets);
 
             match wallet.send_tx(outputs, fee, message.clone()) {
-                Ok(tx) => match node.receive_transaction(tx) {
+                Ok(tx) => match node_guard.receive_transaction(tx) {
                     Ok(_) => {
                         println!("✓ Transaction created and added to mempool");
                         println!("  To: {}", to);
@@ -709,7 +720,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
                             println!("  Message: {}", msg);
                         }
                         println!("\n  Use 'mine block' to include it in the blockchain");
-                        node.persist_mempool();
+                        node_guard.persist_mempool();
                     }
                     Err(e) => {
                         println!("✗ Error receiving transaction: {}", e);

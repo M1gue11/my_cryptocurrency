@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufWriter;
+use std::sync::{Arc, OnceLock, RwLock};
 
 use crate::db::repository::LedgerRepository;
 use crate::globals::{CONFIG, CONSENSUS_RULES};
@@ -18,22 +19,19 @@ pub struct Node {
     difficulty: usize,
 }
 
-static mut NODE: Option<Node> = None;
+static NODE: OnceLock<Arc<RwLock<Node>>> = OnceLock::new();
 
 pub fn init_node() {
-    unsafe {
-        NODE = Some(Node::new());
-    }
+    let node = Node::new();
+    let _ = NODE.set(Arc::new(RwLock::new(node)));
 }
 
-#[allow(static_mut_refs)]
-pub fn get_node_mut() -> &'static mut Node {
-    unsafe { NODE.as_mut().expect("Node não inicializado") }
+pub fn get_node() -> Arc<RwLock<Node>> {
+    NODE.get().expect("Node not initialized").clone()
 }
 
-#[allow(static_mut_refs)]
-pub fn get_node() -> &'static Node {
-    unsafe { NODE.as_ref().expect("Node não inicializado") }
+pub fn get_node_mut() -> Arc<RwLock<Node>> {
+    NODE.get().expect("Node not initialized").clone()
 }
 
 impl Node {
