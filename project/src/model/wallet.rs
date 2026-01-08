@@ -220,7 +220,7 @@ impl Wallet {
     /// # Returns
     /// * `Some(Vec<UTXO>)` - A vector of selected UTXOs if sufficient funds are available
     /// * `None` - If the wallet doesn't have enough funds to cover the amount
-    pub fn select_utxos(&self, amount: f64) -> Option<Vec<UTXO>> {
+    pub fn select_utxos(&self, amount: i64) -> Option<Vec<UTXO>> {
         let mut utxos = self.get_wallet_utxos();
         // Sort UTXOs in descending order by value (largest first)
         utxos.sort_by(|a, b| {
@@ -231,7 +231,7 @@ impl Wallet {
         });
 
         let mut selected = Vec::new();
-        let mut total = 0.0;
+        let mut total = 0;
         for utxo in utxos {
             total += utxo.output.value;
             selected.push(utxo);
@@ -243,7 +243,7 @@ impl Wallet {
         None
     }
 
-    pub fn calculate_balance(&self) -> f64 {
+    pub fn calculate_balance(&self) -> i64 {
         let utxos = self.get_wallet_utxos();
         utxos.iter().map(|u| u.output.value).sum()
     }
@@ -251,7 +251,7 @@ impl Wallet {
     pub fn send_tx(
         &mut self,
         mut outputs: Vec<TxOutput>,
-        fee: Option<f64>,
+        fee: Option<i64>,
         message: Option<String>,
     ) -> Result<MempoolTx, &'static str> {
         // Validate output addresses
@@ -264,15 +264,15 @@ impl Wallet {
         }
 
         // Calculate total needed and select UTXOs
-        let total_needed: f64 = outputs.iter().map(|o| o.value).sum::<f64>() + fee.unwrap_or(0.0);
+        let total_needed: i64 = outputs.iter().map(|o| o.value).sum::<i64>() + fee.unwrap_or(0);
         let utxos_to_spend = match self.select_utxos(total_needed) {
             Some(ref utxos) => utxos.clone(),
             None => return Err("Insufficient funds"),
         };
 
         // Calculate change and add change output if necessary
-        let change = utxos_to_spend.iter().map(|u| u.output.value).sum::<f64>() - total_needed;
-        if change > 0.0 {
+        let change = utxos_to_spend.iter().map(|u| u.output.value).sum::<i64>() - total_needed;
+        if change > 0 {
             let change_address = self.get_change_addr();
             let change_output = TxOutput {
                 address: change_address,

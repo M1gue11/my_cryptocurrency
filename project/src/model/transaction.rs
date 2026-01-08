@@ -33,7 +33,7 @@ impl Transaction {
         sha256(&self.as_bytes())
     }
 
-    pub fn new_coinbase(miner_address: String, fees: f64) -> Self {
+    pub fn new_coinbase(miner_address: String, fees: i64) -> Self {
         let date = Utc::now().naive_utc();
         let inputs = Vec::new();
         let reward_amount = CONSENSUS_RULES.block_reward + fees;
@@ -70,7 +70,7 @@ impl Transaction {
         Ok(())
     }
 
-    pub fn amount(&self) -> f64 {
+    pub fn amount(&self) -> i64 {
         self.outputs.iter().map(|o| o.value).sum()
     }
 
@@ -130,15 +130,15 @@ impl MempoolTx {
         MempoolTx { tx, utxos }
     }
 
-    pub fn calculate_fee(&self) -> f64 {
-        let input_sum: f64 = self.utxos.iter().map(|u| u.output.value).sum();
-        let output_sum: f64 = self.tx.outputs.iter().map(|o| o.value).sum();
+    pub fn calculate_fee(&self) -> i64 {
+        let input_sum: i64 = self.utxos.iter().map(|u| u.output.value).sum();
+        let output_sum: i64 = self.tx.outputs.iter().map(|o| o.value).sum();
         input_sum - output_sum
     }
 
     pub fn calculate_fee_per_byte(&self) -> f64 {
         let fee = self.calculate_fee();
-        let tx_size = self.tx.as_bytes().len() as f64;
-        fee / tx_size
+        let tx_size = self.tx.as_bytes().len() as i64;
+        fee as f64 / tx_size as f64
     }
 }

@@ -337,7 +337,7 @@ fn build_utxo_from_row(row: &rusqlite::Row) -> rusqlite::Result<UTXO> {
         tx_id: txid,
         index: vout as usize,
         output: TxOutput {
-            value: value as f64,
+            value: value as i64,
             address,
         },
     })

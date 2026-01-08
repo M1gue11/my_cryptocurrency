@@ -116,11 +116,11 @@ pub enum WalletCommands {
 
         /// Amount to send
         #[arg(short, long)]
-        amount: f64,
+        amount: i64,
 
         /// Transaction fee
         #[arg(short, long)]
-        fee: Option<f64>,
+        fee: Option<i64>,
 
         /// Optional message
         #[arg(short, long)]

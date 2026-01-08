@@ -42,7 +42,7 @@ impl std::fmt::Debug for TxInput {
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct TxOutput {
-    pub value: f64,
+    pub value: i64,
     pub address: String, // endereço destino (ex: Base58Check)
 }
 

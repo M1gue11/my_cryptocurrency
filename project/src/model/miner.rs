@@ -54,10 +54,9 @@ impl Miner {
             let fee_rate_b: f64 = b.calculate_fee_per_byte();
             fee_rate_b.partial_cmp(&fee_rate_a).unwrap()
         });
-        let estimated_coinbase_tx_size =
-            Transaction::new_coinbase(self.wallet.get_curr_addr(), 0.0)
-                .as_bytes()
-                .len();
+        let estimated_coinbase_tx_size = Transaction::new_coinbase(self.wallet.get_curr_addr(), 0)
+            .as_bytes()
+            .len();
         let max_block_size_bytes =
             (CONSENSUS_RULES.max_block_size_kb * 1000.0) as usize - estimated_coinbase_tx_size;
         let mut cutoff_index = 0;
@@ -79,7 +78,7 @@ impl Miner {
 
         println!("Transactions selected for block: {}", txs.len());
 
-        let total_fees: f64 = txs.iter().map(|mtx| mtx.calculate_fee()).sum();
+        let total_fees: i64 = txs.iter().map(|mtx| mtx.calculate_fee()).sum();
         let mut block_txs: Vec<Transaction> = txs.iter().map(|mtx| mtx.tx.clone()).collect();
         let reward_tx = Transaction::new_coinbase(self.wallet.get_receive_addr(), total_fees);
         block_txs.insert(0, reward_tx);

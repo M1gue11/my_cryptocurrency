@@ -269,19 +269,19 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                     }
 
                     let amount = amount_str
-                        .parse::<f64>()
+                        .parse::<i64>()
                         .map_err(|_| "Invalid amount format. Must be a number".to_string())?;
 
-                    if amount <= 0.0 {
+                    if amount <= 0 {
                         return Err("Amount must be greater than zero".to_string());
                     }
 
                     let fee = match parse_flag_value(&parts, "--fee") {
                         Ok(fee_str) => {
                             let f = fee_str
-                                .parse::<f64>()
+                                .parse::<i64>()
                                 .map_err(|_| "Invalid fee format. Must be a number".to_string())?;
-                            if f < 0.0 {
+                            if f < 0 {
                                 return Err("Fee cannot be negative".to_string());
                             }
                             Some(f)
@@ -639,7 +639,7 @@ fn handle_chain(command: ChainCommands) {
                 "└──────┴──────────────────┴───────┴──────────────┴────────────────────────────────────────────────┘"
             );
 
-            let total: f64 = utxo_list
+            let total: i64 = utxo_list
                 .iter()
                 .take(limit as usize)
                 .map(|u| u.output.value)
