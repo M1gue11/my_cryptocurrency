@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    globals::CONFIG,
+    globals::{CONFIG, CONSENSUS_RULES},
     model::{Block, MempoolTx, Transaction, Wallet, transaction::TxId},
     security_utils::hash_starts_with_zero_bits,
 };
@@ -59,7 +59,7 @@ impl Miner {
                 .as_bytes()
                 .len();
         let max_block_size_bytes =
-            (CONFIG.max_block_size_kb * 1000.0) as usize - estimated_coinbase_tx_size;
+            (CONSENSUS_RULES.max_block_size_kb * 1000.0) as usize - estimated_coinbase_tx_size;
         let mut cutoff_index = 0;
         let mut curr_block_size_bytes = 0;
         for (i, mtx) in txs.iter().enumerate() {

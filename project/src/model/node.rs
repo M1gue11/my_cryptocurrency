@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::BufWriter;
 
 use crate::db::repository::LedgerRepository;
-use crate::globals::CONFIG;
+use crate::globals::{CONFIG, CONSENSUS_RULES};
 use crate::model::transaction::TxId;
 use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction};
 use crate::security_utils::digest_to_hex_string;
@@ -55,7 +55,7 @@ impl Node {
             blockchain: bc,
             mempool: Node::load_mempool(),
             miner: Miner::new(),
-            difficulty: CONFIG.difficulty,
+            difficulty: CONSENSUS_RULES.difficulty,
         }
     }
 

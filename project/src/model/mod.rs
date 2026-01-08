@@ -13,5 +13,5 @@ pub use hdkey::HDKey;
 pub use io::{TxInput, TxOutput, UTXO};
 pub use miner::Miner;
 pub use node::{get_node, get_node_mut, init_node};
-pub use transaction::{Transaction, MempoolTx};
+pub use transaction::{MempoolTx, Transaction};
 pub use wallet::Wallet;

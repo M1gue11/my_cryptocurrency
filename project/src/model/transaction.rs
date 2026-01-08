@@ -1,5 +1,5 @@
 use crate::{
-    globals::CONFIG,
+    globals::CONSENSUS_RULES,
     model::{TxInput, TxOutput, UTXO},
     security_utils::{
         digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
@@ -36,7 +36,7 @@ impl Transaction {
     pub fn new_coinbase(miner_address: String, fees: f64) -> Self {
         let date = Utc::now().naive_utc();
         let inputs = Vec::new();
-        let reward_amount = CONFIG.block_reward + fees;
+        let reward_amount = CONSENSUS_RULES.block_reward + fees;
         let outputs = vec![TxOutput {
             value: reward_amount,
             address: miner_address,

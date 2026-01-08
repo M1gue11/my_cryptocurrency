@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::Transaction;
-use crate::globals::CONFIG;
+use crate::globals::CONSENSUS_RULES;
 use crate::security_utils::hash_starts_with_zero_bits;
 use crate::{
     security_utils::{digest_to_hex_string, sha256},
@@ -99,14 +99,14 @@ impl Block {
             return Err("Block has no transactions".to_string());
         }
 
-        if self.size() > (CONFIG.max_block_size_kb * 1000.0) as usize {
+        if self.size() > (CONSENSUS_RULES.max_block_size_kb * 1000.0) as usize {
             return Err(format!(
                 "Block size exceeds maximum limit: {} bytes",
                 self.size()
             ));
         }
 
-        if !hash_starts_with_zero_bits(&self.header_hash(), CONFIG.difficulty) {
+        if !hash_starts_with_zero_bits(&self.header_hash(), CONSENSUS_RULES.difficulty) {
             return Err("Invalid proof of work".to_string());
         }
 
