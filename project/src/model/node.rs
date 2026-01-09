@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufWriter;
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::Arc;
+
+use once_cell::sync::Lazy;
+use tokio::sync::RwLock;
 
 use crate::db::repository::LedgerRepository;
 use crate::globals::{CONFIG, CONSENSUS_RULES};
@@ -19,19 +22,19 @@ pub struct Node {
     difficulty: usize,
 }
 
-static NODE: OnceLock<Arc<RwLock<Node>>> = OnceLock::new();
+pub static NODE: Lazy<Arc<RwLock<Node>>> = Lazy::new(|| Arc::new(RwLock::new(Node::new())));
 
-pub fn init_node() {
-    let node = Node::new();
-    let _ = NODE.set(Arc::new(RwLock::new(node)));
+pub async fn get_node() -> tokio::sync::RwLockReadGuard<'static, Node> {
+    NODE.read().await
 }
 
-pub fn get_node() -> Arc<RwLock<Node>> {
-    NODE.get().expect("Node not initialized").clone()
+pub async fn get_node_mut() -> tokio::sync::RwLockWriteGuard<'static, Node> {
+    NODE.write().await
 }
 
-pub fn get_node_mut() -> Arc<RwLock<Node>> {
-    NODE.get().expect("Node not initialized").clone()
+pub async fn restart_node() {
+    let mut node_guard = NODE.write().await;
+    *node_guard = Node::new();
 }
 
 impl Node {

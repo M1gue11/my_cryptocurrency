@@ -2,6 +2,7 @@ mod db;
 mod front;
 mod globals;
 mod model;
+mod network;
 mod security_utils;
 mod utils;
 
@@ -9,10 +10,10 @@ mod utils;
 mod tests;
 
 use crate::db::db::init_db;
-use crate::model::init_node;
 use front::run_interactive_mode;
-fn main() {
+
+#[tokio::main]
+async fn main() {
     init_db();
-    init_node();
-    run_interactive_mode();
+    run_interactive_mode().await;
 }

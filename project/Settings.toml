@@ -3,3 +3,4 @@ db_path = "saved_files/bd/caramuru_main_db.db"
 miner_wallet_seed_path = "keys/miner_wallet.json"
 miner_wallet_password = "miner123"
 max_mining_attempts = 3
+p2p_port = 6000

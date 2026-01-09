@@ -8,6 +8,7 @@ pub struct Settings {
     pub miner_wallet_seed_path: String,
     pub miner_wallet_password: String,
     pub max_mining_attempts: u32,
+    pub p2p_port: u16,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {

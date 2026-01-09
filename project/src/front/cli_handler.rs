@@ -2,17 +2,16 @@ use super::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, Wal
 use crate::{
     db::repository::LedgerRepository,
     front::cli::NodeCommands,
-    model::{TxOutput, Wallet, get_node, get_node_mut, init_node, wallet::DerivationType},
+    model::{TxOutput, Wallet, get_node, get_node_mut, node::restart_node, wallet::DerivationType},
 };
 use std::io::{self, Write};
 
-pub fn run_interactive_mode() {
-    print_welcome();
+pub async fn run_interactive_mode() {
+    print_welcome().await;
 
     let mut loaded_wallets: Vec<(String, Wallet)> = {
-        let node = get_node();
-        let node_guard = node.read().expect("Failed to acquire read lock");
-        vec![("miner_wallet".to_string(), node_guard.miner.wallet.clone())]
+        let node = get_node().await;
+        vec![("miner_wallet".to_string(), node.miner.wallet.clone())]
     };
 
     loop {
@@ -40,7 +39,7 @@ pub fn run_interactive_mode() {
 
                 match parse_command(input) {
                     Ok(command) => {
-                        if let Err(e) = execute_command(command, &mut loaded_wallets) {
+                        if let Err(e) = execute_command(command, &mut loaded_wallets).await {
                             println!("✗ Error: {}", e);
                         }
                     }
@@ -73,7 +72,7 @@ fn resolve_wallet_by_name<'a>(
     panic!("Wallet with name '{}' not found", name);
 }
 
-fn print_welcome() {
+async fn print_welcome() {
     println!("\n╔══════════════════════════════════════════════════════════════════════╗");
     println!("║                                                                      ║");
     println!("║              🔗 CARAMURU Node Interactive CLI 🔗                     ║");
@@ -81,14 +80,13 @@ fn print_welcome() {
     println!("╚══════════════════════════════════════════════════════════════════════╝");
     println!("\nWelcome! Type 'help' for available commands or 'exit' to quit.\n");
 
-    let node = get_node();
-    let node_guard = node.read().expect("Failed to acquire read lock");
-    if node_guard.is_chain_empty() {
+    let node = get_node().await;
+    if node.is_chain_empty() {
         println!("⚠  Blockchain is empty. Use 'mine block' to create the genesis block.");
     } else {
         println!(
             "✓  Loaded blockchain with {} blocks",
-            node_guard.blockchain.chain.len()
+            node.blockchain.chain.len()
         );
     }
 }
@@ -383,25 +381,25 @@ fn parse_flag_value(parts: &[&str], flag: &str) -> Result<String, String> {
     Err(format!("Missing required flag: {}", flag))
 }
 
-fn execute_command(
+async fn execute_command(
     command: Commands,
     loaded_wallets: &mut Vec<(String, Wallet)>,
 ) -> Result<(), String> {
     match command {
         Commands::Node(node_cmd) => {
-            handle_node(node_cmd);
+            handle_node(node_cmd).await;
             Ok(())
         }
         Commands::Mine(mine_cmd) => {
-            handle_mine(mine_cmd);
+            handle_mine(mine_cmd).await;
             Ok(())
         }
         Commands::Chain(chain_cmd) => {
-            handle_chain(chain_cmd);
+            handle_chain(chain_cmd).await;
             Ok(())
         }
         Commands::Wallet(wallet_cmd) => {
-            handle_wallet(wallet_cmd, loaded_wallets);
+            handle_wallet(wallet_cmd, loaded_wallets).await;
             Ok(())
         }
         Commands::Transaction(tx_cmd) => {
@@ -411,54 +409,50 @@ fn execute_command(
     }
 }
 
-fn handle_node(command: NodeCommands) {
+async fn handle_node(command: NodeCommands) {
     match command {
         NodeCommands::Init => {
-            init_node();
-            let node = get_node();
-            let node_guard = node.read().expect("Failed to acquire read lock");
+            restart_node().await;
+            let node = get_node().await;
 
             println!("✓ Node reinitialized successfully");
 
-            if node_guard.is_chain_empty() {
+            if node.is_chain_empty() {
                 println!("⚠ Blockchain is empty. Use 'mine block' to create the genesis block.");
             } else {
                 println!(
                     "✓ Loaded blockchain with {} blocks",
-                    node_guard.blockchain.chain.len()
+                    node.blockchain.chain.len()
                 );
             }
         }
         NodeCommands::Mempool => {
-            let node = get_node();
-            let node_guard = node.read().expect("Failed to acquire read lock");
+            let node = get_node().await;
 
-            if node_guard.is_mempool_empty() {
+            if node.is_mempool_empty() {
                 println!("⚠  Mempool is empty");
                 return;
             }
 
-            node_guard.print_mempool();
+            node.print_mempool();
         }
 
         NodeCommands::ClearMempool => {
-            let node = get_node_mut();
-            let mut node_guard = node.write().expect("Failed to acquire write lock");
-            node_guard.clear_mempool();
-            node_guard.save_node();
+            let mut node = get_node_mut().await;
+            node.clear_mempool();
+            node.save_node();
             println!("✓ Mempool cleared");
         }
     }
 }
 
-fn handle_mine(command: MineCommands) {
+async fn handle_mine(command: MineCommands) {
     match command {
         MineCommands::Block => {
-            let node = get_node_mut();
-            let mut node_guard = node.write().expect("Failed to acquire write lock");
+            let mut node = get_node_mut().await;
 
             println!("⛏  Mining new block...");
-            let block = match node_guard.mine() {
+            let block = match node.mine() {
                 Err(e) => {
                     println!("✗ Mining failed: {}", e);
                     return;
@@ -472,24 +466,23 @@ fn handle_mine(command: MineCommands) {
             println!("  Nonce: {}", block.header.nonce);
 
             // Save blockchain after mining
-            node_guard.save_node();
+            node.save_node();
             println!("✓ Blockchain saved");
         }
     }
 }
 
-fn handle_chain(command: ChainCommands) {
+async fn handle_chain(command: ChainCommands) {
     match command {
         ChainCommands::Show => {
-            let node = get_node();
-            let node_guard = node.read().expect("Failed to acquire read lock");
-            if node_guard.is_chain_empty() {
+            let node = get_node().await;
+            if node.is_chain_empty() {
                 println!("⚠  Blockchain is empty");
                 return;
             }
 
             println!("\n=== Blockchain ===\n");
-            for (i, block) in node_guard.blockchain.chain.iter().enumerate() {
+            for (i, block) in node.blockchain.chain.iter().enumerate() {
                 println!("Block #{} Size: {} bytes", i, block.size());
                 println!("  Hash: {}", hex::encode(block.header_hash()));
                 println!(
@@ -531,9 +524,8 @@ fn handle_chain(command: ChainCommands) {
         }
 
         ChainCommands::Validate => {
-            let node = get_node();
-            let node_guard = node.read().expect("Failed to acquire read lock");
-            let validation = node_guard.validate_bc();
+            let node = get_node().await;
+            let validation = node.validate_bc();
 
             match validation {
                 Ok(is_valid) => {
@@ -550,24 +542,22 @@ fn handle_chain(command: ChainCommands) {
         }
 
         ChainCommands::Save => {
-            let node = get_node();
-            let node_guard = node.read().expect("Failed to acquire read lock");
-            node_guard.save_node();
+            let node = get_node().await;
+            node.save_node();
             println!("✓ Blockchain saved to disk");
         }
 
         ChainCommands::Status => {
-            let node = get_node();
-            let node_guard = node.read().expect("Failed to acquire read lock");
-            let block_count = node_guard.blockchain.chain.len();
-            let validation = node_guard.validate_bc();
+            let node = get_node().await;
+            let block_count = node.blockchain.chain.len();
+            let validation = node.validate_bc();
 
             println!("\n=== Blockchain Status ===");
             println!("  Blocks: {}", block_count);
             println!("  Valid: {}", if validation.is_ok() { "Yes" } else { "No" });
 
             if block_count > 0 {
-                let last_block = node_guard.blockchain.chain.last().unwrap();
+                let last_block = node.blockchain.chain.last().unwrap();
                 println!(
                     "  Last Block Hash: {}",
                     hex::encode(last_block.header_hash())
@@ -632,9 +622,8 @@ fn handle_chain(command: ChainCommands) {
     }
 }
 
-fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wallet)>) {
-    let node = get_node_mut();
-    let mut node_guard = node.write().expect("Failed to acquire write lock");
+async fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wallet)>) {
+    let mut node = get_node_mut().await;
 
     match command {
         WalletCommands::New {
@@ -711,7 +700,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
             let wallet = resolve_wallet_by_name(from, loaded_wallets);
 
             match wallet.send_tx(outputs, fee, message.clone()) {
-                Ok(tx) => match node_guard.receive_transaction(tx) {
+                Ok(tx) => match node.receive_transaction(tx) {
                     Ok(_) => {
                         println!("✓ Transaction created and added to mempool");
                         println!("  To: {}", to);
@@ -720,7 +709,7 @@ fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wall
                             println!("  Message: {}", msg);
                         }
                         println!("\n  Use 'mine block' to include it in the blockchain");
-                        node_guard.persist_mempool();
+                        node.persist_mempool();
                     }
                     Err(e) => {
                         println!("✗ Error receiving transaction: {}", e);
