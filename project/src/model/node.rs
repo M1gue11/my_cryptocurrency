@@ -4,6 +4,7 @@ use std::io::BufWriter;
 use std::sync::Arc;
 
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::db::repository::LedgerRepository;
@@ -256,4 +257,19 @@ impl Node {
     pub fn clear_mempool(&mut self) {
         self.mempool.clear();
     }
+
+    pub fn get_node_version_info(&self) -> NodeVersionInfo {
+        NodeVersionInfo {
+            version: 1,
+            height: self.blockchain.chain.len() as u64,
+            top_hash: hex::encode(self.blockchain.get_last_block_hash()),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NodeVersionInfo {
+    pub version: u32,
+    pub height: u64,
+    pub top_hash: String,
 }

@@ -1,4 +1,4 @@
-use crate::model::{Block, Transaction};
+use crate::model::{Block, Transaction, node::NodeVersionInfo};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -10,11 +10,7 @@ pub enum InventoryType {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum NetworkMessage {
     // --- Handshake ---
-    Version {
-        version: u32,
-        height: u64,
-        top_hash: String,
-    },
+    Version(NodeVersionInfo),
     VerAck,
 
     // --- Keep-Alive ---
