@@ -59,7 +59,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
         let node = get_node().await;
         let v = node.get_node_version_info();
 
-        let json = serde_json::to_string(&v)?;
+        let json = serde_json::to_string(&NetworkMessage::Version(v))?;
         writer.write_all(format!("{}\n", json).as_bytes()).await?;
     }
 

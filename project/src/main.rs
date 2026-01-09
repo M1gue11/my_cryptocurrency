@@ -47,7 +47,9 @@ async fn main() {
     });
 
     let cli_handle = tokio::task::spawn_blocking(|| {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
         rt.block_on(run_interactive_mode());
     });
 
