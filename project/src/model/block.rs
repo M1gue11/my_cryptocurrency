@@ -4,7 +4,7 @@ use super::Transaction;
 use crate::globals::CONSENSUS_RULES;
 use crate::security_utils::hash_starts_with_zero_bits;
 use crate::{
-    security_utils::{digest_to_hex_string, sha256},
+    security_utils::{bytes_to_hex_string, sha256},
     utils::{MerkleTree, format_date},
 };
 use chrono::{NaiveDateTime, Utc};
@@ -124,7 +124,7 @@ impl Block {
                 if unique_utxos_map.contains(&input.prev_tx_id) {
                     return Err(format!(
                         "Double spending detected in block for UTXO: tx_id: {}, output_index: {}",
-                        digest_to_hex_string(&input.prev_tx_id),
+                        bytes_to_hex_string(&input.prev_tx_id),
                         input.output_index
                     ));
                 }
@@ -141,11 +141,11 @@ impl std::fmt::Debug for Block {
         f.debug_struct("Block")
             .field(
                 "prev_block_hash",
-                &digest_to_hex_string(&self.header.prev_block_hash),
+                &bytes_to_hex_string(&self.header.prev_block_hash),
             )
             .field(
                 "merkle root",
-                &digest_to_hex_string(&self.header.merkle_root),
+                &bytes_to_hex_string(&self.header.merkle_root),
             )
             .field("transactions", &self.transactions)
             .field("nonce", &self.header.nonce)

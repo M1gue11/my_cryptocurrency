@@ -2,7 +2,7 @@ use crate::{
     globals::CONSENSUS_RULES,
     model::{TxInput, TxOutput, UTXO},
     security_utils::{
-        digest_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
+        bytes_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
         verify_signature,
     },
     utils::format_date,
@@ -97,7 +97,7 @@ impl std::fmt::Display for Transaction {
         write!(
             f,
             "Transaction {{ id: {}, inputs: {:?}, outputs: {:?}, date: {}, message: {:?} }}",
-            digest_to_hex_string(&self.id()),
+            bytes_to_hex_string(&self.id()),
             self.inputs,
             self.outputs,
             self.date,
@@ -109,7 +109,7 @@ impl std::fmt::Display for Transaction {
 impl std::fmt::Debug for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Transaction")
-            .field("id", &digest_to_hex_string(&self.id()))
+            .field("id", &bytes_to_hex_string(&self.id()))
             .field("inputs", &self.inputs)
             .field("outputs", &self.outputs)
             .field("date", &self.date)

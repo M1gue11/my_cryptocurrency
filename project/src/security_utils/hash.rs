@@ -12,8 +12,8 @@ pub fn sha512(data: &[u8]) -> [u8; 64] {
     hasher.finalize().into()
 }
 
-pub fn digest_to_hex_string(digest: &[u8; 32]) -> String {
-    digest.iter().map(|b| format!("{:02x}", b)).collect()
+pub fn bytes_to_hex_string(bytes: &[u8; 32]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 pub fn hash_starts_with_zero_bits(hash: &[u8; 32], n: usize) -> bool {

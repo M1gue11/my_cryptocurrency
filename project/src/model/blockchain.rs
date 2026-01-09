@@ -1,6 +1,6 @@
 use super::Block;
 use crate::{
-    db::repository::LedgerRepository, globals::CONFIG, security_utils::digest_to_hex_string, utils,
+    db::repository::LedgerRepository, globals::CONFIG, security_utils::bytes_to_hex_string, utils,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -49,7 +49,7 @@ impl Blockchain {
                 if input_utxo.is_err() {
                     return Err(format!(
                         "Transaction input is not a valid UTXO: tx_id: {}, output_index: {}",
-                        digest_to_hex_string(&input.prev_tx_id),
+                        bytes_to_hex_string(&input.prev_tx_id),
                         input.output_index
                     ));
                 }
@@ -57,6 +57,10 @@ impl Blockchain {
         }
         self.chain.push(block);
         Ok(())
+    }
+
+    pub fn find_block_by_hash(&self, hash: [u8; 32]) -> Option<&Block> {
+        self.chain.iter().find(|block| block.header_hash() == hash)
     }
 
     pub fn persist_chain(&self, path: Option<String>) {

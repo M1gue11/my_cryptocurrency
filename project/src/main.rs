@@ -11,7 +11,7 @@ mod tests;
 
 use std::env;
 
-use crate::{db::db::init_db, globals::CONFIG, network::server::run_p2p_server};
+use crate::{db::db::init_db, globals::CONFIG, network::server::run_server};
 use front::run_interactive_mode;
 
 #[tokio::main]
@@ -43,7 +43,7 @@ async fn main() {
 
     let p2p_peers = peers.clone();
     tokio::spawn(async move {
-        run_p2p_server(port, p2p_peers).await;
+        run_server(port, p2p_peers).await;
     });
 
     let cli_handle = tokio::task::spawn_blocking(|| {

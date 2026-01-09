@@ -11,8 +11,9 @@ use crate::db::repository::LedgerRepository;
 use crate::globals::{CONFIG, CONSENSUS_RULES};
 use crate::model::transaction::TxId;
 use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction};
-use crate::security_utils::digest_to_hex_string;
-use crate::utils;
+use crate::network::network_message::InventoryType;
+use crate::security_utils::bytes_to_hex_string;
+use crate::{network, utils};
 
 const MEMPOOL_FILE: &str = "mempool.json";
 
@@ -107,7 +108,7 @@ impl Node {
             if block.header.prev_block_hash != prev_block.header_hash() {
                 return Err(format!(
                     "Block {} has invalid previous block hash",
-                    digest_to_hex_string(&block.id())
+                    bytes_to_hex_string(&block.id())
                 ));
             }
         }
@@ -195,7 +196,7 @@ impl Node {
             if !valid_utxos_map.contains(&(txid, vout)) {
                 return Err(format!(
                     "Transaction input is not a valid UTXO: tx_id: {}, output_index: {}",
-                    digest_to_hex_string(&txid),
+                    bytes_to_hex_string(&txid),
                     vout
                 ));
             }
@@ -263,6 +264,62 @@ impl Node {
             version: 1,
             height: self.blockchain.chain.len() as u64,
             top_hash: hex::encode(self.blockchain.get_last_block_hash()),
+        }
+    }
+
+    pub fn get_mempool_tx_by_id(&self, tx_id: [u8; 32]) -> Option<&MempoolTx> {
+        self.mempool.iter().find(|mtx| mtx.tx.id() == tx_id)
+    }
+
+    pub async fn handle_inventory(&self, items: Vec<(InventoryType, [u8; 32])>) {
+        for (inv_type, item_id) in items {
+            match inv_type {
+                InventoryType::Block => {
+                    if self.blockchain.find_block_by_hash(item_id).is_some() {
+                        continue;
+                    }
+                    println!(
+                        "Requesting block with ID: {}",
+                        bytes_to_hex_string(&item_id)
+                    );
+                    network::ask_for_block(item_id);
+                }
+                InventoryType::Tx => {
+                    if self.get_mempool_tx_by_id(item_id).is_some() {
+                        continue;
+                    }
+                    println!(
+                        "Requesting transaction with ID: {}",
+                        bytes_to_hex_string(&item_id)
+                    );
+                    //TODO
+                }
+            }
+        }
+    }
+
+    pub async fn handle_get_data_request(&self, item_type: InventoryType, item_id: [u8; 32]) {
+        match item_type {
+            InventoryType::Block => {
+                if let Some(block) = self.blockchain.find_block_by_hash(item_id) {
+                    network::send_block(block);
+                } else {
+                    println!(
+                        "Requested block with ID {} not found.",
+                        bytes_to_hex_string(&item_id)
+                    );
+                }
+            }
+            InventoryType::Tx => {
+                // TODO
+            }
+        }
+    }
+
+    pub async fn handle_received_block(&mut self, block: Block) {
+        match self.submit_block(block) {
+            Ok(()) => println!("Block added to the blockchain successfully."),
+            Err(e) => println!("Failed to add block to the blockchain: {}", e),
         }
     }
 }

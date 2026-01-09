@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::security_utils::digest_to_hex_string;
+use crate::security_utils::bytes_to_hex_string;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TxInput {
@@ -32,7 +32,7 @@ impl TxInput {
 impl std::fmt::Debug for TxInput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TxInput")
-            .field("prev_tx_id", &digest_to_hex_string(&self.prev_tx_id))
+            .field("prev_tx_id", &bytes_to_hex_string(&self.prev_tx_id))
             .field("output_index", &self.output_index)
             .field("signature", &self.signature)
             .field("public_key", &self.public_key)

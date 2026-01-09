@@ -18,17 +18,17 @@ pub enum NetworkMessage {
     Pong(u64),
 
     Inv {
-        items: Vec<(InventoryType, String)>,
+        items: Vec<(InventoryType, [u8; 32])>,
     },
     GetData {
         item_type: InventoryType,
-        item_id: String,
+        item_id: [u8; 32],
     },
 
     Block(Block),
     Tx(Transaction),
 
     GetBlocks {
-        last_known_hash: String,
+        last_known_hash: [u8; 32],
     },
 }
