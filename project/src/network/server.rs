@@ -1,7 +1,7 @@
 use crate::model::{get_node, get_node_mut};
 use crate::network::NetworkMessage;
 use once_cell::sync::Lazy;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
 
@@ -63,9 +63,8 @@ async fn connect_to_peer(address: String) {
 }
 
 async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
-    let (reader, writer) = stream.split();
+    let (reader, mut writer) = stream.split();
     let mut reader = BufReader::new(reader);
-    let mut writer = BufWriter::new(writer);
     let mut broadcast_rx = BROADCAST_CHANNEL.sender.subscribe();
 
     {
@@ -100,7 +99,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                                     "Received VERSION: v={} height={} hash={}",
                                     ver.version, ver.height, ver.top_hash
                                 );
-
+                                get_node().await.handle_version_message(ver).await;
                                 let ack = serde_json::to_string(&NetworkMessage::VerAck)?;
                                 writer.write_all(format!("{}\n", ack).as_bytes()).await?;
                             },
@@ -145,8 +144,6 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
             }
 
             Ok(msg) = broadcast_rx.recv() => {
-                // Serializa e manda para ESTE peer específico
-                println!("Broadcasting message to peer: {:?}", msg);
                 let json = serde_json::to_string(&msg)?;
                 writer.write_all(format!("{}\n", json).as_bytes()).await?;
             }

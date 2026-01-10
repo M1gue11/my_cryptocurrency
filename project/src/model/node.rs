@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use crate::db::repository::LedgerRepository;
 use crate::globals::{CONFIG, CONSENSUS_RULES};
 use crate::model::transaction::TxId;
-use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction};
+use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction, node};
 use crate::network::network_message::InventoryType;
 use crate::security_utils::bytes_to_hex_string;
 use crate::{network, utils};
@@ -53,7 +53,6 @@ impl Node {
         } else {
             println!("Loaded existing blockchain with {} blocks.", bc.chain.len());
         }
-        network::ask_for_blocks(bc.get_last_block_hash());
         Node {
             blockchain: bc,
             mempool: Node::load_mempool(),
@@ -292,10 +291,6 @@ impl Node {
                     if self.get_mempool_tx_by_id(item_id).is_some() {
                         continue;
                     }
-                    println!(
-                        "Requesting transaction with ID: {}",
-                        bytes_to_hex_string(&item_id)
-                    );
                     network::ask_for_tx(item_id);
                 }
             }
@@ -376,6 +371,16 @@ impl Node {
         // TODO: improve this
         for block in blocks_to_send {
             network::send_block(&block);
+        }
+    }
+
+    pub async fn handle_version_message(&self, peer_v: NodeVersionInfo) {
+        let node_v = self.get_node_version_info();
+        if peer_v.height > node_v.height {
+            network::ask_for_blocks(self.blockchain.get_last_block_hash());
+        } else if peer_v.height == node_v.height && peer_v.top_hash != node_v.top_hash {
+            println!("Warning: Detected potential fork with peer node.");
+            // TODO: Handle fork resolution
         }
     }
 }
