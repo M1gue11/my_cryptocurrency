@@ -146,6 +146,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
 
             Ok(msg) = broadcast_rx.recv() => {
                 // Serializa e manda para ESTE peer específico
+                println!("Broadcasting message to peer: {:?}", msg);
                 let json = serde_json::to_string(&msg)?;
                 writer.write_all(format!("{}\n", json).as_bytes()).await?;
             }

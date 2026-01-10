@@ -3,7 +3,6 @@ use crate::{
     db::repository::LedgerRepository,
     front::cli::NodeCommands,
     model::{TxOutput, Wallet, get_node, get_node_mut, node::restart_node, wallet::DerivationType},
-    network::broadcast_new_block_hash,
 };
 use std::io::{self, Write};
 
@@ -467,10 +466,8 @@ async fn handle_mine(command: MineCommands) {
             println!("  Transactions: {}", block.transactions.len());
             println!("  Nonce: {}", block.header.nonce);
 
-            let block_hash = block.header_hash();
             node.save_node();
             println!("✓ Blockchain saved");
-            broadcast_new_block_hash(block_hash);
         }
     }
 }

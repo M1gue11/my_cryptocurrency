@@ -238,7 +238,11 @@ impl Node {
             .mine(&self.mempool, previous_hash, self.difficulty)?;
 
         match self.submit_block(mined_block) {
-            Ok(()) => Ok(self.blockchain.chain.last().unwrap()),
+            Ok(()) => {
+                let new_block = self.blockchain.chain.last().unwrap();
+                network::broadcast_new_block_hash(new_block.id());
+                Ok(new_block)
+            }
             Err(e) => Err(e),
         }
     }
