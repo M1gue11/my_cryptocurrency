@@ -53,7 +53,7 @@ impl Node {
         } else {
             println!("Loaded existing blockchain with {} blocks.", bc.chain.len());
         }
-
+        network::ask_for_blocks(bc.get_last_block_hash());
         Node {
             blockchain: bc,
             mempool: Node::load_mempool(),
@@ -225,7 +225,7 @@ impl Node {
         if let Err(e) = self.is_all_inputs_utxos(&tx) {
             return Err(e);
         }
-
+        network::broadcast_new_tx_hash(tx.id());
         self.mempool.push(mem_txs);
         Ok(())
     }
@@ -292,7 +292,7 @@ impl Node {
                         "Requesting transaction with ID: {}",
                         bytes_to_hex_string(&item_id)
                     );
-                    //TODO
+                    network::ask_for_tx(item_id);
                 }
             }
         }

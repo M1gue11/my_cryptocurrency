@@ -10,6 +10,13 @@ pub fn broadcast_new_block_hash(block_hash: [u8; 32]) {
     let _ = BROADCAST_CHANNEL.sender.send(inv_msg);
 }
 
+pub fn broadcast_new_tx_hash(tx_hash: [u8; 32]) {
+    let inv_msg = NetworkMessage::Inv {
+        items: vec![(InventoryType::Tx, tx_hash)],
+    };
+    let _ = BROADCAST_CHANNEL.sender.send(inv_msg);
+}
+
 pub fn send_block(block: &Block) {
     let block_msg = NetworkMessage::Block(block.clone());
     let _ = BROADCAST_CHANNEL.sender.send(block_msg);
@@ -26,4 +33,17 @@ pub fn ask_for_block(block_hash: [u8; 32]) {
         item_id: block_hash,
     };
     let _ = BROADCAST_CHANNEL.sender.send(get_data_msg);
+}
+
+pub fn ask_for_tx(tx_hash: [u8; 32]) {
+    let get_data_msg = NetworkMessage::GetData {
+        item_type: InventoryType::Tx,
+        item_id: tx_hash,
+    };
+    let _ = BROADCAST_CHANNEL.sender.send(get_data_msg);
+}
+
+pub fn ask_for_blocks(last_known_hash: [u8; 32]) {
+    let get_blocks_msg = NetworkMessage::GetBlocks { last_known_hash };
+    let _ = BROADCAST_CHANNEL.sender.send(get_blocks_msg);
 }
