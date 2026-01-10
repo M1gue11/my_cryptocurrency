@@ -40,10 +40,7 @@ impl Block {
     }
 
     pub fn evaluate_merkle_root(&mut self) {
-        let mut leaf_hashes: Vec<[u8; 32]> = Vec::new();
-        for tx in &self.transactions {
-            leaf_hashes.push(tx.id());
-        }
+        let leaf_hashes = self.transactions.iter().map(|tx| tx.id()).collect();
         let merkle_tree = MerkleTree::from_leaves(leaf_hashes);
         self.header.merkle_root = merkle_tree.root();
     }

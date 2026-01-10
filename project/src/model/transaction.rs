@@ -120,7 +120,7 @@ impl std::fmt::Debug for Transaction {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MempoolTx {
     pub tx: Transaction,
     pub utxos: Vec<UTXO>,

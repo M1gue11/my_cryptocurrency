@@ -1,4 +1,4 @@
-use crate::model::Block;
+use crate::model::{Block, Transaction};
 use crate::network::NetworkMessage;
 use crate::network::network_message::InventoryType;
 use crate::network::server::BROADCAST_CHANNEL;
@@ -13,6 +13,11 @@ pub fn broadcast_new_block_hash(block_hash: [u8; 32]) {
 pub fn send_block(block: &Block) {
     let block_msg = NetworkMessage::Block(block.clone());
     let _ = BROADCAST_CHANNEL.sender.send(block_msg);
+}
+
+pub fn send_tx(tx: &Transaction) {
+    let tx_msg = NetworkMessage::Tx(tx.clone());
+    let _ = BROADCAST_CHANNEL.sender.send(tx_msg);
 }
 
 pub fn ask_for_block(block_hash: [u8; 32]) {

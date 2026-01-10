@@ -1,7 +1,7 @@
 use crate::model::{get_node, get_node_mut};
 use crate::network::NetworkMessage;
 use once_cell::sync::Lazy;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
 
@@ -63,8 +63,9 @@ async fn connect_to_peer(address: String) {
 }
 
 async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
-    let (reader, mut writer) = stream.split();
+    let (reader, writer) = stream.split();
     let mut reader = BufReader::new(reader);
+    let mut writer = BufWriter::new(writer);
     let mut broadcast_rx = BROADCAST_CHANNEL.sender.subscribe();
 
     {
@@ -122,6 +123,16 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                             NetworkMessage::Block(block) => {
                                 let mut node = get_node_mut().await;
                                 node.handle_received_block(block).await;
+                            },
+
+                            NetworkMessage::Tx(tx) => {
+                                let mut node = get_node_mut().await;
+                                node.handle_received_transaction(tx).await;
+                            },
+
+                            NetworkMessage::GetBlocks { last_known_hash } => {
+                                let node = get_node().await;
+                                node.handle_get_blocks_request(last_known_hash).await;
                             },
 
                             _ => println!("Received: {:?}", message),

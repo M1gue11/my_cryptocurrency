@@ -311,7 +311,22 @@ impl Node {
                 }
             }
             InventoryType::Tx => {
-                // TODO
+                if let Some(mem_tx) = self.get_mempool_tx_by_id(item_id) {
+                    network::send_tx(&mem_tx.tx);
+                } else {
+                    let repo = LedgerRepository::new();
+                    match repo.get_transaction(&item_id) {
+                        Ok(tx) => {
+                            network::send_tx(&tx);
+                        }
+                        Err(_) => {
+                            println!(
+                                "Requested transaction with ID {} not found.",
+                                bytes_to_hex_string(&item_id)
+                            );
+                        }
+                    }
+                }
             }
         }
     }
@@ -320,6 +335,43 @@ impl Node {
         match self.submit_block(block) {
             Ok(()) => println!("Block added to the blockchain successfully."),
             Err(e) => println!("Failed to add block to the blockchain: {}", e),
+        }
+    }
+
+    pub async fn handle_received_transaction(&mut self, tx: Transaction) {
+        let utxos_ids = tx
+            .inputs
+            .iter()
+            .map(|i| (i.prev_tx_id, i.output_index))
+            .collect::<Vec<_>>();
+        let repo = LedgerRepository::new();
+        let utxos = match repo.get_utxos_from_ids(&utxos_ids) {
+            Ok(u) => u,
+            Err(e) => {
+                println!("Failed to get UTXOs for transaction: {}", e);
+                return;
+            }
+        };
+        match self.receive_transaction(MempoolTx { tx, utxos }) {
+            Ok(()) => println!("Transaction added to mempool successfully."),
+            Err(e) => println!("Failed to add transaction to mempool: {}", e),
+        }
+    }
+
+    pub async fn handle_get_blocks_request(&self, last_known_hash: [u8; 32]) {
+        let mut blocks_to_send = Vec::new();
+        let mut found = false;
+        for block in &self.blockchain.chain {
+            if found {
+                blocks_to_send.push(block.clone());
+            } else if block.header_hash() == last_known_hash {
+                found = true;
+            }
+        }
+
+        // TODO: improve this
+        for block in blocks_to_send {
+            network::send_block(&block);
         }
     }
 }
