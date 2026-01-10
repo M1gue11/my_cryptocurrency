@@ -1,0 +1,34 @@
+services:
+  node-1:
+    build: .
+    hostname: node1
+    ports:
+      - "6000:6000"
+    # environment:
+    #   - RUST_LOG=info
+    #   - DB_PATH=/data/blockchain.db
+    #   - PERSISTED_CHAIN_PATH=/data
+    #   - MINER_WALLET_SEED_PATH=/data/miner.keystore
+    #   - MINER_WALLET_PASSWORD=123
+    # volumes:
+    #   - ./.docker-data/node1:/data
+    command: ["--port", "6000"]
+    tty: true # Important to interact with the container
+    stdin_open: true # Important to interact with the container
+
+  node-2:
+    build: .
+    hostname: node2
+    depends_on:
+      - node-1
+    environment:
+      - RUST_LOG=info
+      - DB_PATH=/data/blockchain.db
+      - PERSISTED_CHAIN_PATH=/data
+      - MINER_WALLET_SEED_PATH=/data/miner.keystore
+      - MINER_WALLET_PASSWORD=123
+    volumes:
+      - ./.docker-data/node2:/data
+    command: ["--port", "6000", "--peer", "node1:6000"]
+    tty: true
+    stdin_open: true
