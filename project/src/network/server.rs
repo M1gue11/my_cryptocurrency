@@ -1,9 +1,12 @@
 use crate::model::{get_node, get_node_mut};
 use crate::network::NetworkMessage;
 use once_cell::sync::Lazy;
+// use std::net::SocketAddr;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
+
+// type BroadcastMessage = (NetworkMessage, Option<SocketAddr>);
 
 pub struct Broadcast {
     pub sender: broadcast::Sender<NetworkMessage>,

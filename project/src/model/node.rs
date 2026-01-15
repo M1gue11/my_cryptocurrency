@@ -331,8 +331,18 @@ impl Node {
     }
 
     pub async fn handle_received_block(&mut self, block: Block) {
+        if self.blockchain.find_block_by_hash(block.id()).is_some() {
+            println!("Block already exists in the blockchain.");
+            return;
+        }
+        let block_hash = block.id();
         match self.submit_block(block) {
-            Ok(()) => println!("Block added to the blockchain successfully."),
+            Ok(()) => {
+                println!("Block added to the blockchain successfully.");
+                network::broadcast_new_block_hash(block_hash);
+                // TODO: optimize persistence
+                self.blockchain.persist_chain(None);
+            }
             Err(e) => println!("Failed to add block to the blockchain: {}", e),
         }
     }
@@ -351,8 +361,12 @@ impl Node {
                 return;
             }
         };
+        let tx_id = tx.id();
         match self.receive_transaction(MempoolTx { tx, utxos }) {
-            Ok(()) => println!("Transaction added to mempool successfully."),
+            Ok(()) => {
+                println!("Transaction added to mempool successfully.");
+                network::broadcast_new_tx_hash(tx_id);
+            }
             Err(e) => println!("Failed to add transaction to mempool: {}", e),
         }
     }
