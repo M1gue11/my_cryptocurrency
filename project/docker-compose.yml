@@ -7,12 +7,13 @@ services:
     environment:
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
-      - MINER_WALLET_SEED_PATH=/data/miner.keystore
-      - MINER_WALLET_PASSWORD=password123_node1
+      - MINER_WALLET_SEED_PATH=/keys/miner_wallet.json
+      - MINER_WALLET_PASSWORD=miner123
       - MAX_MINING_ATTEMPTS=1000000
       - P2P_PORT=6000
     volumes:
       - ./.docker-data/node1:/data
+      - ./keys:/keys
     command: ["--port", "6000"]
     tty: true
     stdin_open: true
@@ -27,12 +28,13 @@ services:
     environment:
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
-      - MINER_WALLET_SEED_PATH=/data/miner.keystore
-      - MINER_WALLET_PASSWORD=password123_node2
+      - MINER_WALLET_SEED_PATH=/keys/miner_wallet.json
+      - MINER_WALLET_PASSWORD=miner123
       - MAX_MINING_ATTEMPTS=1000000
       - P2P_PORT=6000
     volumes:
       - ./.docker-data/node2:/data
+      - ./keys:/keys
     command: ["--port", "6000", "--peer", "node1:6000"]
     tty: true
     stdin_open: true
