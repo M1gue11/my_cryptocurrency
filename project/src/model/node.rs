@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufWriter;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use once_cell::sync::Lazy;
@@ -224,7 +225,7 @@ impl Node {
         if let Err(e) = self.is_all_inputs_utxos(&tx) {
             return Err(e);
         }
-        network::broadcast_new_tx_hash(tx.id());
+        network::broadcast_new_tx_hash(tx.id(), None);
         self.mempool.push(mem_txs);
         Ok(())
     }
@@ -239,7 +240,7 @@ impl Node {
         match self.submit_block(mined_block) {
             Ok(()) => {
                 let new_block = self.blockchain.chain.last().unwrap();
-                network::broadcast_new_block_hash(new_block.id());
+                network::broadcast_new_block_hash(new_block.id(), None);
                 Ok(new_block)
             }
             Err(e) => Err(e),
@@ -274,7 +275,11 @@ impl Node {
         self.mempool.iter().find(|mtx| mtx.tx.id() == tx_id)
     }
 
-    pub async fn handle_inventory(&self, items: Vec<(InventoryType, [u8; 32])>) {
+    pub async fn handle_inventory(
+        &self,
+        items: Vec<(InventoryType, [u8; 32])>,
+        _exclude_peer: Option<SocketAddr>,
+    ) {
         for (inv_type, item_id) in items {
             match inv_type {
                 InventoryType::Block => {
@@ -301,7 +306,7 @@ impl Node {
         match item_type {
             InventoryType::Block => {
                 if let Some(block) = self.blockchain.find_block_by_hash(item_id) {
-                    network::send_block(block);
+                    network::send_block(block, None);
                 } else {
                     println!(
                         "Requested block with ID {} not found.",
@@ -311,12 +316,12 @@ impl Node {
             }
             InventoryType::Tx => {
                 if let Some(mem_tx) = self.get_mempool_tx_by_id(item_id) {
-                    network::send_tx(&mem_tx.tx);
+                    network::send_tx(&mem_tx.tx, None);
                 } else {
                     let repo = LedgerRepository::new();
                     match repo.get_transaction(&item_id) {
                         Ok(tx) => {
-                            network::send_tx(&tx);
+                            network::send_tx(&tx, None);
                         }
                         Err(_) => {
                             println!(
@@ -330,7 +335,7 @@ impl Node {
         }
     }
 
-    pub async fn handle_received_block(&mut self, block: Block) {
+    pub async fn handle_received_block(&mut self, block: Block, exclude_peer: Option<SocketAddr>) {
         if self.blockchain.find_block_by_hash(block.id()).is_some() {
             println!("Block already exists in the blockchain.");
             return;
@@ -339,7 +344,7 @@ impl Node {
         match self.submit_block(block) {
             Ok(()) => {
                 println!("Block added to the blockchain successfully.");
-                network::broadcast_new_block_hash(block_hash);
+                network::broadcast_new_block_hash(block_hash, exclude_peer);
                 // TODO: optimize persistence
                 self.blockchain.persist_chain(None);
             }
@@ -347,7 +352,11 @@ impl Node {
         }
     }
 
-    pub async fn handle_received_transaction(&mut self, tx: Transaction) {
+    pub async fn handle_received_transaction(
+        &mut self,
+        tx: Transaction,
+        exclude_peer: Option<SocketAddr>,
+    ) {
         let utxos_ids = tx
             .inputs
             .iter()
@@ -365,7 +374,7 @@ impl Node {
         match self.receive_transaction(MempoolTx { tx, utxos }) {
             Ok(()) => {
                 println!("Transaction added to mempool successfully.");
-                network::broadcast_new_tx_hash(tx_id);
+                network::broadcast_new_tx_hash(tx_id, exclude_peer);
             }
             Err(e) => println!("Failed to add transaction to mempool: {}", e),
         }
@@ -388,7 +397,7 @@ impl Node {
 
         // TODO: improve this
         for block in blocks_to_send {
-            network::send_block(&block);
+            network::send_block(&block, None);
         }
     }
 

@@ -1,16 +1,16 @@
 use crate::model::{get_node, get_node_mut};
 use crate::network::NetworkMessage;
 use once_cell::sync::Lazy;
-// use std::net::SocketAddr;
+use std::net::SocketAddr;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
 
-// type BroadcastMessage = (NetworkMessage, Option<SocketAddr>);
+type BroadcastMessage = (NetworkMessage, Option<SocketAddr>);
 
 pub struct Broadcast {
-    pub sender: broadcast::Sender<NetworkMessage>,
-    pub _receiver: broadcast::Receiver<NetworkMessage>,
+    pub sender: broadcast::Sender<BroadcastMessage>,
+    pub _receiver: broadcast::Receiver<BroadcastMessage>,
 }
 
 pub static BROADCAST_CHANNEL: Lazy<Broadcast> = Lazy::new(|| {
@@ -70,6 +70,7 @@ async fn connect_to_peer(address: String) {
 }
 
 async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    let peer_addr = stream.peer_addr().ok();
     let (reader, mut writer) = stream.split();
     let mut reader = BufReader::new(reader);
     let mut broadcast_rx = BROADCAST_CHANNEL.sender.subscribe();
@@ -118,7 +119,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                             NetworkMessage::Inv { items } => {
                                 println!("Received Inventory with {} items.", items.len());
                                 let node = get_node().await;
-                                node.handle_inventory(items).await;
+                                node.handle_inventory(items, peer_addr).await;
                             },
 
                             NetworkMessage::GetData{item_type, item_id} => {
@@ -128,12 +129,12 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
 
                             NetworkMessage::Block(block) => {
                                 let mut node = get_node_mut().await;
-                                node.handle_received_block(block).await;
+                                node.handle_received_block(block, peer_addr).await;
                             },
 
                             NetworkMessage::Tx(tx) => {
                                 let mut node = get_node_mut().await;
-                                node.handle_received_transaction(tx).await;
+                                node.handle_received_transaction(tx, peer_addr).await;
                             },
 
                             NetworkMessage::GetBlocks { last_known_hash } => {
@@ -150,7 +151,13 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                 }
             }
 
-            Ok(msg) = broadcast_rx.recv() => {
+            Ok((msg, exclude_peer)) = broadcast_rx.recv() => {
+                if let Some(excluded) = exclude_peer {
+                    if peer_addr == Some(excluded) {
+                        println!("Skipping message to excluded peer: {:?}", excluded);
+                        continue;
+                    }
+                }
                 let json = serde_json::to_string(&msg)?;
                 writer.write_all(format!("{}\n", json).as_bytes()).await?;
             }
