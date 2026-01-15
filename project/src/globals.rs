@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
-use serde::Deserialize;
+use std::env;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Settings {
     pub persisted_chain_path: String,
     pub db_path: String,
@@ -12,11 +12,25 @@ pub struct Settings {
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
-    let settings = config::Config::builder()
-        .add_source(config::File::with_name("Settings.toml"))
-        .build()
-        .unwrap();
-    settings.try_deserialize().unwrap()
+    dotenv::dotenv().ok();
+
+    Settings {
+        persisted_chain_path: env::var("PERSISTED_CHAIN_PATH")
+            .unwrap_or_else(|_| "saved_files".to_string()),
+        db_path: env::var("DB_PATH").unwrap_or_else(|_| "saved_files/bd".to_string()),
+        miner_wallet_seed_path: env::var("MINER_WALLET_SEED_PATH")
+            .unwrap_or_else(|_| "keys/miner_wallet.json".to_string()),
+        miner_wallet_password: env::var("MINER_WALLET_PASSWORD")
+            .unwrap_or_else(|_| "password123".to_string()),
+        max_mining_attempts: env::var("MAX_MINING_ATTEMPTS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1_000_000),
+        p2p_port: env::var("P2P_PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(6000),
+    }
 });
 
 pub struct ConsensusRules {

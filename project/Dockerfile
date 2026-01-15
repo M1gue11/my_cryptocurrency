@@ -23,7 +23,7 @@ WORKDIR /app
 
 COPY --from=builder /usr/src/app/target/release/project /usr/local/bin/node
 
-COPY Settings.toml .
+COPY .env.example .
 
 COPY keys/ ./keys/
 
