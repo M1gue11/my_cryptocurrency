@@ -7,12 +7,15 @@ use tokio::sync::broadcast;
 
 pub struct Broadcast {
     pub sender: broadcast::Sender<NetworkMessage>,
-    pub receiver: broadcast::Receiver<NetworkMessage>,
+    pub _receiver: broadcast::Receiver<NetworkMessage>,
 }
 
 pub static BROADCAST_CHANNEL: Lazy<Broadcast> = Lazy::new(|| {
     let (sender, receiver) = broadcast::channel(100); // 100 messages buffer
-    Broadcast { sender, receiver }
+    Broadcast {
+        sender,
+        _receiver: receiver,
+    }
 });
 
 pub async fn run_server(port: u16, peers: Vec<String>) {
@@ -22,6 +25,7 @@ pub async fn run_server(port: u16, peers: Vec<String>) {
         .expect("Failed to bind P2P server to address");
 
     println!("P2P Server listening on {}", addr);
+    println!("Known peers: {:?}", peers);
 
     // 1. Try to connect to known peers (seeds)
     for peer_addr in peers {

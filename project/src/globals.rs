@@ -9,6 +9,7 @@ pub struct Settings {
     pub miner_wallet_password: String,
     pub max_mining_attempts: u32,
     pub p2p_port: u16,
+    pub peers: Vec<String>,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
@@ -30,6 +31,12 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(6000),
+        peers: env::var("PEERS")
+            .unwrap_or_else(|_| "".to_string())
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect(),
     }
 });
 
