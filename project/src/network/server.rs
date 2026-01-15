@@ -9,11 +9,17 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{RwLock, broadcast};
 
-type BroadcastMessage = (NetworkMessage, Option<SocketAddr>);
+#[derive(Clone)]
+pub enum Delivery {
+    Broadcast { exclude_peer: Option<SocketAddr> },
+    Direct { target_peer: SocketAddr },
+}
+
+type QueuedMessage = (NetworkMessage, Delivery);
 
 pub struct Broadcast {
-    pub sender: broadcast::Sender<BroadcastMessage>,
-    pub _receiver: broadcast::Receiver<BroadcastMessage>,
+    pub sender: broadcast::Sender<QueuedMessage>,
+    pub _receiver: broadcast::Receiver<QueuedMessage>,
 }
 
 pub static BROADCAST_CHANNEL: Lazy<Broadcast> = Lazy::new(|| {
@@ -27,9 +33,9 @@ pub static BROADCAST_CHANNEL: Lazy<Broadcast> = Lazy::new(|| {
 pub static CONNECTED_PEERS: Lazy<Arc<RwLock<HashSet<SocketAddr>>>> =
     Lazy::new(|| Arc::new(RwLock::new(HashSet::new())));
 
-pub async fn get_connected_peers() -> Vec<SocketAddr> {
-    CONNECTED_PEERS.read().await.iter().copied().collect()
-}
+// pub async fn get_connected_peers() -> Vec<SocketAddr> {
+//     CONNECTED_PEERS.read().await.iter().copied().collect()
+// }
 
 pub async fn get_peer_count() -> usize {
     CONNECTED_PEERS.read().await.len()
@@ -149,7 +155,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
 
                             NetworkMessage::GetData{item_type, item_id} => {
                                 let node = get_node().await;
-                                node.handle_get_data_request(item_type, item_id).await;
+                                node.handle_get_data_request(item_type, item_id, peer_addr).await;
                             },
 
                             NetworkMessage::Block(block) => {
@@ -176,15 +182,24 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                 }
             }
 
-            Ok((msg, exclude_peer)) = broadcast_rx.recv() => {
-                if let Some(excluded) = exclude_peer {
-                    if peer_addr == Some(excluded) {
-                        println!("Skipping message to excluded peer: {:?}", excluded);
-                        continue;
+            Ok((msg, delivery)) = broadcast_rx.recv() => {
+                match delivery {
+                    Delivery::Broadcast { exclude_peer } => {
+                        if exclude_peer.is_some() && peer_addr == exclude_peer {
+                            println!("Skipping message to excluded peer: {:?}", exclude_peer.unwrap());
+                            continue;
+                        }
+                        let json = serde_json::to_string(&msg)?;
+                        writer.write_all(format!("{}\n", json).as_bytes()).await?;
+                    }
+                    Delivery::Direct { target_peer } => {
+                        if peer_addr != Some(target_peer) {
+                            continue;
+                        }
+                        let json = serde_json::to_string(&msg)?;
+                        writer.write_all(format!("{}\n", json).as_bytes()).await?;
                     }
                 }
-                let json = serde_json::to_string(&msg)?;
-                writer.write_all(format!("{}\n", json).as_bytes()).await?;
             }
         }
     }

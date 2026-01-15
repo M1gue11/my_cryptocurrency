@@ -312,11 +312,20 @@ impl Node {
         }
     }
 
-    pub async fn handle_get_data_request(&self, item_type: InventoryType, item_id: [u8; 32]) {
+    pub async fn handle_get_data_request(
+        &self,
+        item_type: InventoryType,
+        item_id: [u8; 32],
+        requester: Option<SocketAddr>,
+    ) {
         match item_type {
             InventoryType::Block => {
                 if let Some(block) = self.blockchain.find_block_by_hash(item_id) {
-                    network::send_block(block, None);
+                    if let Some(peer) = requester {
+                        network::send_block_to(block, peer);
+                    } else {
+                        println!("Requested peer is None, not sending block.");
+                    }
                 } else {
                     println!(
                         "Requested block with ID {} not found.",
@@ -326,12 +335,20 @@ impl Node {
             }
             InventoryType::Tx => {
                 if let Some(mem_tx) = self.get_mempool_tx_by_id(item_id) {
-                    network::send_tx(&mem_tx.tx, None);
+                    if let Some(peer) = requester {
+                        network::send_tx_to(&mem_tx.tx, peer);
+                    } else {
+                        println!("Requested peer is None, not sending transaction.");
+                    }
                 } else {
                     let repo = LedgerRepository::new();
                     match repo.get_transaction(&item_id) {
                         Ok(tx) => {
-                            network::send_tx(&tx, None);
+                            if let Some(peer) = requester {
+                                network::send_tx_to(&tx, peer);
+                            } else {
+                                println!("Requested peer is None, not sending transaction.");
+                            }
                         }
                         Err(_) => {
                             println!(
