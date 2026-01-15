@@ -12,6 +12,7 @@ use crate::db::repository::LedgerRepository;
 use crate::globals::{CONFIG, CONSENSUS_RULES};
 use crate::model::transaction::TxId;
 use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction};
+use crate::network::get_peer_count;
 use crate::network::network_message::InventoryType;
 use crate::security_utils::bytes_to_hex_string;
 use crate::{network, utils};
@@ -263,12 +264,21 @@ impl Node {
         self.mempool.clear();
     }
 
-    pub fn get_node_version_info(&self) -> NodeVersionInfo {
-        NodeVersionInfo {
+    pub fn get_node_version_info(&self) -> NodeVersion {
+        NodeVersion {
             version: 1,
             height: self.blockchain.chain.len() as u64,
-            top_hash: hex::encode(self.blockchain.get_last_block_hash()),
+            top_hash: self.blockchain.get_last_block_hash(),
         }
+    }
+
+    pub async fn get_node_state(&self) -> NodeState {
+        let v = self.get_node_version_info();
+        let peers_count = get_peer_count().await;
+        return NodeState {
+            version: v,
+            peers_connected: peers_count,
+        };
     }
 
     pub fn get_mempool_tx_by_id(&self, tx_id: [u8; 32]) -> Option<&MempoolTx> {
@@ -337,7 +347,10 @@ impl Node {
 
     pub async fn handle_received_block(&mut self, block: Block, exclude_peer: Option<SocketAddr>) {
         if self.blockchain.find_block_by_hash(block.id()).is_some() {
-            println!("Block already exists in the blockchain.");
+            println!(
+                "Block already exists in the blockchain. peer_addr: {:?}",
+                exclude_peer
+            );
             return;
         }
         let block_hash = block.id();
@@ -401,7 +414,7 @@ impl Node {
         }
     }
 
-    pub async fn handle_version_message(&self, peer_v: NodeVersionInfo) {
+    pub async fn handle_version_message(&self, peer_v: NodeVersion) {
         let node_v = self.get_node_version_info();
         if peer_v.height > node_v.height {
             network::ask_for_blocks(self.blockchain.get_last_block_hash());
@@ -413,8 +426,13 @@ impl Node {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct NodeVersionInfo {
+pub struct NodeVersion {
     pub version: u32,
     pub height: u64,
-    pub top_hash: String,
+    pub top_hash: [u8; 32],
+}
+
+pub struct NodeState {
+    pub version: NodeVersion,
+    pub peers_connected: usize,
 }

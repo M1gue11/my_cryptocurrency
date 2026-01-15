@@ -3,6 +3,7 @@ use crate::{
     db::repository::LedgerRepository,
     front::cli::NodeCommands,
     model::{TxOutput, Wallet, get_node, get_node_mut, node::restart_node, wallet::DerivationType},
+    security_utils::bytes_to_hex_string,
 };
 use std::io::{self, Write};
 
@@ -103,6 +104,7 @@ fn print_help() {
     println!("  node init                       - Reinitialize the node");
     println!("  node mempool                    - Display transactions in the mempool");
     println!("  node clear-mempool              - Clear all transactions in the mempool");
+    println!("  node status                     - Show current node status");
 
     println!("\n⛏  Mining:");
     println!("  mine block                 - Mine a new block with pending transactions");
@@ -160,6 +162,7 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                 "init" => Ok(Commands::Node(NodeCommands::Init)),
                 "mempool" => Ok(Commands::Node(NodeCommands::Mempool)),
                 "clear-mempool" => Ok(Commands::Node(NodeCommands::ClearMempool)),
+                "status" => Ok(Commands::Node(NodeCommands::Status)),
                 _ => Err(format!("Unknown node command: {}", parts[1])),
             }
         }
@@ -442,6 +445,18 @@ async fn handle_node(command: NodeCommands) {
             node.clear_mempool();
             node.save_node();
             println!("✓ Mempool cleared");
+        }
+
+        NodeCommands::Status => {
+            let state = get_node().await.get_node_state().await;
+            println!("\n=== Node Status ===");
+            println!("  Version: {}", state.version.version);
+            println!("  Peers Connected: {}", state.peers_connected);
+            println!("  Current Block Height: {}", state.version.height);
+            println!(
+                "  Current Block Hash: {}",
+                bytes_to_hex_string(&state.version.top_hash)
+            );
         }
     }
 }

@@ -1,10 +1,13 @@
 use crate::model::{get_node, get_node_mut};
 use crate::network::NetworkMessage;
+use crate::security_utils::bytes_to_hex_string;
 use once_cell::sync::Lazy;
+use std::collections::HashSet;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::broadcast;
+use tokio::sync::{RwLock, broadcast};
 
 type BroadcastMessage = (NetworkMessage, Option<SocketAddr>);
 
@@ -20,6 +23,17 @@ pub static BROADCAST_CHANNEL: Lazy<Broadcast> = Lazy::new(|| {
         _receiver: receiver,
     }
 });
+
+pub static CONNECTED_PEERS: Lazy<Arc<RwLock<HashSet<SocketAddr>>>> =
+    Lazy::new(|| Arc::new(RwLock::new(HashSet::new())));
+
+pub async fn get_connected_peers() -> Vec<SocketAddr> {
+    CONNECTED_PEERS.read().await.iter().copied().collect()
+}
+
+pub async fn get_peer_count() -> usize {
+    CONNECTED_PEERS.read().await.len()
+}
 
 pub async fn run_server(port: u16, peers: Vec<String>) {
     let addr = format!("0.0.0.0:{}", port);
@@ -71,6 +85,17 @@ async fn connect_to_peer(address: String) {
 
 async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     let peer_addr = stream.peer_addr().ok();
+
+    // Add peer to connected peers list
+    if let Some(addr) = peer_addr {
+        CONNECTED_PEERS.write().await.insert(addr);
+        println!(
+            "Peer connected: {}. Total peers: {}",
+            addr,
+            get_peer_count().await
+        );
+    }
+
     let (reader, mut writer) = stream.split();
     let mut reader = BufReader::new(reader);
     let mut broadcast_rx = BROADCAST_CHANNEL.sender.subscribe();
@@ -105,7 +130,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                             NetworkMessage::Version(ver) => {
                                 println!(
                                     "Received VERSION: v={} height={} hash={}",
-                                    ver.version, ver.height, ver.top_hash
+                                    ver.version, ver.height, bytes_to_hex_string(&ver.top_hash)
                                 );
                                 get_node().await.handle_version_message(ver).await;
                                 let ack = serde_json::to_string(&NetworkMessage::VerAck)?;
@@ -163,5 +188,16 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
             }
         }
     }
+
+    // Remove peer from connected peers list when disconnecting
+    if let Some(addr) = peer_addr {
+        CONNECTED_PEERS.write().await.remove(&addr);
+        println!(
+            "Peer disconnected: {}. Total peers: {}",
+            addr,
+            get_peer_count().await
+        );
+    }
+
     Ok(())
 }

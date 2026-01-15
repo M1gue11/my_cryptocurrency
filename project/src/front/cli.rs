@@ -38,6 +38,8 @@ pub enum NodeCommands {
     Mempool,
 
     ClearMempool,
+
+    Status,
 }
 
 #[derive(Subcommand)]
