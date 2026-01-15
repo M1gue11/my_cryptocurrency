@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use crate::db::repository::LedgerRepository;
 use crate::globals::{CONFIG, CONSENSUS_RULES};
 use crate::model::transaction::TxId;
-use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction, node};
+use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction};
 use crate::network::network_message::InventoryType;
 use crate::security_utils::bytes_to_hex_string;
 use crate::{network, utils};
@@ -360,9 +360,13 @@ impl Node {
     pub async fn handle_get_blocks_request(&self, last_known_hash: [u8; 32]) {
         let mut blocks_to_send = Vec::new();
         let mut found = false;
+
+        if last_known_hash == [0; 32] {
+            found = true;
+        }
         for block in &self.blockchain.chain {
             if found {
-                blocks_to_send.push(block.clone());
+                blocks_to_send.push(block);
             } else if block.header_hash() == last_known_hash {
                 found = true;
             }
