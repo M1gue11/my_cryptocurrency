@@ -170,7 +170,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
 
                             NetworkMessage::GetBlocks { last_known_hash } => {
                                 let node = get_node().await;
-                                node.handle_get_blocks_request(last_known_hash).await;
+                                node.handle_get_blocks_request(last_known_hash, peer_addr.unwrap()).await;
                             },
 
                             _ => println!("Received: {:?}", message),

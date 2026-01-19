@@ -22,13 +22,6 @@ pub fn broadcast_new_tx_hash(tx_hash: [u8; 32], exclude_peer: Option<SocketAddr>
         .send((inv_msg, Delivery::Broadcast { exclude_peer }));
 }
 
-pub fn send_block(block: &Block, exclude_peer: Option<SocketAddr>) {
-    let block_msg = NetworkMessage::Block(block.clone());
-    let _ = BROADCAST_CHANNEL
-        .sender
-        .send((block_msg, Delivery::Broadcast { exclude_peer }));
-}
-
 pub fn send_block_to(block: &Block, target_peer: SocketAddr) {
     let block_msg = NetworkMessage::Block(block.clone());
     let _ = BROADCAST_CHANNEL

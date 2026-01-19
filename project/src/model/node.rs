@@ -410,7 +410,11 @@ impl Node {
         }
     }
 
-    pub async fn handle_get_blocks_request(&self, last_known_hash: [u8; 32]) {
+    pub async fn handle_get_blocks_request(
+        &self,
+        last_known_hash: [u8; 32],
+        target_peer: SocketAddr,
+    ) {
         let mut blocks_to_send = Vec::new();
         let mut found = false;
 
@@ -427,7 +431,7 @@ impl Node {
 
         // TODO: improve this
         for block in blocks_to_send {
-            network::send_block(&block, None);
+            network::send_block_to(&block, target_peer);
         }
     }
 
