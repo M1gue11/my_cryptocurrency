@@ -21,28 +21,33 @@ pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> Rp
 
     let path = params.path.unwrap_or_default();
     let mut is_imported_wallet = true;
-    let mut wallet = match Wallet::from_keystore_file(&path, &params.password) {
-        Ok(w) => w,
-        Err(e) => {
-            // Only create a new wallet if the keystore file doesn't exist
-            if e.contains("Arquivo não encontrado") {
-                is_imported_wallet = false;
-                match Keystore::new_seed(&params.password, &path) {
-                    Ok(seed) => Wallet::from_seed(seed),
-                    Err(create_err) => {
-                        return RpcResponse::error(
-                            id,
-                            INVALID_PARAMS,
-                            format!("Failed to create new wallet: {}", create_err),
-                        );
-                    }
-                }
-            } else {
-                // For any other error (wrong password, corrupted file, etc.), return an error
+    
+    // Check if keystore file exists
+    let keystore_exists = std::path::Path::new(&path).exists();
+    
+    let mut wallet = if keystore_exists {
+        // File exists, try to load it
+        match Wallet::from_keystore_file(&path, &params.password) {
+            Ok(w) => w,
+            Err(e) => {
+                // Return error for any loading failure (wrong password, corrupted file, etc.)
                 return RpcResponse::error(
                     id,
                     INVALID_PARAMS,
                     format!("Failed to load wallet: {}", e),
+                );
+            }
+        }
+    } else {
+        // File doesn't exist, create new wallet
+        is_imported_wallet = false;
+        match Keystore::new_seed(&params.password, &path) {
+            Ok(seed) => Wallet::from_seed(seed),
+            Err(create_err) => {
+                return RpcResponse::error(
+                    id,
+                    INVALID_PARAMS,
+                    format!("Failed to create new wallet: {}", create_err),
                 );
             }
         }
