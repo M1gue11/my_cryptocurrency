@@ -31,6 +31,7 @@ pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> Rp
             Ok(w) => w,
             Err(e) => {
                 // Return error for any loading failure (wrong password, corrupted file, etc.)
+                // Using INVALID_PARAMS for consistency with other wallet handlers
                 return RpcResponse::error(
                     id,
                     INVALID_PARAMS,
@@ -42,7 +43,11 @@ pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> Rp
         // File doesn't exist, create new wallet
         is_imported_wallet = false;
         match Keystore::new_seed(&params.password, &path) {
-            Ok(seed) => Wallet::from_seed(seed),
+            Ok(seed) => {
+                // Wallet::from_seed is infallible - it handles database errors gracefully
+                // by falling back to index 0 when unable to determine last used index
+                Wallet::from_seed(seed)
+            }
             Err(create_err) => {
                 return RpcResponse::error(
                     id,
