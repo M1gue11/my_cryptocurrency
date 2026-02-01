@@ -4,15 +4,15 @@ use tokio::net::TcpStream;
 
 use crate::daemon::types::{
     ChainShowResponse, ChainStatusResponse, MempoolResponse, MineBlockResponse, NodeStatusResponse,
-    RpcRequest, RpcResponse, TransactionViewResponse, UtxosResponse, WalletAddressResponse,
-    WalletBalanceResponse, WalletGenerateKeysResponse, WalletListResponse, WalletNewResponse,
+    RpcRequest, RpcResponse, TransactionViewResponse, UtxosResponse, WalletAccessParams,
+    WalletAddressResponse, WalletBalanceResponse, WalletGenerateKeysResponse, WalletNewResponse,
     WalletSendResponse,
 };
 
-/// Contador global de IDs de requisição
+/// global counter for request IDs
 static REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
-/// Cliente RPC para comunicação com o daemon
+/// RPC client for communication with the daemon
 pub struct RpcClient {
     host: String,
     port: u16,
@@ -26,14 +26,14 @@ impl RpcClient {
         }
     }
 
-    /// Conecta ao daemon e retorna se a conexão foi bem-sucedida
+    /// Connects to the daemon and returns whether the connection was successful
     pub async fn ping(&self) -> bool {
         self.call::<serde_json::Value>("node_status", serde_json::json!({}))
             .await
             .is_ok()
     }
 
-    /// Faz uma chamada RPC genérica
+    /// Makes a generic RPC call
     pub async fn call<T: serde::de::DeserializeOwned>(
         &self,
         method: &str,
@@ -81,12 +81,11 @@ impl RpcClient {
     // ========================================================================
     // Node Methods
     // ========================================================================
-
     pub async fn node_status(&self) -> Result<NodeStatusResponse, String> {
         self.call("node_status", serde_json::json!({})).await
     }
 
-    pub async fn node_init(&self) -> Result<serde_json::Value, String> {
+    pub async fn node_init(&self) -> Result<RpcResponse, String> {
         self.call("node_init", serde_json::json!({})).await
     }
 
@@ -94,14 +93,17 @@ impl RpcClient {
         self.call("node_mempool", serde_json::json!({})).await
     }
 
-    pub async fn node_clear_mempool(&self) -> Result<serde_json::Value, String> {
+    pub async fn node_clear_mempool(&self) -> Result<RpcResponse, String> {
         self.call("node_clear_mempool", serde_json::json!({})).await
+    }
+
+    pub async fn node_save(&self) -> Result<RpcResponse, String> {
+        self.call("node_save", serde_json::json!({})).await
     }
 
     // ========================================================================
     // Mining Methods
     // ========================================================================
-
     pub async fn mine_block(&self) -> Result<MineBlockResponse, String> {
         self.call("mine_block", serde_json::json!({})).await
     }
@@ -109,7 +111,6 @@ impl RpcClient {
     // ========================================================================
     // Chain Methods
     // ========================================================================
-
     pub async fn chain_status(&self) -> Result<ChainStatusResponse, String> {
         self.call("chain_status", serde_json::json!({})).await
     }
@@ -118,12 +119,8 @@ impl RpcClient {
         self.call("chain_show", serde_json::json!({})).await
     }
 
-    pub async fn chain_validate(&self) -> Result<serde_json::Value, String> {
+    pub async fn chain_validate(&self) -> Result<RpcResponse, String> {
         self.call("chain_validate", serde_json::json!({})).await
-    }
-
-    pub async fn chain_save(&self) -> Result<serde_json::Value, String> {
-        self.call("chain_save", serde_json::json!({})).await
     }
 
     pub async fn chain_utxos(&self, limit: u32) -> Result<UtxosResponse, String> {
@@ -132,53 +129,63 @@ impl RpcClient {
     }
 
     // ========================================================================
+    // Transaction Methods
+    // ========================================================================
+    pub async fn transaction_view(&self, id: &str) -> Result<TransactionViewResponse, String> {
+        self.call("transaction_view", serde_json::json!({ "id": id }))
+            .await
+    }
+
+    // ========================================================================
     // Wallet Methods
     // ========================================================================
-
+    /// Creates a new wallet
     pub async fn wallet_new(
         &self,
         password: &str,
         path: &str,
-        name: Option<&str>,
     ) -> Result<WalletNewResponse, String> {
         self.call(
             "wallet_new",
             serde_json::json!({
                 "password": password,
                 "path": path,
-                "name": name
             }),
         )
         .await
     }
 
-    pub async fn wallet_list(&self) -> Result<WalletListResponse, String> {
-        self.call("wallet_list", serde_json::json!({})).await
-    }
-
     pub async fn wallet_address(
         &self,
-        name: Option<&str>,
+        key_path: String,
+        password: String,
     ) -> Result<WalletAddressResponse, String> {
-        self.call("wallet_address", serde_json::json!({ "name": name }))
-            .await
+        self.call(
+            "wallet_address",
+            serde_json::json!({ "key_path": key_path, "password": password }),
+        )
+        .await
     }
 
     pub async fn wallet_balance(
         &self,
-        name: Option<&str>,
+        key_path: String,
+        password: String,
     ) -> Result<WalletBalanceResponse, String> {
-        self.call("wallet_balance", serde_json::json!({ "name": name }))
-            .await
+        self.call(
+            "wallet_balance",
+            serde_json::json!({ "key_path": key_path, "password": password }),
+        )
+        .await
     }
 
     pub async fn wallet_send(
         &self,
-        from: Option<&str>,
+        from: &WalletAccessParams,
         to: &str,
         amount: i64,
         fee: Option<i64>,
-        message: Option<&str>,
+        message: Option<String>,
     ) -> Result<WalletSendResponse, String> {
         self.call(
             "wallet_send",
@@ -196,26 +203,21 @@ impl RpcClient {
     pub async fn wallet_generate_keys(
         &self,
         count: u32,
-        name: Option<&str>,
+        key_path: String,
+        password: String,
         derivation_type: Option<u32>,
     ) -> Result<WalletGenerateKeysResponse, String> {
         self.call(
             "wallet_generate_keys",
             serde_json::json!({
                 "count": count,
-                "name": name,
+                "wallet": {
+                    "key_path": key_path,
+                    "password": password
+                },
                 "derivation_type": derivation_type
             }),
         )
         .await
-    }
-
-    // ========================================================================
-    // Transaction Methods
-    // ========================================================================
-
-    pub async fn transaction_view(&self, id: &str) -> Result<TransactionViewResponse, String> {
-        self.call("transaction_view", serde_json::json!({ "id": id }))
-            .await
     }
 }

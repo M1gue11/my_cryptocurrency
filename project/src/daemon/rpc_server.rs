@@ -1,7 +1,7 @@
 // JSON-RPC server for the daemon
 use crate::daemon::handlers::chain::{
-    handle_chain_save, handle_chain_show, handle_chain_status, handle_chain_utxos,
-    handle_chain_validate,
+    handle_chain_show, handle_chain_status, handle_chain_utxos, handle_chain_validate,
+    handle_node_save,
 };
 use crate::daemon::handlers::mine::handle_mine_block;
 use crate::daemon::handlers::node::{
@@ -17,9 +17,6 @@ use crate::daemon::types::{RpcRequest, RpcResponse};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-
-/// default RPC server port
-pub const DEFAULT_RPC_PORT: u16 = 7000;
 
 /// daemon RPC server
 pub struct RpcServer {
@@ -106,6 +103,7 @@ async fn process_request(request_str: &str) -> RpcResponse {
         "node_init" => handle_node_init(request.id).await,
         "node_mempool" => handle_node_mempool(request.id).await,
         "node_clear_mempool" => handle_node_clear_mempool(request.id).await,
+        "node_save" => handle_node_save(request.id).await,
 
         // Mining methods
         "mine_block" => handle_mine_block(request.id).await,
@@ -114,7 +112,6 @@ async fn process_request(request_str: &str) -> RpcResponse {
         "chain_status" => handle_chain_status(request.id).await,
         "chain_show" => handle_chain_show(request.id).await,
         "chain_validate" => handle_chain_validate(request.id).await,
-        "chain_save" => handle_chain_save(request.id).await,
         "chain_utxos" => handle_chain_utxos(request.id, request.params).await,
 
         // Wallet methods

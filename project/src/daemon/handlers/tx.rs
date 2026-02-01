@@ -38,6 +38,7 @@ pub async fn handle_transaction_view(id: Option<u64>, params: serde_json::Value)
                     prev_tx_id: hex::encode(i.prev_tx_id),
                     output_index: i.output_index,
                     public_key: i.public_key.clone(),
+                    signature: i.signature.clone(),
                 })
                 .collect();
 
@@ -57,6 +58,7 @@ pub async fn handle_transaction_view(id: Option<u64>, params: serde_json::Value)
                 inputs,
                 outputs,
                 is_coinbase: tx.is_coinbase(),
+                size: tx.size(),
             };
 
             RpcResponse::success(id, serde_json::to_value(response).unwrap())

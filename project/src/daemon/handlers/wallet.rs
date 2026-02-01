@@ -8,6 +8,7 @@ use crate::daemon::types::{
 };
 use crate::model::wallet::DerivationType;
 use crate::model::{TxOutput, Wallet, get_node_mut};
+use crate::security_utils::bytes_to_hex_string;
 
 pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
     let params: WalletNewParams = match serde_json::from_value(params) {
@@ -118,15 +119,14 @@ pub async fn handle_wallet_send(id: Option<u64>, params: serde_json::Value) -> R
 
     match wallet.send_tx(outputs, params.fee, params.message) {
         Ok(mempool_tx) => {
-            let tx_id = hex::encode(mempool_tx.tx.id());
             let mut node = get_node_mut().await;
-
+            let tx_id = mempool_tx.tx.id();
             match node.receive_transaction(mempool_tx) {
                 Ok(_) => {
                     node.persist_mempool();
                     let response = WalletSendResponse {
                         success: true,
-                        tx_id: Some(tx_id),
+                        tx_id: Some(bytes_to_hex_string(&tx_id)),
                         error: None,
                     };
                     RpcResponse::success(id, serde_json::to_value(response).unwrap())

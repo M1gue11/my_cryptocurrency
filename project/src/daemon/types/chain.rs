@@ -1,6 +1,8 @@
 // Chain RPC Types
 use serde::{Deserialize, Serialize};
 
+use crate::daemon::types::TransactionViewResponse;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChainStatusResponse {
     pub block_count: usize,
@@ -17,7 +19,7 @@ pub struct BlockInfo {
     pub merkle_root: String,
     pub nonce: u32,
     pub timestamp: String,
-    pub transactions_count: usize,
+    pub transactions: Vec<TransactionViewResponse>,
     pub size_bytes: usize,
 }
 

@@ -56,9 +56,6 @@ pub enum ChainCommands {
     /// Validate the blockchain integrity
     Validate,
 
-    /// Save the blockchain to disk
-    Save,
-
     /// Get blockchain status
     Status,
 

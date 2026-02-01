@@ -90,6 +90,10 @@ impl Transaction {
     pub fn is_coinbase(&self) -> bool {
         self.inputs.is_empty()
     }
+
+    pub fn size(&self) -> usize {
+        self.as_bytes().len()
+    }
 }
 
 impl std::fmt::Display for Transaction {
@@ -115,7 +119,7 @@ impl std::fmt::Debug for Transaction {
             .field("date", &self.date)
             .field("message", &self.message)
             .field("is coinbase", &self.is_coinbase())
-            .field("size in bytes", &self.as_bytes().len())
+            .field("size in bytes", &self.size())
             .finish()
     }
 }

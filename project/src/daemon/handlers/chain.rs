@@ -6,6 +6,7 @@ use crate::daemon::types::{
 };
 use crate::db::repository::LedgerRepository;
 use crate::model::get_node;
+use crate::utils::transaction_model_to_view;
 
 pub async fn handle_chain_status(id: Option<u64>) -> RpcResponse {
     let node = get_node().await;
@@ -47,7 +48,11 @@ pub async fn handle_chain_show(id: Option<u64>) -> RpcResponse {
             merkle_root: hex::encode(block.header.merkle_root),
             nonce: block.header.nonce,
             timestamp: block.header.timestamp.to_string(),
-            transactions_count: block.transactions.len(),
+            transactions: block
+                .transactions
+                .iter()
+                .map(|tx| transaction_model_to_view(tx))
+                .collect(),
             size_bytes: block.size(),
         })
         .collect();
@@ -74,7 +79,7 @@ pub async fn handle_chain_validate(id: Option<u64>) -> RpcResponse {
     RpcResponse::success(id, response)
 }
 
-pub async fn handle_chain_save(id: Option<u64>) -> RpcResponse {
+pub async fn handle_node_save(id: Option<u64>) -> RpcResponse {
     let node = get_node().await;
     node.save_node();
 

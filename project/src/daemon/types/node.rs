@@ -1,6 +1,8 @@
 // Node RPC Types
 use serde::{Deserialize, Serialize};
 
+use crate::daemon::types::TransactionViewResponse;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeStatusResponse {
     pub version: String,
@@ -11,10 +13,7 @@ pub struct NodeStatusResponse {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MempoolEntry {
-    pub tx_id: String,
-    pub amount: i64,
-    pub fee: i64,
-    pub fee_per_byte: f64,
+    pub tx: TransactionViewResponse,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

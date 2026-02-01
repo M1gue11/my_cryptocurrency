@@ -2,6 +2,7 @@
 use crate::daemon::types::{MempoolEntry, MempoolResponse, NodeStatusResponse, RpcResponse};
 use crate::model::{get_node, get_node_mut, node::restart_node};
 use crate::security_utils::bytes_to_hex_string;
+use crate::utils::transaction_model_to_view;
 
 pub async fn handle_node_status(id: Option<u64>) -> RpcResponse {
     let state = get_node().await.get_node_state().await;
@@ -36,10 +37,7 @@ pub async fn handle_node_mempool(id: Option<u64>) -> RpcResponse {
         .get_mempool()
         .iter()
         .map(|mtx| MempoolEntry {
-            tx_id: bytes_to_hex_string(&mtx.tx.id()),
-            amount: mtx.tx.amount(),
-            fee: mtx.calculate_fee(),
-            fee_per_byte: mtx.calculate_fee_per_byte(),
+            tx: transaction_model_to_view(&mtx.tx),
         })
         .collect();
 
