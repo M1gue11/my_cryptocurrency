@@ -25,7 +25,7 @@ pub async fn handle_chain_status(id: Option<u64>) -> RpcResponse {
 
     let response = ChainStatusResponse {
         block_count,
-        is_valid: validation.is_ok(),
+        is_valid: matches!(validation, Ok(true)),
         last_block_hash: last_hash,
         last_block_date: last_date,
     };
