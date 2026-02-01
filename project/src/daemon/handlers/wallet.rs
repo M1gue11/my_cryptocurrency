@@ -9,6 +9,7 @@ use crate::daemon::types::{
 use crate::model::wallet::DerivationType;
 use crate::model::{TxOutput, Wallet, get_node_mut};
 use crate::security_utils::bytes_to_hex_string;
+use crate::security_utils::Keystore;
 
 pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
     let params: WalletNewParams = match serde_json::from_value(params) {
@@ -22,9 +23,28 @@ pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> Rp
     let mut is_imported_wallet = true;
     let mut wallet = match Wallet::from_keystore_file(&path, &params.password) {
         Ok(w) => w,
-        Err(_) => {
-            is_imported_wallet = false;
-            Wallet::new(&params.password, &path)
+        Err(e) => {
+            // Only create a new wallet if the keystore file doesn't exist
+            if e.contains("Arquivo não encontrado") {
+                is_imported_wallet = false;
+                match Keystore::new_seed(&params.password, &path) {
+                    Ok(seed) => Wallet::from_seed(seed),
+                    Err(create_err) => {
+                        return RpcResponse::error(
+                            id,
+                            INVALID_PARAMS,
+                            format!("Failed to create new wallet: {}", create_err),
+                        );
+                    }
+                }
+            } else {
+                // For any other error (wrong password, corrupted file, etc.), return an error
+                return RpcResponse::error(
+                    id,
+                    INVALID_PARAMS,
+                    format!("Failed to load wallet: {}", e),
+                );
+            }
         }
     };
 
@@ -32,7 +52,7 @@ pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> Rp
     let response = WalletNewResponse {
         success: true,
         address: Some(address),
-        is_imported_wallet: is_imported_wallet,
+        is_imported_wallet,
     };
 
     RpcResponse::success(id, serde_json::to_value(response).unwrap())
