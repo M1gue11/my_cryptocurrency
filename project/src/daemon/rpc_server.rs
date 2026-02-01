@@ -77,7 +77,7 @@ async fn handle_connection(
     Ok(())
 }
 
-async fn process_request(request_str: &str) -> RpcResponse {
+pub async fn process_request(request_str: &str) -> RpcResponse {
     // Parse JSON-RPC request
     let request: RpcRequest = match serde_json::from_str(request_str) {
         Ok(req) => req,
@@ -85,6 +85,7 @@ async fn process_request(request_str: &str) -> RpcResponse {
             return RpcResponse::error(None, PARSE_ERROR, format!("Parse error: {}", e));
         }
     };
+    println!("[RPC] Received request: {}", request.method);
 
     // Validate jsonrpc version
     if request.jsonrpc != "2.0" {
