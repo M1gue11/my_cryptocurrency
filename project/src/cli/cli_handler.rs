@@ -70,9 +70,12 @@ fn resolve_wallet_by_name<'a>(
     loaded_wallets: &'a HashMap<String, WalletAccessParams>,
 ) -> Result<&'a WalletAccessParams, String> {
     let name = name.unwrap_or_else(|| "miner_wallet".to_string());
-    loaded_wallets
-        .get(&name)
-        .ok_or_else(|| format!("Wallet '{}' not found. Use 'wallet list' to see loaded wallets.", name))
+    loaded_wallets.get(&name).ok_or_else(|| {
+        format!(
+            "Wallet '{}' not found. Use 'wallet list' to see loaded wallets.",
+            name
+        )
+    })
 }
 
 async fn startup_helper(client: &RpcClient) {
@@ -129,6 +132,9 @@ fn print_help() {
     println!("\n💰 Wallet:");
     println!("  wallet new --password <password> --path <keystore_path> [--name <name>]");
     println!("    - Create a new wallet. If name is provided, wallet is stored in session.");
+
+    println!("\n  wallet import --password <password> --path <keystore_path> [--name <name>]");
+    println!("    - Import an existing wallet. If name is provided, wallet is stored in session.");
 
     println!("\n  wallet list");
     println!("    - List all loaded wallets in the current session.");
@@ -232,6 +238,29 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                         _ => None,
                     };
                     Ok(Commands::Wallet(WalletCommands::New {
+                        name,
+                        path,
+                        password,
+                    }))
+                }
+
+                "import" => {
+                    let password = parse_flag_value(&parts, "--password")?;
+                    if password.is_empty() {
+                        return Err("Password cannot be empty".to_string());
+                    }
+
+                    let path = parse_flag_value(&parts, "--path")?;
+                    if path.is_empty() {
+                        return Err("Path cannot be empty".to_string());
+                    }
+
+                    let name_result = parse_flag_value(&parts, "--name");
+                    let name = match name_result {
+                        Ok(n) if !n.is_empty() => Some(n),
+                        _ => None,
+                    };
+                    Ok(Commands::Wallet(WalletCommands::Import {
                         name,
                         path,
                         password,
@@ -677,6 +706,43 @@ async fn handle_wallet(
     loaded_wallets: &mut HashMap<String, WalletAccessParams>,
 ) {
     match command {
+        WalletCommands::Import {
+            password,
+            path,
+            name,
+        } => {
+            if let Some(ref wallet_name) = name {
+                if loaded_wallets.contains_key(wallet_name) {
+                    println!(
+                        "✗ Wallet with name '{}' already loaded in session",
+                        wallet_name
+                    );
+                    return;
+                }
+            }
+
+            let new_wallet_response = match client.wallet_import(&password, &path).await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Wallet import failed: {}", e);
+                    return;
+                }
+            };
+
+            if let Some(wallet_name) = name {
+                loaded_wallets.insert(
+                    wallet_name,
+                    WalletAccessParams {
+                        key_path: path.clone(),
+                        password: password.clone(),
+                    },
+                );
+            }
+
+            println!("✓ Wallet imported successfully");
+            println!("  Next address: {:?}", new_wallet_response.address);
+        }
+
         WalletCommands::New {
             password,
             path,
@@ -684,11 +750,13 @@ async fn handle_wallet(
         } => {
             if let Some(ref wallet_name) = name {
                 if loaded_wallets.contains_key(wallet_name) {
-                    println!("✗ Wallet with name '{}' already loaded in session", wallet_name);
+                    println!(
+                        "✗ Wallet with name '{}' already loaded in session",
+                        wallet_name
+                    );
                     return;
                 }
             }
-
             let new_wallet_response = match client.wallet_new(&password, &path).await {
                 Ok(res) => res,
                 Err(e) => {
@@ -708,7 +776,7 @@ async fn handle_wallet(
             }
 
             println!("✓ Wallet created successfully");
-            println!("  First address: {:?}", new_wallet_response.address);
+            println!("  Next address: {:?}", new_wallet_response.address);
         }
 
         WalletCommands::List => {

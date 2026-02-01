@@ -68,7 +68,18 @@ pub enum ChainCommands {
 
 #[derive(Subcommand)]
 pub enum WalletCommands {
-    /// Create a new wallet
+    /// Import an existing wallet
+    Import {
+        #[arg(short, long)]
+        password: String,
+
+        #[arg(short, long)]
+        path: String,
+
+        #[arg(short, long)]
+        name: Option<String>,
+    },
+
     New {
         #[arg(short, long)]
         password: String,
