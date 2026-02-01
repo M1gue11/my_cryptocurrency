@@ -4,19 +4,22 @@ use crate::{
     daemon::types::WalletAccessParams,
     globals::CONFIG,
 };
+use std::collections::HashMap;
 use std::io::{self, Write};
 
 pub async fn run_cli(client: RpcClient) {
     print_welcome(&client).await;
 
-    let mut loaded_wallets: Vec<(String, WalletAccessParams)> = {
-        vec![(
+    let mut loaded_wallets: HashMap<String, WalletAccessParams> = {
+        let mut map = HashMap::new();
+        map.insert(
             "miner_wallet".to_string(),
             WalletAccessParams {
                 key_path: CONFIG.miner_wallet_seed_path.clone(),
                 password: CONFIG.miner_wallet_password.clone(),
             },
-        )]
+        );
+        map
     };
 
     loop {
@@ -64,18 +67,12 @@ pub async fn run_cli(client: RpcClient) {
 
 fn resolve_wallet_by_name<'a>(
     name: Option<String>,
-    loaded_wallets: &'a mut Vec<(String, WalletAccessParams)>,
-) -> &'a mut WalletAccessParams {
-    let name = match name {
-        Some(n) => n,
-        None => "miner_wallet".to_string(),
-    };
-    for (loaded_name, wallet) in loaded_wallets {
-        if *loaded_name == name {
-            return wallet;
-        }
-    }
-    panic!("Wallet with name '{}' not found", name);
+    loaded_wallets: &'a HashMap<String, WalletAccessParams>,
+) -> Result<&'a WalletAccessParams, String> {
+    let name = name.unwrap_or_else(|| "miner_wallet".to_string());
+    loaded_wallets
+        .get(&name)
+        .ok_or_else(|| format!("Wallet '{}' not found. Use 'wallet list' to see loaded wallets.", name))
 }
 
 async fn startup_helper(client: &RpcClient) {
@@ -398,7 +395,7 @@ fn parse_flag_value(parts: &[&str], flag: &str) -> Result<String, String> {
 async fn execute_command(
     command: Commands,
     client: &RpcClient,
-    loaded_wallets: &mut Vec<(String, WalletAccessParams)>,
+    loaded_wallets: &mut HashMap<String, WalletAccessParams>,
 ) -> Result<(), String> {
     match command {
         Commands::Node(node_cmd) => {
@@ -677,7 +674,7 @@ async fn handle_chain(command: ChainCommands, client: &RpcClient) {
 async fn handle_wallet(
     command: WalletCommands,
     client: &RpcClient,
-    loaded_wallets: &mut Vec<(String, WalletAccessParams)>,
+    loaded_wallets: &mut HashMap<String, WalletAccessParams>,
 ) {
     match command {
         WalletCommands::New {
@@ -685,16 +682,11 @@ async fn handle_wallet(
             path,
             name,
         } => {
-            if name.is_some()
-                && loaded_wallets
-                    .iter()
-                    .any(|(n, _)| n == name.as_ref().unwrap())
-            {
-                println!(
-                    "✗ Wallet with name '{}' already loaded in session",
-                    name.unwrap()
-                );
-                return;
+            if let Some(ref wallet_name) = name {
+                if loaded_wallets.contains_key(wallet_name) {
+                    println!("✗ Wallet with name '{}' already loaded in session", wallet_name);
+                    return;
+                }
             }
 
             let new_wallet_response = match client.wallet_new(&password, &path).await {
@@ -704,15 +696,15 @@ async fn handle_wallet(
                     return;
                 }
             };
-            if name.is_some() {
-                let name = name.unwrap();
-                loaded_wallets.push((
-                    name.clone(),
+
+            if let Some(wallet_name) = name {
+                loaded_wallets.insert(
+                    wallet_name,
                     WalletAccessParams {
                         key_path: path.clone(),
                         password: password.clone(),
                     },
-                ));
+                );
             }
 
             println!("✓ Wallet created successfully");
@@ -737,8 +729,13 @@ async fn handle_wallet(
         }
 
         WalletCommands::Address { name } => {
-            // Select wallet, default to miner's wallet
-            let wallet = resolve_wallet_by_name(name, loaded_wallets);
+            let wallet = match resolve_wallet_by_name(name, loaded_wallets) {
+                Ok(w) => w,
+                Err(e) => {
+                    println!("✗ {}", e);
+                    return;
+                }
+            };
             let address_response = match client
                 .wallet_address(wallet.key_path.clone(), wallet.password.clone())
                 .await
@@ -753,7 +750,13 @@ async fn handle_wallet(
         }
 
         WalletCommands::Balance { name } => {
-            let wallet = resolve_wallet_by_name(name, loaded_wallets);
+            let wallet = match resolve_wallet_by_name(name, loaded_wallets) {
+                Ok(w) => w,
+                Err(e) => {
+                    println!("✗ {}", e);
+                    return;
+                }
+            };
             let balance_response = match client
                 .wallet_balance(wallet.key_path.clone(), wallet.password.clone())
                 .await
@@ -786,7 +789,13 @@ async fn handle_wallet(
             fee,
             message,
         } => {
-            let wallet = resolve_wallet_by_name(from, loaded_wallets);
+            let wallet = match resolve_wallet_by_name(from, loaded_wallets) {
+                Ok(w) => w,
+                Err(e) => {
+                    println!("✗ {}", e);
+                    return;
+                }
+            };
 
             let send_response = match client.wallet_send(wallet, &to, amount, fee, message).await {
                 Ok(res) => res,
@@ -813,7 +822,13 @@ async fn handle_wallet(
         }
 
         WalletCommands::GenerateKeys { count, name, type_ } => {
-            let wallet = resolve_wallet_by_name(name, loaded_wallets);
+            let wallet = match resolve_wallet_by_name(name, loaded_wallets) {
+                Ok(w) => w,
+                Err(e) => {
+                    println!("✗ {}", e);
+                    return;
+                }
+            };
             let gen_keys_response = match client
                 .wallet_generate_keys(
                     count,
