@@ -6,15 +6,14 @@ use crate::daemon::types::UtxoInfo;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WalletNewParams {
     pub password: String,
-    pub path: String,
-    pub name: Option<String>,
+    pub path: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WalletNewResponse {
     pub success: bool,
     pub address: Option<String>,
-    pub error: Option<String>,
+    pub is_imported_wallet: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -30,7 +29,8 @@ pub struct WalletListResponse {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WalletAddressParams {
-    pub name: Option<String>,
+    pub key_path: String,
+    pub password: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -40,7 +40,8 @@ pub struct WalletAddressResponse {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WalletBalanceParams {
-    pub name: Option<String>,
+    pub key_path: String,
+    pub password: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -51,8 +52,15 @@ pub struct WalletBalanceResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct WalletAccessParams {
+    pub key_path: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WalletSendParams {
-    pub from: Option<String>,
+    pub from: WalletAccessParams,
+    /// address to send funds to
     pub to: String,
     pub amount: i64,
     pub fee: Option<i64>,
@@ -68,8 +76,8 @@ pub struct WalletSendResponse {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WalletGenerateKeysParams {
+    pub wallet: WalletAccessParams,
     pub count: Option<u32>,
-    pub name: Option<String>,
     /// 0 = receive, 1 = change
     pub derivation_type: Option<u32>,
 }
