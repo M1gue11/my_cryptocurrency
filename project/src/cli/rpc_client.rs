@@ -119,7 +119,7 @@ impl RpcClient {
         self.call("chain_show", serde_json::json!({})).await
     }
 
-    pub async fn chain_validate(&self) -> Result<RpcResponse, String> {
+    pub async fn chain_validate(&self) -> Result<serde_json::Value, String> {
         self.call("chain_validate", serde_json::json!({})).await
     }
 
