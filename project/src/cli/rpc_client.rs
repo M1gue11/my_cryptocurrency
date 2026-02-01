@@ -3,10 +3,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
 use crate::daemon::types::{
-    ChainShowResponse, ChainStatusResponse, MempoolResponse, MineBlockResponse, NodeStatusResponse,
-    RpcRequest, RpcResponse, TransactionViewResponse, UtxosResponse, WalletAccessParams,
-    WalletAddressResponse, WalletBalanceResponse, WalletGenerateKeysResponse, WalletNewResponse,
-    WalletSendResponse,
+    ChainShowResponse, ChainStatusResponse, MempoolResponse, MineBlockResponse, NodeInitResponse,
+    NodeStatusResponse, RpcRequest, RpcResponse, SuccessResponse, TransactionViewResponse,
+    UtxosResponse, WalletAccessParams, WalletAddressResponse, WalletBalanceResponse,
+    WalletGenerateKeysResponse, WalletNewResponse, WalletSendResponse,
 };
 
 /// global counter for request IDs
@@ -85,7 +85,7 @@ impl RpcClient {
         self.call("node_status", serde_json::json!({})).await
     }
 
-    pub async fn node_init(&self) -> Result<RpcResponse, String> {
+    pub async fn node_init(&self) -> Result<NodeInitResponse, String> {
         self.call("node_init", serde_json::json!({})).await
     }
 
@@ -93,11 +93,11 @@ impl RpcClient {
         self.call("node_mempool", serde_json::json!({})).await
     }
 
-    pub async fn node_clear_mempool(&self) -> Result<RpcResponse, String> {
+    pub async fn node_clear_mempool(&self) -> Result<SuccessResponse, String> {
         self.call("node_clear_mempool", serde_json::json!({})).await
     }
 
-    pub async fn node_save(&self) -> Result<RpcResponse, String> {
+    pub async fn node_save(&self) -> Result<SuccessResponse, String> {
         self.call("node_save", serde_json::json!({})).await
     }
 

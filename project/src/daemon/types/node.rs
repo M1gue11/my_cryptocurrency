@@ -21,3 +21,14 @@ pub struct MempoolResponse {
     pub count: usize,
     pub transactions: Vec<MempoolEntry>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NodeInitResponse {
+    pub success: bool,
+    pub block_count: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SuccessResponse {
+    pub success: bool,
+}
