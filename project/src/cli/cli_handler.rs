@@ -1,18 +1,25 @@
 use super::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, WalletCommands};
 use crate::{
-    db::repository::LedgerRepository,
-    front::cli::NodeCommands,
-    model::{TxOutput, Wallet, get_node, get_node_mut, node::restart_node, wallet::DerivationType},
-    security_utils::bytes_to_hex_string,
+    cli::{RpcClient, cli::NodeCommands},
+    daemon::types::WalletAccessParams,
+    globals::CONFIG,
 };
+use std::collections::HashMap;
 use std::io::{self, Write};
 
-pub async fn run_interactive_mode() {
-    print_welcome().await;
+pub async fn run_cli(client: RpcClient) {
+    print_welcome(&client).await;
 
-    let mut loaded_wallets: Vec<(String, Wallet)> = {
-        let node = get_node().await;
-        vec![("miner_wallet".to_string(), node.miner.wallet.clone())]
+    let mut loaded_wallets: HashMap<String, WalletAccessParams> = {
+        let mut map = HashMap::new();
+        map.insert(
+            "miner_wallet".to_string(),
+            WalletAccessParams {
+                key_path: CONFIG.miner_wallet_seed_path.clone(),
+                password: CONFIG.miner_wallet_password.clone(),
+            },
+        );
+        map
     };
 
     loop {
@@ -40,18 +47,19 @@ pub async fn run_interactive_mode() {
 
                 match parse_command(input) {
                     Ok(command) => {
-                        if let Err(e) = execute_command(command, &mut loaded_wallets).await {
-                            println!("✗ Error: {}", e);
+                        if let Err(e) = execute_command(command, &client, &mut loaded_wallets).await
+                        {
+                            println!("Error: {}", e);
                         }
                     }
                     Err(e) => {
-                        println!("✗ {}", e);
+                        println!("Error: {}", e);
                         println!("  Type 'help' for available commands");
                     }
                 }
             }
             Err(e) => {
-                println!("✗ Error reading input: {}", e);
+                println!("Error reading input: {}", e);
             }
         }
     }
@@ -59,21 +67,31 @@ pub async fn run_interactive_mode() {
 
 fn resolve_wallet_by_name<'a>(
     name: Option<String>,
-    loaded_wallets: &'a mut Vec<(String, Wallet)>,
-) -> &'a mut Wallet {
-    let name = match name {
-        Some(n) => n,
-        None => "miner_wallet".to_string(),
-    };
-    for (loaded_name, wallet) in loaded_wallets {
-        if *loaded_name == name {
-            return wallet;
-        }
-    }
-    panic!("Wallet with name '{}' not found", name);
+    loaded_wallets: &'a HashMap<String, WalletAccessParams>,
+) -> Result<&'a WalletAccessParams, String> {
+    let name = name.unwrap_or_else(|| "miner_wallet".to_string());
+    loaded_wallets
+        .get(&name)
+        .ok_or_else(|| format!("Wallet '{}' not found. Use 'wallet list' to see loaded wallets.", name))
 }
 
-async fn print_welcome() {
+async fn startup_helper(client: &RpcClient) {
+    let response = match client.node_status().await {
+        Ok(status) => status,
+        Err(e) => {
+            println!("Error: Could not retrieve node status: {}", e);
+            return;
+        }
+    };
+
+    if response.block_height == 0 {
+        println!("⚠  Blockchain is empty. Use 'mine block' to create the genesis block.");
+    } else {
+        println!("✓  Loaded blockchain with {} blocks", response.block_height);
+    }
+}
+
+async fn print_welcome(client: &RpcClient) {
     println!("\n╔══════════════════════════════════════════════════════════════════════╗");
     println!("║                                                                      ║");
     println!("║              🔗 CARAMURU Node Interactive CLI 🔗                     ║");
@@ -81,15 +99,7 @@ async fn print_welcome() {
     println!("╚══════════════════════════════════════════════════════════════════════╝");
     println!("\nWelcome! Type 'help' for available commands or 'exit' to quit.\n");
 
-    let node = get_node().await;
-    if node.is_chain_empty() {
-        println!("⚠  Blockchain is empty. Use 'mine block' to create the genesis block.");
-    } else {
-        println!(
-            "✓  Loaded blockchain with {} blocks",
-            node.blockchain.chain.len()
-        );
-    }
+    startup_helper(client).await;
 }
 
 fn print_help() {
@@ -113,7 +123,6 @@ fn print_help() {
     println!("  chain show                 - Display the entire blockchain");
     println!("  chain status               - Show blockchain status");
     println!("  chain validate             - Validate blockchain integrity");
-    println!("  chain save                 - Save blockchain to disk");
     println!("  chain utxos [--limit <n>]  - Show at most <n> UTXOs");
     println!("    - Limit is optional, default is 10");
 
@@ -179,13 +188,12 @@ fn parse_command(input: &str) -> Result<Commands, String> {
 
         "chain" => {
             if parts.len() < 2 {
-                return Err("Usage: chain <show|status|validate|save|rollback>".to_string());
+                return Err("Usage: chain <show|status|validate|rollback>".to_string());
             }
             match parts[1] {
                 "show" => Ok(Commands::Chain(ChainCommands::Show)),
                 "status" => Ok(Commands::Chain(ChainCommands::Status)),
                 "validate" => Ok(Commands::Chain(ChainCommands::Validate)),
-                "save" => Ok(Commands::Chain(ChainCommands::Save)),
                 "utxos" => {
                     let limit = if let Ok(limit_str) = parse_flag_value(&parts, "--limit") {
                         limit_str.parse::<u32>().map_err(|_| {
@@ -386,146 +394,166 @@ fn parse_flag_value(parts: &[&str], flag: &str) -> Result<String, String> {
 
 async fn execute_command(
     command: Commands,
-    loaded_wallets: &mut Vec<(String, Wallet)>,
+    client: &RpcClient,
+    loaded_wallets: &mut HashMap<String, WalletAccessParams>,
 ) -> Result<(), String> {
     match command {
         Commands::Node(node_cmd) => {
-            handle_node(node_cmd).await;
+            handle_node(node_cmd, client).await;
             Ok(())
         }
         Commands::Mine(mine_cmd) => {
-            handle_mine(mine_cmd).await;
+            handle_mine(mine_cmd, client).await;
             Ok(())
         }
         Commands::Chain(chain_cmd) => {
-            handle_chain(chain_cmd).await;
+            handle_chain(chain_cmd, client).await;
             Ok(())
         }
         Commands::Wallet(wallet_cmd) => {
-            handle_wallet(wallet_cmd, loaded_wallets).await;
+            handle_wallet(wallet_cmd, client, loaded_wallets).await;
             Ok(())
         }
         Commands::Transaction(tx_cmd) => {
-            handle_transaction(tx_cmd);
+            handle_transaction(tx_cmd, client).await;
             Ok(())
         }
     }
 }
 
-async fn handle_node(command: NodeCommands) {
+async fn handle_node(command: NodeCommands, client: &RpcClient) {
     match command {
         NodeCommands::Init => {
-            restart_node().await;
-            let node = get_node().await;
-
+            match client.node_init().await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Node reinitialization failed: {}", e);
+                    return;
+                }
+            };
             println!("✓ Node reinitialized successfully");
-
-            if node.is_chain_empty() {
-                println!("⚠ Blockchain is empty. Use 'mine block' to create the genesis block.");
-            } else {
-                println!(
-                    "✓ Loaded blockchain with {} blocks",
-                    node.blockchain.chain.len()
-                );
-            }
+            startup_helper(client).await;
         }
         NodeCommands::Mempool => {
-            let node = get_node().await;
+            let mempool_response = match client.node_mempool().await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not retrieve mempool: {}", e);
+                    return;
+                }
+            };
 
-            if node.is_mempool_empty() {
+            if mempool_response.count == 0 {
                 println!("⚠  Mempool is empty");
                 return;
             }
 
-            node.print_mempool();
+            for tx in mempool_response.transactions {
+                println!("{:?}\n", tx);
+            }
         }
 
         NodeCommands::ClearMempool => {
-            let mut node = get_node_mut().await;
-            node.clear_mempool();
-            node.save_node();
+            match client.node_clear_mempool().await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not clear mempool: {}", e);
+                    return;
+                }
+            };
+            match client.node_save().await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not save node after clearing mempool: {}", e);
+                    return;
+                }
+            };
             println!("✓ Mempool cleared");
         }
 
         NodeCommands::Status => {
-            let state = get_node().await.get_node_state().await;
+            let status_response = match client.node_status().await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not retrieve node status: {}", e);
+                    return;
+                }
+            };
             println!("\n=== Node Status ===");
-            println!("  Version: {}", state.version.version);
-            println!("  Peers Connected: {}", state.peers_connected);
-            println!("  Current Block Height: {}", state.version.height);
-            println!(
-                "  Current Block Hash: {}",
-                bytes_to_hex_string(&state.version.top_hash)
-            );
+            println!("  Version: {}", status_response.version);
+            println!("  Peers Connected: {}", status_response.peers_connected);
+            println!("  Current Block Height: {}", status_response.block_height);
+            println!("  Current Block Hash: {}", status_response.top_block_hash);
         }
     }
 }
 
-async fn handle_mine(command: MineCommands) {
+async fn handle_mine(command: MineCommands, client: &RpcClient) {
     match command {
         MineCommands::Block => {
-            let mut node = get_node_mut().await;
-
             println!("⛏  Mining new block...");
-            let block = match node.mine() {
+            let mine_response = match client.mine_block().await {
+                Ok(res) => res,
                 Err(e) => {
                     println!("✗ Mining failed: {}", e);
                     return;
                 }
-                Ok(block) => block,
             };
-            // Save blockchain after mining
-
             println!("✓ Block mined successfully!");
-            println!("  Block hash: {}", hex::encode(block.header_hash()));
-            println!("  Transactions: {}", block.transactions.len());
-            println!("  Nonce: {}", block.header.nonce);
-
-            node.save_node();
-            println!("✓ Blockchain saved");
+            println!("  Block hash: {:?}", mine_response.block_hash);
+            println!(
+                "  Transactions: {}",
+                mine_response
+                    .transactions
+                    .iter()
+                    .map(|tx| format!("{:?}\n", tx))
+                    .collect::<Vec<_>>()
+                    .len()
+            );
+            println!("  Nonce: {:?}", mine_response.nonce);
         }
     }
 }
 
-async fn handle_chain(command: ChainCommands) {
+async fn handle_chain(command: ChainCommands, client: &RpcClient) {
     match command {
         ChainCommands::Show => {
-            let node = get_node().await;
-            if node.is_chain_empty() {
+            let chain_show_response = match client.chain_show().await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not retrieve blockchain: {}", e);
+                    return;
+                }
+            };
+
+            if chain_show_response.blocks.len() == 0 {
                 println!("⚠  Blockchain is empty");
                 return;
             }
 
             println!("\n=== Blockchain ===\n");
-            for (i, block) in node.blockchain.chain.iter().enumerate() {
-                println!("Block #{} Size: {} bytes", i, block.size());
-                println!("  Hash: {}", hex::encode(block.header_hash()));
-                println!(
-                    "  Previous Hash: {}",
-                    hex::encode(block.header.prev_block_hash)
-                );
-                println!("  Merkle Root: {}", hex::encode(block.header.merkle_root));
-                println!("  Nonce: {}", block.header.nonce);
-                println!("  Date: {}", block.header.timestamp);
+            for (i, block) in chain_show_response.blocks.iter().enumerate() {
+                println!("Block #{} Size: {} bytes", i, block.size_bytes);
+                println!("  Hash: {}", block.hash);
+                println!("  Previous Hash: {}", block.prev_hash);
+                println!("  Merkle Root: {}", block.merkle_root);
+                println!("  Nonce: {}", block.nonce);
+                println!("  Date: {}", block.timestamp);
                 println!("  Transactions: {}", block.transactions.len());
 
                 for (j, tx) in block.transactions.iter().enumerate() {
+                    println!("\n    Transaction #{} Size: {} bytes", j, tx.size);
+                    println!("      ID: {}", tx.id);
                     println!(
-                        "\n    Transaction #{} Size: {} bytes",
-                        j,
-                        tx.as_bytes().len()
+                        "      Amount: {}",
+                        tx.outputs.iter().map(|o| o.value).sum::<i64>()
                     );
-                    println!("      ID: {}", hex::encode(tx.id()));
-                    println!("      Amount: {}", tx.amount());
                     if let Some(msg) = &tx.message {
                         println!("      Message: {}", msg);
                     }
                     println!("      Inputs:");
                     for input in &tx.inputs {
-                        println!(
-                            "            Input Prev TX: {}",
-                            hex::encode(input.prev_tx_id)
-                        );
+                        println!("            Input Prev TX: {}", input.prev_tx_id);
                         println!("            Input Output Index: {}\n", input.output_index);
                     }
                     println!("      Outputs:");
@@ -539,59 +567,64 @@ async fn handle_chain(command: ChainCommands) {
         }
 
         ChainCommands::Validate => {
-            let node = get_node().await;
-            let validation = node.validate_bc();
-
-            match validation {
-                Ok(is_valid) => {
-                    if is_valid {
-                        println!("✓ Blockchain is valid");
-                    } else {
-                        println!("✗ Blockchain is invalid!");
-                    }
+            match client.chain_validate().await {
+                Ok(res) => {
+                    println!("✓ Blockchain validation request submitted: {:?}", res);
                 }
                 Err(e) => {
-                    println!("✗ Blockchain validation failed: {}", e);
+                    println!("✗ Could not validate blockchain: {}", e);
+                    return;
                 }
-            }
-        }
-
-        ChainCommands::Save => {
-            let node = get_node().await;
-            node.save_node();
-            println!("✓ Blockchain saved to disk");
+            };
         }
 
         ChainCommands::Status => {
-            let node = get_node().await;
-            let block_count = node.blockchain.chain.len();
-            let validation = node.validate_bc();
+            let status_response = match client.chain_status().await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not retrieve blockchain status: {}", e);
+                    return;
+                }
+            };
 
             println!("\n=== Blockchain Status ===");
-            println!("  Blocks: {}", block_count);
-            println!("  Valid: {}", if validation.is_ok() { "Yes" } else { "No" });
+            println!("  Blocks: {}", status_response.block_count);
+            println!(
+                "  Valid: {}",
+                if status_response.is_valid {
+                    "Yes"
+                } else {
+                    "No"
+                }
+            );
 
-            if block_count > 0 {
-                let last_block = node.blockchain.chain.last().unwrap();
-                println!(
-                    "  Last Block Hash: {}",
-                    hex::encode(last_block.header_hash())
-                );
-                println!("  Last Block Date: {}", last_block.header.timestamp);
+            if status_response.block_count > 0 {
+                let last_block_hash = status_response
+                    .last_block_hash
+                    .unwrap_or("Ultimo hash nao encontrado".to_string());
+
+                let last_block_date = status_response
+                    .last_block_date
+                    .unwrap_or("Ultima data nao encontrada".to_string());
+                println!("  Last Block Hash: {}", last_block_hash);
+                println!("  Last Block Date: {}", last_block_date);
             }
             println!();
         }
 
         ChainCommands::Utxos { limit } => {
-            let repo = LedgerRepository::new();
-            let utxos = repo.get_all_utxos(Some(limit as usize));
-
-            if utxos.is_err() {
+            let utxos_resp = match client.chain_utxos(limit).await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not retrieve UTXOs: {}", e);
+                    return;
+                }
+            };
+            if utxos_resp.utxos.len() == 0 {
                 println!("⚠  No UTXOs found in the blockchain");
                 return;
             }
 
-            let utxo_list = utxos.unwrap();
             println!("\n=== UTXOs (showing up to {}) ===\n", limit);
 
             println!(
@@ -604,8 +637,8 @@ async fn handle_chain(command: ChainCommands) {
                 "├──────┼──────────────────┼───────┼──────────────┼────────────────────────────────────────────────┤"
             );
 
-            for (i, utxo) in utxo_list.iter().take(limit as usize).enumerate() {
-                let tx_id_hex = hex::encode(utxo.tx_id);
+            for (i, utxo) in utxos_resp.utxos.iter().take(limit as usize).enumerate() {
+                let tx_id_hex = &utxo.tx_id;
                 let tx_id_short = format!("{}...{} ", &tx_id_hex[..6], &tx_id_hex[58..]);
 
                 println!(
@@ -613,8 +646,8 @@ async fn handle_chain(command: ChainCommands) {
                     i + 1,
                     tx_id_short,
                     utxo.index,
-                    utxo.output.value,
-                    utxo.output.address
+                    utxo.value,
+                    utxo.address
                 );
             }
 
@@ -622,80 +655,128 @@ async fn handle_chain(command: ChainCommands) {
                 "└──────┴──────────────────┴───────┴──────────────┴────────────────────────────────────────────────┘"
             );
 
-            let total: i64 = utxo_list
+            let total: i64 = utxos_resp
+                .utxos
                 .iter()
                 .take(limit as usize)
-                .map(|u| u.output.value)
+                .map(|u| u.value)
                 .sum();
             println!(
                 "\nTotal: {} units across {} UTXOs",
                 total,
-                utxo_list.len().min(limit as usize)
+                utxos_resp.utxos.len().min(limit as usize)
             );
             println!();
         }
     }
 }
 
-async fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String, Wallet)>) {
-    let mut node = get_node_mut().await;
-
+async fn handle_wallet(
+    command: WalletCommands,
+    client: &RpcClient,
+    loaded_wallets: &mut HashMap<String, WalletAccessParams>,
+) {
     match command {
         WalletCommands::New {
             password,
             path,
             name,
         } => {
-            let mut wallet = match Wallet::from_keystore_file(&path, &password) {
-                Ok(w) => w,
+            if let Some(ref wallet_name) = name {
+                if loaded_wallets.contains_key(wallet_name) {
+                    println!("✗ Wallet with name '{}' already loaded in session", wallet_name);
+                    return;
+                }
+            }
+
+            let new_wallet_response = match client.wallet_new(&password, &path).await {
+                Ok(res) => res,
                 Err(e) => {
-                    println!("✗ Unable to load wallet from keystore: {}.", e);
-                    println!("Creating a new keystore instead...");
-                    Wallet::new(&password, &path)
+                    println!("✗ Wallet creation failed: {}", e);
+                    return;
                 }
             };
 
-            let address = wallet.get_receive_addr();
-            if name.is_some() {
-                let name = name.unwrap();
-                loaded_wallets.push((name.clone(), wallet));
+            if let Some(wallet_name) = name {
+                loaded_wallets.insert(
+                    wallet_name,
+                    WalletAccessParams {
+                        key_path: path.clone(),
+                        password: password.clone(),
+                    },
+                );
             }
 
             println!("✓ Wallet created successfully");
-            println!("  First address: {}", address);
+            println!("  First address: {:?}", new_wallet_response.address);
         }
 
         WalletCommands::List => {
             println!("\n=== Loaded Wallets ===\n");
             for (name, w) in loaded_wallets.iter() {
-                println!("Wallet: {} - Balance: {}", name, w.calculate_balance());
+                let response = match client
+                    .wallet_balance(w.key_path.clone(), w.password.clone())
+                    .await
+                {
+                    Ok(res) => res,
+                    Err(e) => {
+                        println!("✗ Could not retrieve wallet balance for {}: {}", name, e);
+                        continue;
+                    }
+                };
+                println!("Wallet: {} - Balance: {}", name, response.balance);
             }
         }
 
         WalletCommands::Address { name } => {
-            // Select wallet, default to miner's wallet
-            let wallet = resolve_wallet_by_name(name, loaded_wallets);
-            let address = wallet.get_receive_addr();
-            println!("✓ New receive address: {}", address);
+            let wallet = match resolve_wallet_by_name(name, loaded_wallets) {
+                Ok(w) => w,
+                Err(e) => {
+                    println!("✗ {}", e);
+                    return;
+                }
+            };
+            let address_response = match client
+                .wallet_address(wallet.key_path.clone(), wallet.password.clone())
+                .await
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not retrieve wallet address: {}", e);
+                    return;
+                }
+            };
+            println!("✓ New receive address: {}", address_response.address);
         }
 
         WalletCommands::Balance { name } => {
-            let wallet = resolve_wallet_by_name(name, loaded_wallets);
-            let utxos = wallet.get_wallet_utxos();
+            let wallet = match resolve_wallet_by_name(name, loaded_wallets) {
+                Ok(w) => w,
+                Err(e) => {
+                    println!("✗ {}", e);
+                    return;
+                }
+            };
+            let balance_response = match client
+                .wallet_balance(wallet.key_path.clone(), wallet.password.clone())
+                .await
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not retrieve wallet balance: {}", e);
+                    return;
+                }
+            };
 
-            let total: i64 = utxos.iter().map(|u| u.output.value).sum();
-
+            let total: i64 = balance_response.utxos.iter().map(|u| u.value).sum();
             println!("\n=== Wallet Balance ===");
-            println!("  UTXOs: {}", utxos.len());
+            println!("  UTXOs: {}", balance_response.utxos.len());
             println!("  Total Balance: {} coins", total);
 
-            if !utxos.is_empty() {
+            if !balance_response.utxos.is_empty() {
                 println!("\n  Details:");
-                for (i, utxo) in utxos.iter().enumerate() {
-                    println!(
-                        "    UTXO #{}: {} coins to {}",
-                        i, utxo.output.value, utxo.output.address
-                    );
+                for (i, utxo) in balance_response.utxos.iter().enumerate() {
+                    println!("    UTXO #{}: {} coins to {}", i, utxo.value, utxo.address);
                 }
             }
             println!();
@@ -708,108 +789,105 @@ async fn handle_wallet(command: WalletCommands, loaded_wallets: &mut Vec<(String
             fee,
             message,
         } => {
-            let outputs = vec![TxOutput {
-                value: amount,
-                address: to.clone(),
-            }];
-            let wallet = resolve_wallet_by_name(from, loaded_wallets);
-
-            match wallet.send_tx(outputs, fee, message.clone()) {
-                Ok(tx) => match node.receive_transaction(tx) {
-                    Ok(_) => {
-                        println!("✓ Transaction created and added to mempool");
-                        println!("  To: {}", to);
-                        println!("  Amount: {} coins", amount);
-                        if let Some(msg) = message {
-                            println!("  Message: {}", msg);
-                        }
-                        println!("\n  Use 'mine block' to include it in the blockchain");
-                        node.persist_mempool();
-                    }
-                    Err(e) => {
-                        println!("✗ Error receiving transaction: {}", e);
-                    }
-                },
+            let wallet = match resolve_wallet_by_name(from, loaded_wallets) {
+                Ok(w) => w,
                 Err(e) => {
-                    println!("✗ Error creating transaction: {}", e);
+                    println!("✗ {}", e);
+                    return;
                 }
+            };
+
+            let send_response = match client.wallet_send(wallet, &to, amount, fee, message).await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not prepare transaction: {}", e);
+                    return;
+                }
+            };
+
+            if !send_response.success {
+                println!(
+                    "✗ Transaction failed: {}",
+                    send_response.error.unwrap_or("Unknown error".to_string())
+                );
+                return;
             }
+
+            println!(
+                "✓ Transaction {} created and added to mempool",
+                send_response.tx_id.unwrap_or("Unknown".to_string())
+            );
+
+            println!("\n  Use 'mine block' to include it in the blockchain");
         }
 
         WalletCommands::GenerateKeys { count, name, type_ } => {
-            let wallet = resolve_wallet_by_name(name, loaded_wallets);
-            let keys = wallet.generate_n_keys(
-                count,
-                None,
-                type_.map(|t| {
-                    if t == 0 {
-                        DerivationType::Receive
-                    } else {
-                        DerivationType::Change
-                    }
-                }),
-            );
-
-            println!("✓ Generated {} keys:\n", count);
-            for (i, key) in keys.iter().enumerate() {
+            let wallet = match resolve_wallet_by_name(name, loaded_wallets) {
+                Ok(w) => w,
+                Err(e) => {
+                    println!("✗ {}", e);
+                    return;
+                }
+            };
+            let gen_keys_response = match client
+                .wallet_generate_keys(
+                    count,
+                    wallet.key_path.clone(),
+                    wallet.password.clone(),
+                    type_,
+                )
+                .await
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not generate keys: {}", e);
+                    return;
+                }
+            };
+            println!("✓ Generated {} keys:\n", gen_keys_response.keys.len());
+            for (i, key) in gen_keys_response.keys.iter().enumerate() {
                 println!("Key #{}", i + 1);
-                println!("  Address: {}", key.get_address());
-                println!(
-                    "  Public Key: {}",
-                    hex::encode(key.get_public_key().as_bytes())
-                );
+                println!("  Address: {}", key.address);
+                println!("  Public Key: {}", key.public_key);
                 println!();
             }
         }
     }
 }
 
-fn handle_transaction(command: TransactionCommands) {
+async fn handle_transaction(command: TransactionCommands, client: &RpcClient) {
     match command {
         TransactionCommands::View { id } => {
-            let tx_id_bytes = match hex::decode(&id) {
-                Ok(bytes) if bytes.len() == 32 => {
-                    let mut array = [0u8; 32];
-                    array.copy_from_slice(&bytes);
-                    array
-                }
-                _ => {
-                    println!("✗ Invalid transaction ID format. Must be 64 hex characters.");
+            let get_tx_response = match client.transaction_view(&id).await {
+                Ok(res) => res,
+                Err(e) => {
+                    println!("✗ Could not retrieve transaction: {}", e);
                     return;
                 }
             };
+            println!("\n=== Transaction Details ===");
+            println!("  ID: {}", get_tx_response.id);
+            println!("  Date: {}", get_tx_response.date);
 
-            let repo = LedgerRepository::new();
-            match repo.get_transaction(&tx_id_bytes) {
-                Ok(tx) => {
-                    println!("\n=== Transaction Details ===");
-                    println!("  ID: {}", hex::encode(tx.id()));
-                    println!("  Date: {}", tx.date);
-
-                    if let Some(msg) = &tx.message {
-                        println!("  Message: {}", msg);
-                    }
-
-                    println!("\n  Inputs ({}): ", tx.inputs.len());
-                    for (i, input) in tx.inputs.iter().enumerate() {
-                        println!("    Input #{}", i);
-                        println!("      Previous TX: {}", hex::encode(input.prev_tx_id));
-                        println!("      Output Index: {}", input.output_index);
-                        println!("      Public Key: {}", input.public_key);
-                    }
-
-                    println!("\n  Outputs ({}):", tx.outputs.len());
-                    for (i, output) in tx.outputs.iter().enumerate() {
-                        println!("    Output #{}", i);
-                        println!("      Value: {} units", output.value);
-                        println!("      Address: {}", output.address);
-                    }
-                    println!();
-                }
-                Err(_) => {
-                    println!("✗ Transaction not found");
-                }
+            if let Some(msg) = &get_tx_response.message {
+                println!("  Message: {}", msg);
             }
+
+            println!("\n  Inputs ({}): ", get_tx_response.inputs.len());
+            for (i, input) in get_tx_response.inputs.iter().enumerate() {
+                println!("    Input #{}", i);
+                println!("      Previous TX: {}", input.prev_tx_id);
+                println!("      Output Index: {}", input.output_index);
+                println!("      Public Key: {}", input.public_key);
+            }
+
+            println!("\n  Outputs ({}):", get_tx_response.outputs.len());
+            for (i, output) in get_tx_response.outputs.iter().enumerate() {
+                println!("    Output #{}", i);
+                println!("      Value: {} units", output.value);
+                println!("      Address: {}", output.address);
+            }
+            println!();
         }
     }
 }

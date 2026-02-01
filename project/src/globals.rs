@@ -10,6 +10,7 @@ pub struct Settings {
     pub max_mining_attempts: u32,
     pub p2p_port: u16,
     pub peers: Vec<String>,
+    pub rpc_port: u16,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
@@ -37,6 +38,10 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
             .collect(),
+        rpc_port: env::var("RPC_PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(7000),
     }
 });
 

@@ -70,10 +70,6 @@ impl Transaction {
         Ok(())
     }
 
-    pub fn amount(&self) -> i64 {
-        self.outputs.iter().map(|o| o.value).sum()
-    }
-
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
         for input in &self.inputs {
@@ -89,6 +85,10 @@ impl Transaction {
 
     pub fn is_coinbase(&self) -> bool {
         self.inputs.is_empty()
+    }
+
+    pub fn size(&self) -> usize {
+        self.as_bytes().len()
     }
 }
 
@@ -115,7 +115,7 @@ impl std::fmt::Debug for Transaction {
             .field("date", &self.date)
             .field("message", &self.message)
             .field("is coinbase", &self.is_coinbase())
-            .field("size in bytes", &self.as_bytes().len())
+            .field("size in bytes", &self.size())
             .finish()
     }
 }
