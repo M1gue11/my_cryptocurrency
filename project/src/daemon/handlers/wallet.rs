@@ -18,7 +18,16 @@ pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> Rp
         }
     };
 
-    let path = params.path.unwrap_or_default();
+    let path = match params.path {
+        Some(p) if !p.is_empty() => p,
+        _ => {
+            return RpcResponse::error(
+                id,
+                INVALID_PARAMS,
+                "Missing or empty 'path' parameter".to_string(),
+            );
+        }
+    };
     let mut is_imported_wallet = true;
     let mut wallet = match Wallet::from_keystore_file(&path, &params.password) {
         Ok(w) => w,
