@@ -11,6 +11,7 @@ pub struct Settings {
     pub p2p_port: u16,
     pub peers: Vec<String>,
     pub rpc_port: u16,
+    pub http_port: u16,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
@@ -42,6 +43,10 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(7000),
+        http_port: env::var("HTTP_PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(7001),
     }
 });
 

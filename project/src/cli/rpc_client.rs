@@ -140,6 +140,21 @@ impl RpcClient {
     // Wallet Methods
     // ========================================================================
     /// Creates a new wallet
+    pub async fn wallet_import(
+        &self,
+        password: &str,
+        path: &str,
+    ) -> Result<WalletNewResponse, String> {
+        self.call(
+            "wallet_import",
+            serde_json::json!({
+                "password": password,
+                "path": path,
+            }),
+        )
+        .await
+    }
+
     pub async fn wallet_new(
         &self,
         password: &str,
