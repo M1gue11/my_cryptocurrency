@@ -124,6 +124,10 @@ impl Node {
         self.mempool.is_empty()
     }
 
+    pub fn get_mempool(&self) -> &Vec<MempoolTx> {
+        &self.mempool
+    }
+
     pub fn validate_bc(&self) -> Result<bool, String> {
         Node::validate_blockchain(&self.blockchain)
     }

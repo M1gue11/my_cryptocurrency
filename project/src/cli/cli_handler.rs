@@ -1,7 +1,7 @@
 use super::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, WalletCommands};
 use crate::{
+    cli::cli::NodeCommands,
     db::repository::LedgerRepository,
-    front::cli::NodeCommands,
     model::{TxOutput, Wallet, get_node, get_node_mut, node::restart_node, wallet::DerivationType},
     security_utils::bytes_to_hex_string,
 };
