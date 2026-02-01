@@ -25,7 +25,7 @@ let requestId = 1;
 export class RpcClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string = 'http://localhost:7000') {
+  constructor(baseUrl: string = 'http://localhost:7001/rpc') {
     this.baseUrl = baseUrl;
   }
 
