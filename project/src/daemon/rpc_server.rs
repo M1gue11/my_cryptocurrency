@@ -69,7 +69,6 @@ async fn handle_connection(
             continue;
         }
 
-        println!("Raw request: {}", trimmed);
         let response = process_request(trimmed).await;
         let response_json = serde_json::to_string(&response)? + "\n";
         writer.write_all(response_json.as_bytes()).await?;
