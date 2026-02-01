@@ -116,14 +116,6 @@ impl Node {
         Ok(true)
     }
 
-    pub fn is_chain_empty(&self) -> bool {
-        self.blockchain.is_empty()
-    }
-
-    pub fn is_mempool_empty(&self) -> bool {
-        self.mempool.is_empty()
-    }
-
     pub fn get_mempool(&self) -> &Vec<MempoolTx> {
         &self.mempool
     }
@@ -255,13 +247,6 @@ impl Node {
     pub fn save_node(&self) {
         self.blockchain.persist_chain(None);
         self.persist_mempool();
-    }
-
-    pub fn print_mempool(&self) {
-        println!("Mempool Transactions:");
-        for mem_tx in &self.mempool {
-            println!("{:#?}", mem_tx.tx);
-        }
     }
 
     pub fn clear_mempool(&mut self) {

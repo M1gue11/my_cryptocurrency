@@ -70,10 +70,6 @@ impl Transaction {
         Ok(())
     }
 
-    pub fn amount(&self) -> i64 {
-        self.outputs.iter().map(|o| o.value).sum()
-    }
-
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut out = Vec::new();
         for input in &self.inputs {

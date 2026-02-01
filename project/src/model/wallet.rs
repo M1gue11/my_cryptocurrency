@@ -243,11 +243,6 @@ impl Wallet {
         None
     }
 
-    pub fn calculate_balance(&self) -> i64 {
-        let utxos = self.get_wallet_utxos();
-        utxos.iter().map(|u| u.output.value).sum()
-    }
-
     pub fn send_tx(
         &mut self,
         mut outputs: Vec<TxOutput>,
