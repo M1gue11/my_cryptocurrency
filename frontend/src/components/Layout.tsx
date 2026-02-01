@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { NavLink } from 'react-router-dom';
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,14 +13,15 @@ export function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">🔗</span>
+              <span className="text-2xl font-bold text-blue-400">[C]</span>
               <h1 className="text-xl font-bold text-white">Caramuru</h1>
             </div>
-            <nav className="flex gap-6">
-              <NavLink href="/">Dashboard</NavLink>
-              <NavLink href="/blocks">Blocks</NavLink>
-              <NavLink href="/wallet">Wallet</NavLink>
-              <NavLink href="/transactions">Transactions</NavLink>
+            <nav className="flex gap-4">
+              <NavItem to="/">Dashboard</NavItem>
+              <NavItem to="/blocks">Blocks</NavItem>
+              <NavItem to="/wallet">Wallet</NavItem>
+              <NavItem to="/transactions">Transactions</NavItem>
+              <NavItem to="/network">Network</NavItem>
             </nav>
           </div>
         </div>
@@ -33,20 +35,19 @@ export function Layout({ children }: LayoutProps) {
   );
 }
 
-function NavLink({ href, children }: { href: string; children: ReactNode }) {
-  // Simple link for now - can be replaced with React Router later
-  const isActive = window.location.pathname === href;
-
+function NavItem({ to, children }: { to: string; children: ReactNode }) {
   return (
-    <a
-      href={href}
-      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-        isActive
-          ? 'bg-gray-900 text-white'
-          : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-      }`}
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+          isActive
+            ? 'bg-gray-900 text-white'
+            : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+        }`
+      }
     >
       {children}
-    </a>
+    </NavLink>
   );
 }

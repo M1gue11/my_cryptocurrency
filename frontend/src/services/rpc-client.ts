@@ -17,7 +17,7 @@ import type {
   WalletGenerateKeysResponse,
   TransactionViewResponse,
   WalletAccessParams,
-} from '../types';
+} from "../types";
 
 // Global request ID counter
 let requestId = 1;
@@ -25,7 +25,7 @@ let requestId = 1;
 export class RpcClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string = 'http://localhost:7001/rpc') {
+  constructor(baseUrl: string = "http://localhost:7001/rpc") {
     this.baseUrl = baseUrl;
   }
 
@@ -34,16 +34,16 @@ export class RpcClient {
    */
   async call<T>(method: string, params: unknown = {}): Promise<T> {
     const request: RpcRequest = {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       method,
       params,
       id: requestId++,
     };
 
     const response = await fetch(this.baseUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(request),
     });
@@ -55,11 +55,13 @@ export class RpcClient {
     const rpcResponse: RpcResponse<T> = await response.json();
 
     if (rpcResponse.error) {
-      throw new Error(`RPC error: ${rpcResponse.error.message} (code: ${rpcResponse.error.code})`);
+      throw new Error(
+        `RPC error: ${rpcResponse.error.message} (code: ${rpcResponse.error.code})`,
+      );
     }
 
     if (rpcResponse.result === undefined) {
-      throw new Error('Empty response from daemon');
+      throw new Error("Empty response from daemon");
     }
 
     return rpcResponse.result;
@@ -82,23 +84,23 @@ export class RpcClient {
   // ==========================================================================
 
   async nodeStatus(): Promise<NodeStatusResponse> {
-    return this.call<NodeStatusResponse>('node_status');
+    return this.call<NodeStatusResponse>("node_status");
   }
 
   async nodeInit(): Promise<{ success: boolean; block_count: number }> {
-    return this.call('node_init');
+    return this.call("node_init");
   }
 
   async nodeMempool(): Promise<MempoolResponse> {
-    return this.call<MempoolResponse>('node_mempool');
+    return this.call<MempoolResponse>("node_mempool");
   }
 
   async nodeClearMempool(): Promise<{ success: boolean }> {
-    return this.call('node_clear_mempool');
+    return this.call("node_clear_mempool");
   }
 
   async nodeSave(): Promise<{ success: boolean }> {
-    return this.call('node_save');
+    return this.call("node_save");
   }
 
   // ==========================================================================
@@ -106,7 +108,7 @@ export class RpcClient {
   // ==========================================================================
 
   async mineBlock(): Promise<MineBlockResponse> {
-    return this.call<MineBlockResponse>('mine_block');
+    return this.call<MineBlockResponse>("mine_block");
   }
 
   // ==========================================================================
@@ -114,19 +116,19 @@ export class RpcClient {
   // ==========================================================================
 
   async chainStatus(): Promise<ChainStatusResponse> {
-    return this.call<ChainStatusResponse>('chain_status');
+    return this.call<ChainStatusResponse>("chain_status");
   }
 
   async chainShow(): Promise<ChainShowResponse> {
-    return this.call<ChainShowResponse>('chain_show');
+    return this.call<ChainShowResponse>("chain_show");
   }
 
   async chainValidate(): Promise<{ valid: boolean; error?: string }> {
-    return this.call('chain_validate');
+    return this.call("chain_validate");
   }
 
   async chainUtxos(limit: number = 20): Promise<UtxosResponse> {
-    return this.call<UtxosResponse>('chain_utxos', { limit });
+    return this.call<UtxosResponse>("chain_utxos", { limit });
   }
 
   // ==========================================================================
@@ -134,18 +136,31 @@ export class RpcClient {
   // ==========================================================================
 
   async walletNew(password: string, path: string): Promise<WalletNewResponse> {
-    return this.call<WalletNewResponse>('wallet_new', { password, path });
+    return this.call<WalletNewResponse>("wallet_new", { password, path });
   }
 
-  async walletAddress(keyPath: string, password: string): Promise<WalletAddressResponse> {
-    return this.call<WalletAddressResponse>('wallet_address', {
+  async walletImport(
+    password: string,
+    path: string,
+  ): Promise<WalletNewResponse> {
+    return this.call<WalletNewResponse>("wallet_import", { password, path });
+  }
+
+  async walletAddress(
+    keyPath: string,
+    password: string,
+  ): Promise<WalletAddressResponse> {
+    return this.call<WalletAddressResponse>("wallet_address", {
       key_path: keyPath,
       password,
     });
   }
 
-  async walletBalance(keyPath: string, password: string): Promise<WalletBalanceResponse> {
-    return this.call<WalletBalanceResponse>('wallet_balance', {
+  async walletBalance(
+    keyPath: string,
+    password: string,
+  ): Promise<WalletBalanceResponse> {
+    return this.call<WalletBalanceResponse>("wallet_balance", {
       key_path: keyPath,
       password,
     });
@@ -156,9 +171,9 @@ export class RpcClient {
     to: string,
     amount: number,
     fee?: number,
-    message?: string
+    message?: string,
   ): Promise<WalletSendResponse> {
-    return this.call<WalletSendResponse>('wallet_send', {
+    return this.call<WalletSendResponse>("wallet_send", {
       from,
       to,
       amount,
@@ -170,9 +185,9 @@ export class RpcClient {
   async walletGenerateKeys(
     wallet: WalletAccessParams,
     count: number = 5,
-    derivationType?: number
+    derivationType?: number,
   ): Promise<WalletGenerateKeysResponse> {
-    return this.call<WalletGenerateKeysResponse>('wallet_generate_keys', {
+    return this.call<WalletGenerateKeysResponse>("wallet_generate_keys", {
       wallet,
       count,
       derivation_type: derivationType,
@@ -184,7 +199,7 @@ export class RpcClient {
   // ==========================================================================
 
   async transactionView(id: string): Promise<TransactionViewResponse> {
-    return this.call<TransactionViewResponse>('transaction_view', { id });
+    return this.call<TransactionViewResponse>("transaction_view", { id });
   }
 }
 
