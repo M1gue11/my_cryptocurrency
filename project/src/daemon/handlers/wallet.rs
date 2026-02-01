@@ -164,13 +164,18 @@ pub async fn handle_wallet_generate_keys(
     };
 
     let count = params.count.unwrap_or(5);
-    let derivation_type = params.derivation_type.map(|t| {
-        if t == 0 {
-            DerivationType::Receive
-        } else {
-            DerivationType::Change
+    let derivation_type = match params.derivation_type {
+        None => None,
+        Some(0) => Some(DerivationType::Receive),
+        Some(1) => Some(DerivationType::Change),
+        Some(_) => {
+            return RpcResponse::error(
+                id,
+                INVALID_PARAMS,
+                "Invalid derivation_type: expected 0 (Receive) or 1 (Change)".to_string(),
+            );
         }
-    });
+    };
 
     let wallet = match Wallet::from_keystore_file(&params.wallet.key_path, &params.wallet.password)
     {
