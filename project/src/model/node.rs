@@ -453,6 +453,7 @@ pub struct NodeVersion {
     pub top_hash: [u8; 32],
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NodeState {
     pub version: NodeVersion,
     pub peers_connected: usize,
