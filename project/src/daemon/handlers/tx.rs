@@ -63,6 +63,10 @@ pub async fn handle_transaction_view(id: Option<u64>, params: serde_json::Value)
 
             RpcResponse::success(id, serde_json::to_value(response).unwrap())
         }
-        Err(_) => RpcResponse::error(id, INTERNAL_ERROR, "Transaction not found".to_string()),
+        Err(_) => RpcResponse::error(
+            id,
+            INVALID_PARAMS,
+            "Unknown transaction ID: transaction not found".to_string(),
+        ),
     }
 }
