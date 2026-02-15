@@ -10,6 +10,7 @@ use sha2::Sha256;
 use std::fs::File;
 use std::io::{Read, Write};
 
+use crate::globals::CONFIG;
 use crate::utils;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -20,7 +21,6 @@ pub struct Keystore {
 }
 
 pub type Seed = [u8; 32];
-const PBKDF2_ITERATIONS: u32 = 1; //TODO: this should be 600_000 for production use
 
 impl Keystore {
     /// Creates a new seed, encrypts it with the password, and saves it to a file.
@@ -40,8 +40,7 @@ impl Keystore {
         match pbkdf2::<Hmac<Sha256>>(
             password.as_bytes(),
             &salt,
-            // must be the same number of iterations as creation
-            PBKDF2_ITERATIONS,
+            CONFIG.pbkdf2_iterations,
             &mut key,
         ) {
             Ok(_) => {}
@@ -98,7 +97,7 @@ impl Keystore {
         let ciphertext = hex::decode(&self.ciphertext).map_err(|_| "Ciphertext inválido")?;
 
         let mut key = [0u8; 32];
-        match pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, PBKDF2_ITERATIONS, &mut key) {
+        match pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, CONFIG.pbkdf2_iterations, &mut key) {
             Ok(_) => {}
             Err(e) => return Err(e.to_string()),
         }
