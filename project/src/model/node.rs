@@ -24,6 +24,7 @@ pub struct Node {
     pub blockchain: Blockchain,
     mempool: Vec<MempoolTx>,
     difficulty: usize,
+    fork_helper: utils::ForkHelper,
 }
 
 pub static NODE: Lazy<Arc<RwLock<Node>>> = Lazy::new(|| Arc::new(RwLock::new(Node::new())));
@@ -60,6 +61,7 @@ impl Node {
             mempool: Node::load_mempool(),
             miner: Miner::new(),
             difficulty: CONSENSUS_RULES.difficulty,
+            fork_helper: utils::ForkHelper::new(),
         }
     }
 
@@ -127,13 +129,8 @@ impl Node {
     /** Invalidate mempool transactions that are already included in the blockchain or are no longer valid */
     fn invalidate_mempool(&mut self) {
         let repo = LedgerRepository::new();
-        self.mempool.retain(|tx| {
-            if let Err(_) = repo.get_transaction(&tx.tx.id()) {
-                true
-            } else {
-                false
-            }
-        });
+        self.mempool
+            .retain(|tx| !matches!(repo.get_transaction(&tx.tx.id()), Ok(Some(_))));
         let txs_to_remove: Vec<TxId> = self
             .mempool
             .iter()
@@ -164,12 +161,118 @@ impl Node {
                         .any(|btx| btx.id() == mem_tx.tx.id())
                 });
                 let mut repo = LedgerRepository::new();
-                repo.apply_block(added_block.clone(), &added_block.transactions)
+                repo.apply_block(added_block.clone())
                     .map_err(|e| e.to_string())?;
                 self.invalidate_mempool();
                 Ok(())
             }
         }
+    }
+
+    /// Rollback the last block from the blockchain
+    /// Returns the rolled back block and its transactions for potential re-addition to mempool
+    pub fn rollback_last_block(&mut self) -> Result<(Block, Vec<Transaction>), String> {
+        // Validate that there is a block to rollback (not genesis)
+        if self.blockchain.height() == 0 {
+            return Err("Cannot rollback genesis block".to_string());
+        }
+
+        // Get the last block before removing it
+        let last_block = self
+            .blockchain
+            .chain
+            .last()
+            .ok_or("Blockchain is empty")?
+            .clone();
+
+        // Get transactions from the block (excluding coinbase)
+        let transactions: Vec<Transaction> = last_block
+            .transactions
+            .iter()
+            .filter(|tx| !tx.is_coinbase())
+            .cloned()
+            .collect();
+
+        // Rollback database changes
+        let mut repo = LedgerRepository::new();
+        repo.rollback_block(&last_block)
+            .map_err(|e| format!("Database rollback failed: {}", e))?;
+
+        // Remove block from blockchain
+        self.blockchain.chain.pop();
+
+        // Re-add non-coinbase transactions to mempool
+        let repo = LedgerRepository::new();
+        for tx in &transactions {
+            let utxo_ids: Vec<_> = tx
+                .inputs
+                .iter()
+                .map(|i| (i.prev_tx_id, i.output_index))
+                .collect();
+            let utxos = repo.get_utxos_from_ids(&utxo_ids).unwrap_or_default();
+            self.mempool.push(MempoolTx::new(tx.clone(), utxos));
+        }
+
+        // Invalidate mempool to revalidate all transactions
+        self.invalidate_mempool();
+        println!(
+            "Rolled back block {} at height {}",
+            bytes_to_hex_string(&last_block.id()),
+            self.blockchain.height() + 1
+        );
+
+        Ok((last_block, transactions))
+    }
+
+    /// Rollback multiple blocks until reaching the specified block hash
+    /// Returns all rolled back blocks and their transactions
+    pub fn rollback_to_block(
+        &mut self,
+        target_block_hash: &[u8; 32],
+    ) -> Result<Vec<(Block, Vec<Transaction>)>, String> {
+        let mut rolled_back_blocks = Vec::new();
+
+        // Keep rolling back until we reach the target block
+        loop {
+            // Check if current top block is the target
+            let current_top = self.blockchain.chain.last().ok_or("Blockchain is empty")?;
+
+            if current_top.id() == *target_block_hash {
+                break;
+            }
+
+            // Rollback one block
+            let (block, txs) = self.rollback_last_block()?;
+            rolled_back_blocks.push((block, txs));
+        }
+
+        if rolled_back_blocks.is_empty() {
+            println!("No blocks needed to be rolled back");
+        } else {
+            println!(
+                "Successfully rolled back {} blocks to reach block {}",
+                rolled_back_blocks.len(),
+                bytes_to_hex_string(target_block_hash)
+            );
+        }
+
+        Ok(rolled_back_blocks)
+    }
+
+    pub fn rebase_chain_to_fork(&mut self, fork: utils::Fork) {
+        println!(
+            "Starting rebase to fork with starting block {} and length {}",
+            bytes_to_hex_string(fork.get_fork_start().unwrap()),
+            fork.blocks_sequence.len()
+        );
+        let _ = match self.rollback_to_block(&fork.get_fork_start().unwrap()) {
+            Ok(rb) => rb,
+            Err(e) => {
+                println!("Failed to rollback to fork start: {}", e);
+                return;
+            }
+        };
+        network::ask_for_blocks(self.blockchain.get_last_block_hash());
     }
 
     pub fn is_all_inputs_utxos(&self, tx: &Transaction) -> Result<(), String> {
@@ -215,7 +318,7 @@ impl Node {
         }
 
         let repo = LedgerRepository::new();
-        if repo.get_transaction(&tx.id()).is_ok() {
+        if matches!(repo.get_transaction(&tx.id()), Ok(Some(_))) {
             return Err("Transaction already in blockchain!".to_string());
         }
 
@@ -256,7 +359,7 @@ impl Node {
     pub fn get_node_version_info(&self) -> NodeVersion {
         NodeVersion {
             version: 1,
-            height: self.blockchain.chain.len() as u64,
+            height: self.blockchain.height() as u64,
             top_hash: self.blockchain.get_last_block_hash(),
         }
     }
@@ -332,14 +435,14 @@ impl Node {
                 } else {
                     let repo = LedgerRepository::new();
                     match repo.get_transaction(&item_id) {
-                        Ok(tx) => {
+                        Ok(Some(tx)) => {
                             if let Some(peer) = requester {
                                 network::send_tx_to(&tx, peer);
                             } else {
                                 println!("Requested peer is None, not sending transaction.");
                             }
                         }
-                        Err(_) => {
+                        _ => {
                             println!(
                                 "Requested transaction with ID {} not found.",
                                 bytes_to_hex_string(&item_id)
@@ -354,15 +457,39 @@ impl Node {
     pub async fn handle_received_block(&mut self, block: Block, exclude_peer: Option<SocketAddr>) {
         if self.blockchain.find_block_by_hash(block.id()).is_some() {
             println!(
-                "Block already exists in the blockchain. peer_addr: {:?}",
+                "Block already exists in the blockchain: {}. peer_addr: {:?}",
+                bytes_to_hex_string(&block.id()),
                 exclude_peer
             );
             return;
         }
+
+        if self.fork_helper.verify_fork(
+            self.blockchain
+                .get_last_block()
+                .expect("Blockchain is empty"),
+            &block,
+        ) {
+            println!(
+                "Recived block {} from peer {:?} that creates or extends a fork.",
+                bytes_to_hex_string(&block.id()),
+                exclude_peer
+            );
+            let new_bigger_branch = self.fork_helper.evaluate_forks(&self);
+            if let Some(fork) = new_bigger_branch {
+                self.fork_helper.remove_fork(&fork);
+                self.rebase_chain_to_fork(fork);
+            }
+            return;
+        }
+
         let block_hash = block.id();
         match self.submit_block(block) {
             Ok(()) => {
-                println!("Block added to the blockchain successfully.");
+                println!(
+                    "Block {} added to the blockchain successfully.",
+                    bytes_to_hex_string(&block_hash)
+                );
                 network::broadcast_new_block_hash(block_hash, exclude_peer);
                 // TODO: optimize persistence
                 self.blockchain.persist_chain(None);
@@ -424,14 +551,78 @@ impl Node {
         }
     }
 
-    pub async fn handle_version_message(&self, peer_v: NodeVersion) {
+    pub async fn handle_version_message(&self, peer_v: NodeVersion, peer_addr: Option<SocketAddr>) {
         let node_v = self.get_node_version_info();
-        if peer_v.height > node_v.height {
-            network::ask_for_blocks(self.blockchain.get_last_block_hash());
-        } else if peer_v.height == node_v.height && peer_v.top_hash != node_v.top_hash {
-            println!("Warning: Detected potential fork with peer node.");
-            // TODO: Handle fork resolution
+        let peer = match peer_addr {
+            Some(addr) => addr,
+            None => {
+                println!("Peer address is None, cannot log version info.");
+                return;
+            }
+        };
+        if node_v.height == peer_v.height {
+            if node_v.top_hash != peer_v.top_hash {
+                println!("Peer has same height but different top hash.");
+                println!(
+                    "This could indicate a fork. Requesting blocks to find common ancestor..."
+                );
+                network::find_common_ancestor(self.blockchain.build_block_sequence(), peer);
+            }
+        } else if peer_v.height > node_v.height {
+            println!("Peer has a longer chain. Requesting blocks...");
+            network::find_common_ancestor(self.blockchain.build_block_sequence(), peer);
         }
+    }
+
+    pub async fn handle_find_common_ancestor_request(
+        &self,
+        peer_blocks_hashes: Vec<[u8; 32]>,
+        target_peer: SocketAddr,
+    ) {
+        for hash in peer_blocks_hashes.iter().rev() {
+            let block = self.blockchain.find_block_by_hash(*hash);
+            if block.is_some() {
+                network::send_common_block(&block.unwrap(), target_peer);
+                return;
+            }
+        }
+        println!("No common ancestor found with peer {}", target_peer);
+    }
+
+    pub async fn handle_received_common_block(
+        &mut self,
+        block: Block,
+        peer_addr: Option<SocketAddr>,
+    ) {
+        if !self.blockchain.find_block_by_hash(block.id()).is_some() {
+            println!(
+                "Received common block {} from peer {:?} but it's not in our blockchain!",
+                bytes_to_hex_string(&block.id()),
+                peer_addr
+            );
+            return;
+        }
+
+        if !self.fork_helper.verify_fork(
+            self.blockchain
+                .get_last_block()
+                .expect("Blockchain is empty!"),
+            &block,
+        ) {
+            println!(
+                "No fork detected with block {} from peer {:?}. Probably this is a bug.",
+                bytes_to_hex_string(&block.id()),
+                peer_addr
+            );
+            return;
+        }
+
+        println!(
+            "Recived common block {} from peer {:?}. Fork detected! Added to fork helper.",
+            bytes_to_hex_string(&block.id()),
+            peer_addr
+        );
+        network::ask_for_blocks(block.id());
     }
 }
 
