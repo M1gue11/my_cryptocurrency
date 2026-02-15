@@ -3,3 +3,5 @@ saved_files/
 target/
 keys/
 .docker-data/
+.env
+.claude

@@ -3,67 +3,38 @@ use crate::daemon::types::rpc::INVALID_PARAMS;
 use crate::daemon::types::{
     GeneratedKey, RpcResponse, UtxoInfo, WalletAddressParams, WalletAddressResponse,
     WalletBalanceParams, WalletBalanceResponse, WalletGenerateKeysParams,
-    WalletGenerateKeysResponse, WalletNewParams, WalletNewResponse, WalletSendParams,
-    WalletSendResponse,
+    WalletGenerateKeysResponse, WalletImportParams, WalletNewParams, WalletNewResponse,
+    WalletSendParams, WalletSendResponse,
 };
 use crate::model::wallet::DerivationType;
 use crate::model::{TxOutput, Wallet, get_node_mut};
-use crate::security_utils::bytes_to_hex_string;
 use crate::security_utils::Keystore;
+use crate::security_utils::bytes_to_hex_string;
 
-pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
-    let params: WalletNewParams = match serde_json::from_value(params) {
+pub async fn handle_import_wallet(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
+    let params: WalletImportParams = match serde_json::from_value(params) {
         Ok(p) => p,
         Err(e) => {
             return RpcResponse::error(id, INVALID_PARAMS, format!("Invalid params: {}", e));
         }
     };
 
-    let path = match params.path {
-        Some(p) if !p.is_empty() => p,
-        _ => {
-            return RpcResponse::error(
-                id,
-                INVALID_PARAMS,
-                "Missing or empty 'path' parameter".to_string(),
-            );
-        }
-    };
-    let mut is_imported_wallet = true;
-    
+    let is_imported_wallet = true;
+
     // Check if keystore file exists
-    let keystore_exists = std::path::Path::new(&path).exists();
-    
-    let mut wallet = if keystore_exists {
-        // File exists, try to load it
-        match Wallet::from_keystore_file(&path, &params.password) {
-            Ok(w) => w,
-            Err(e) => {
-                // Return error for any loading failure (wrong password, corrupted file, etc.)
-                // Using INVALID_PARAMS for consistency with other wallet handlers
-                return RpcResponse::error(
-                    id,
-                    INVALID_PARAMS,
-                    format!("Failed to load wallet: {}", e),
-                );
-            }
-        }
-    } else {
-        // File doesn't exist, create new wallet
-        is_imported_wallet = false;
-        match Keystore::new_seed(&params.password, &path) {
-            Ok(seed) => {
-                // Wallet::from_seed is infallible - it handles database errors gracefully
-                // by falling back to index 0 when unable to determine last used index
-                Wallet::from_seed(seed)
-            }
-            Err(create_err) => {
-                return RpcResponse::error(
-                    id,
-                    INVALID_PARAMS,
-                    format!("Failed to create new wallet: {}", create_err),
-                );
-            }
+    let keystore_exists = std::path::Path::new(&params.path).exists();
+    if !keystore_exists {
+        return RpcResponse::error(
+            id,
+            INVALID_PARAMS,
+            format!("KeyStore file not found at path: {}", params.path),
+        );
+    }
+
+    let mut wallet = match Wallet::from_keystore_file(&params.path, &params.password) {
+        Ok(w) => w,
+        Err(e) => {
+            return RpcResponse::error(id, INVALID_PARAMS, format!("Failed to load wallet: {}", e));
         }
     };
 
@@ -73,8 +44,44 @@ pub async fn handle_wallet_new(id: Option<u64>, params: serde_json::Value) -> Rp
         address: Some(address),
         is_imported_wallet,
     };
-
     RpcResponse::success(id, serde_json::to_value(response).unwrap())
+}
+
+pub async fn handle_new_wallet(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
+    let params: WalletNewParams = match serde_json::from_value(params) {
+        Ok(p) => p,
+        Err(e) => {
+            return RpcResponse::error(id, INVALID_PARAMS, format!("Invalid params: {}", e));
+        }
+    };
+
+    // This is SUPER important to avoid overwriting existing wallets
+    if std::path::Path::new(&params.path).exists() {
+        return RpcResponse::error(
+            id,
+            INVALID_PARAMS,
+            format!(
+                "Keystore file already exists at path! Use a different path to avoid overwriting!"
+            ),
+        );
+    }
+
+    let mut wallet = match Keystore::new_seed(&params.password, &params.path) {
+        Ok(seed) => Wallet::from_seed(seed),
+        Err(create_err) => {
+            return RpcResponse::error(
+                id,
+                INVALID_PARAMS,
+                format!("Failed to create new wallet: {}", create_err),
+            );
+        }
+    };
+    let response = WalletNewResponse {
+        success: true,
+        address: Some(wallet.get_receive_addr()),
+        is_imported_wallet: false,
+    };
+    return RpcResponse::success(id, serde_json::to_value(response).unwrap());
 }
 
 pub async fn handle_wallet_address(id: Option<u64>, params: serde_json::Value) -> RpcResponse {

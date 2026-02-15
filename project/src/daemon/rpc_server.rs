@@ -9,8 +9,8 @@ use crate::daemon::handlers::node::{
 };
 use crate::daemon::handlers::tx::handle_transaction_view;
 use crate::daemon::handlers::wallet::{
-    handle_wallet_address, handle_wallet_balance, handle_wallet_generate_keys, handle_wallet_new,
-    handle_wallet_send,
+    handle_import_wallet, handle_new_wallet, handle_wallet_address, handle_wallet_balance,
+    handle_wallet_generate_keys, handle_wallet_send,
 };
 use crate::daemon::types::rpc::{INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR};
 use crate::daemon::types::{RpcRequest, RpcResponse};
@@ -77,7 +77,7 @@ async fn handle_connection(
     Ok(())
 }
 
-async fn process_request(request_str: &str) -> RpcResponse {
+pub async fn process_request(request_str: &str) -> RpcResponse {
     // Parse JSON-RPC request
     let request: RpcRequest = match serde_json::from_str(request_str) {
         Ok(req) => req,
@@ -85,6 +85,7 @@ async fn process_request(request_str: &str) -> RpcResponse {
             return RpcResponse::error(None, PARSE_ERROR, format!("Parse error: {}", e));
         }
     };
+    println!("[RPC] Received request: {}", request.method);
 
     // Validate jsonrpc version
     if request.jsonrpc != "2.0" {
@@ -114,7 +115,8 @@ async fn process_request(request_str: &str) -> RpcResponse {
         "chain_utxos" => handle_chain_utxos(request.id, request.params).await,
 
         // Wallet methods
-        "wallet_new" => handle_wallet_new(request.id, request.params).await,
+        "wallet_import" => handle_import_wallet(request.id, request.params).await,
+        "wallet_new" => handle_new_wallet(request.id, request.params).await,
         "wallet_address" => handle_wallet_address(request.id, request.params).await,
         "wallet_balance" => handle_wallet_balance(request.id, request.params).await,
         "wallet_send" => handle_wallet_send(request.id, request.params).await,

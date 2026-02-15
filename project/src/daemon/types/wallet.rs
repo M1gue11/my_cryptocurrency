@@ -4,9 +4,15 @@ use serde::{Deserialize, Serialize};
 use crate::daemon::types::UtxoInfo;
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct WalletImportParams {
+    pub password: String,
+    pub path: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct WalletNewParams {
     pub password: String,
-    pub path: Option<String>,
+    pub path: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
