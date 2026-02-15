@@ -1,5 +1,5 @@
 # builder
-FROM rust:latest AS builder
+FROM rust:bookworm AS builder
 
 WORKDIR /usr/src/app
 
