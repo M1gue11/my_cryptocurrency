@@ -1,4 +1,5 @@
 pub mod chain;
+pub mod logs;
 pub mod mine;
 pub mod node;
 pub mod tx;

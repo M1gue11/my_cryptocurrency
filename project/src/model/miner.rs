@@ -4,6 +4,7 @@ use crate::{
     globals::{CONFIG, CONSENSUS_RULES},
     model::{Block, MempoolTx, Transaction, Wallet, transaction::TxId},
     security_utils::hash_starts_with_zero_bits,
+    utils,
 };
 
 pub struct Miner {
@@ -69,14 +70,14 @@ impl Miner {
             curr_block_size_bytes += tx_size;
             cutoff_index = i;
         }
-        println!(
+        utils::log_info(utils::LogCategory::Core, &format!(
             "Current block size (bytes): {} / {}",
             curr_block_size_bytes, max_block_size_bytes
-        );
-        println!("Cutoff index: {}", cutoff_index);
+        ));
+        utils::log_info(utils::LogCategory::Core, &format!("Cutoff index: {}", cutoff_index));
         txs.truncate(cutoff_index + 1);
 
-        println!("Transactions selected for block: {}", txs.len());
+        utils::log_info(utils::LogCategory::Core, &format!("Transactions selected for block: {}", txs.len()));
 
         let total_fees: i64 = txs.iter().map(|mtx| mtx.calculate_fee()).sum();
         let mut block_txs: Vec<Transaction> = txs.iter().map(|mtx| mtx.tx.clone()).collect();
@@ -118,10 +119,10 @@ impl Miner {
                 Ok(()) => return Ok(block_to_mine),
                 Err(e) => {
                     attempts += 1;
-                    println!(
-                        "Warning: {} (attempt {}/{}) Retrying with new timestamp...",
+                    utils::log_warning(utils::LogCategory::Core, &format!(
+                        "{} (attempt {}/{}) Retrying with new timestamp...",
                         e, attempts, CONFIG.max_mining_attempts
-                    );
+                    ));
                     continue;
                 }
             }

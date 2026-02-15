@@ -4,6 +4,7 @@ use crate::{
     model::{Block, block::BlockID, node::Node},
     security_utils::bytes_to_hex_string,
 };
+use super::logger::{log_info, log_warning, LogCategory};
 
 #[derive(Clone)]
 pub struct Fork {
@@ -103,7 +104,7 @@ impl ForkHelper {
         let mut best_fork_size: usize = node.blockchain.height();
 
         for fork in &self.forks {
-            println!("Evaluating fork: {:?}", fork);
+            log_info(LogCategory::Core, &format!("Evaluating fork: {:?}", fork));
             let fork_start = match fork.get_fork_start() {
                 Some(hash) => hash,
                 None => continue,
@@ -111,25 +112,25 @@ impl ForkHelper {
             let forked_block_height = match node.blockchain.find_block_height_by_hash(*fork_start) {
                 Some(height) => height,
                 None => {
-                    println!(
+                    log_warning(LogCategory::Core, &format!(
                         "Could not find forked block height for hash: {}",
                         bytes_to_hex_string(fork_start)
-                    );
+                    ));
                     continue;
                 }
             };
-            println!("Forked block height: {}", forked_block_height);
+            log_info(LogCategory::Core, &format!("Forked block height: {}", forked_block_height));
             let fork_size = fork.blocks_sequence.len() + forked_block_height;
-            println!(
+            log_info(LogCategory::Core, &format!(
                 "Calculated fork size: {} - BC height: {}",
                 fork_size,
                 node.blockchain.height()
-            );
+            ));
             if fork_size > best_fork_size {
-                println!(
+                log_info(LogCategory::Core, &format!(
                     "Found a fork with size {} that is larger than current best {}",
                     fork_size, best_fork_size
-                );
+                ));
                 best_fork = Some(fork.clone());
                 best_fork_size = fork_size;
             }

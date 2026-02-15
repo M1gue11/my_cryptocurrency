@@ -1,5 +1,6 @@
 // HTTP server for frontend communication
 use crate::daemon::rpc_server::process_request;
+use crate::utils;
 use axum::{
     Router,
     routing::post,
@@ -29,7 +30,7 @@ impl HttpServer {
         let addr = format!("127.0.0.1:{}", self.port);
         let listener = tokio::net::TcpListener::bind(&addr).await?;
 
-        println!("[HTTP] Server listening on {}", addr);
+        utils::log_info(utils::LogCategory::RPC, &format!("HTTP Server listening on {}", addr));
 
         axum::serve(listener, app).await?;
 

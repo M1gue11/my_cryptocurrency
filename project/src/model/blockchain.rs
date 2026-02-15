@@ -100,7 +100,7 @@ impl Blockchain {
         let rdr = BufReader::new(file);
 
         serde_json::from_reader(rdr).map_err(|e| {
-            eprintln!("Failed to load blockchain: {}", e);
+            utils::log_error(utils::LogCategory::Core, &format!("Failed to load blockchain: {}", e));
             std::io::Error::new(std::io::ErrorKind::InvalidData, e)
         })
     }

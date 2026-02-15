@@ -8,6 +8,7 @@ use crate::daemon::types::{
     UtxosResponse, WalletAccessParams, WalletAddressResponse, WalletBalanceResponse,
     WalletGenerateKeysResponse, WalletNewResponse, WalletSendResponse,
 };
+use crate::utils::LogEntry;
 
 /// global counter for request IDs
 static REQUEST_ID: AtomicU64 = AtomicU64::new(1);
@@ -234,5 +235,27 @@ impl RpcClient {
             }),
         )
         .await
+    }
+
+    // ========================================================================
+    // Logs Methods
+    // ========================================================================
+    pub async fn get_logs(
+        &self,
+        category: Option<&str>,
+        level: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<LogEntry>, String> {
+        let mut params = serde_json::json!({});
+        if let Some(cat) = category {
+            params["category"] = serde_json::json!(cat);
+        }
+        if let Some(lvl) = level {
+            params["level"] = serde_json::json!(lvl);
+        }
+        if let Some(lim) = limit {
+            params["limit"] = serde_json::json!(lim);
+        }
+        self.call("get_logs", params).await
     }
 }

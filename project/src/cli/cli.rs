@@ -29,6 +29,9 @@ pub enum Commands {
     /// Transaction operations
     #[command(subcommand)]
     Transaction(TransactionCommands),
+
+    /// View node logs
+    Logs(LogsArgs),
 }
 
 #[derive(Subcommand)]
@@ -154,4 +157,19 @@ pub enum TransactionCommands {
         #[arg(short, long)]
         id: String,
     },
+}
+
+#[derive(Parser)]
+pub struct LogsArgs {
+    /// Filter by category: core, p2p, rpc
+    #[arg(short, long)]
+    pub category: Option<String>,
+
+    /// Filter by level: info, warning, error
+    #[arg(short, long)]
+    pub level: Option<String>,
+
+    /// Limit number of log entries displayed
+    #[arg(short = 'n', long, default_value_t = 50)]
+    pub limit: usize,
 }

@@ -1,6 +1,7 @@
 use crate::model::{get_node, get_node_mut};
 use crate::network::NetworkMessage;
 use crate::security_utils::bytes_to_hex_string;
+use crate::utils;
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -47,8 +48,8 @@ pub async fn run_server(port: u16, peers: Vec<String>) {
         .await
         .expect("Failed to bind P2P server to address");
 
-    println!("P2P Server listening on {}", addr);
-    println!("Known peers: {:?}", peers);
+    utils::log_info(utils::LogCategory::P2P, &format!("P2P Server listening on {}", addr));
+    utils::log_info(utils::LogCategory::P2P, &format!("Known peers: {:?}", peers));
 
     // 1. Try to connect to known peers (seeds)
     for peer_addr in peers {
@@ -62,30 +63,30 @@ pub async fn run_server(port: u16, peers: Vec<String>) {
     loop {
         match listener.accept().await {
             Ok((socket, addr)) => {
-                println!("New connection received from: {}", addr);
+                utils::log_info(utils::LogCategory::P2P, &format!("New connection received from: {}", addr));
                 // Spawn a task to handle this connection without blocking the rest
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(socket).await {
-                        println!("Connection lost with {}: {}", addr, e);
+                        utils::log_warning(utils::LogCategory::P2P, &format!("Connection lost with {}: {}", addr, e));
                     }
                 });
             }
-            Err(e) => println!("Connection error: {}", e),
+            Err(e) => utils::log_error(utils::LogCategory::P2P, &format!("Connection error: {}", e)),
         }
     }
 }
 
 async fn connect_to_peer(address: String) {
-    println!("Trying to connect to peer: {}", address);
+    utils::log_info(utils::LogCategory::P2P, &format!("Trying to connect to peer: {}", address));
     match TcpStream::connect(&address).await {
         Ok(stream) => {
-            println!("Connected to {}", address);
+            utils::log_info(utils::LogCategory::P2P, &format!("Connected to {}", address));
             // Initiate handshake actively
             if let Err(e) = handle_connection(stream).await {
-                println!("Connection lost with {}: {}", address, e);
+                utils::log_warning(utils::LogCategory::P2P, &format!("Connection lost with {}: {}", address, e));
             }
         }
-        Err(e) => println!("Failed to connect to {}: {}", address, e),
+        Err(e) => utils::log_warning(utils::LogCategory::P2P, &format!("Failed to connect to {}: {}", address, e)),
     }
 }
 
@@ -95,11 +96,11 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
     // Add peer to connected peers list
     if let Some(addr) = peer_addr {
         CONNECTED_PEERS.write().await.insert(addr);
-        println!(
+        utils::log_info(utils::LogCategory::P2P, &format!(
             "Peer connected: {}. Total peers: {}",
             addr,
             get_peer_count().await
-        );
+        ));
     }
 
     let (reader, mut writer) = stream.split();
@@ -126,7 +127,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                         let message: NetworkMessage = match serde_json::from_str(line.trim()) {
                             Ok(msg) => msg,
                             Err(e) => {
-                                println!("JSON Error: {}", e);
+                                utils::log_error(utils::LogCategory::P2P, &format!("JSON Error: {}", e));
                                 line.clear();
                                 continue;
                             }
@@ -134,21 +135,21 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
 
                         match message {
                             NetworkMessage::Version(ver) => {
-                                println!(
+                                utils::log_info(utils::LogCategory::P2P, &format!(
                                     "Received VERSION: v={} height={} hash={}",
                                     ver.version, ver.height, bytes_to_hex_string(&ver.top_hash)
-                                );
+                                ));
                                 get_node().await.handle_version_message(ver, peer_addr).await;
                                 let ack = serde_json::to_string(&NetworkMessage::VerAck)?;
                                 writer.write_all(format!("{}\n", ack).as_bytes()).await?;
                             },
 
                             NetworkMessage::VerAck => {
-                                println!("Received VERACK. Handshake complete! Ready to synchronize.");
+                                utils::log_info(utils::LogCategory::P2P, "Received VERACK. Handshake complete! Ready to synchronize.");
                             },
 
                             NetworkMessage::Inv { items } => {
-                                println!("Received Inventory with {} items.", items.len());
+                                utils::log_info(utils::LogCategory::P2P, &format!("Received Inventory with {} items.", items.len()));
                                 let node = get_node().await;
                                 node.handle_inventory(items, peer_addr).await;
                             },
@@ -183,7 +184,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                                 node.handle_received_common_block(block, peer_addr).await;
                             },
 
-                            _ => println!("Received: {:?}", message),
+                            _ => utils::log_info(utils::LogCategory::P2P, &format!("Received: {:?}", message)),
                         }
 
                         line.clear();
@@ -196,7 +197,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                 match delivery {
                     Delivery::Broadcast { exclude_peer } => {
                         if exclude_peer.is_some() && peer_addr == exclude_peer {
-                            println!("Skipping message to excluded peer: {:?}", exclude_peer.unwrap());
+                            utils::log_info(utils::LogCategory::P2P, &format!("Skipping message to excluded peer: {:?}", exclude_peer.unwrap()));
                             continue;
                         }
                         let json = serde_json::to_string(&msg)?;
@@ -217,11 +218,11 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
     // Remove peer from connected peers list when disconnecting
     if let Some(addr) = peer_addr {
         CONNECTED_PEERS.write().await.remove(&addr);
-        println!(
+        utils::log_info(utils::LogCategory::P2P, &format!(
             "Peer disconnected: {}. Total peers: {}",
             addr,
             get_peer_count().await
-        );
+        ));
     }
 
     Ok(())

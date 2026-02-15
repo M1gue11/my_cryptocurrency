@@ -7,6 +7,7 @@ use crate::daemon::handlers::mine::handle_mine_block;
 use crate::daemon::handlers::node::{
     handle_node_clear_mempool, handle_node_init, handle_node_mempool, handle_node_status,
 };
+use crate::daemon::handlers::logs::handle_get_logs;
 use crate::daemon::handlers::tx::handle_transaction_view;
 use crate::daemon::handlers::wallet::{
     handle_import_wallet, handle_new_wallet, handle_wallet_address, handle_wallet_balance,
@@ -14,6 +15,7 @@ use crate::daemon::handlers::wallet::{
 };
 use crate::daemon::types::rpc::{INVALID_REQUEST, METHOD_NOT_FOUND, PARSE_ERROR};
 use crate::daemon::types::{RpcRequest, RpcResponse};
+use crate::utils;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -33,15 +35,15 @@ impl RpcServer {
         let addr = format!("127.0.0.1:{}", self.port);
         let listener = TcpListener::bind(&addr).await?;
 
-        println!("[RPC] Server listening on {}", addr);
+        utils::log_info(utils::LogCategory::RPC, &format!("RPC Server listening on {}", addr));
 
         loop {
             let (stream, peer_addr) = listener.accept().await?;
-            println!("[RPC] New connection from {}", peer_addr);
+            utils::log_info(utils::LogCategory::RPC, &format!("New connection from {}", peer_addr));
 
             tokio::spawn(async move {
                 if let Err(e) = handle_connection(stream).await {
-                    eprintln!("[RPC] Connection error: {}", e);
+                    utils::log_error(utils::LogCategory::RPC, &format!("Connection error: {}", e));
                 }
             });
         }
@@ -85,7 +87,7 @@ pub async fn process_request(request_str: &str) -> RpcResponse {
             return RpcResponse::error(None, PARSE_ERROR, format!("Parse error: {}", e));
         }
     };
-    println!("[RPC] Received request: {}", request.method);
+    utils::log_info(utils::LogCategory::RPC, &format!("Received request: {}", request.method));
 
     // Validate jsonrpc version
     if request.jsonrpc != "2.0" {
@@ -124,6 +126,9 @@ pub async fn process_request(request_str: &str) -> RpcResponse {
 
         // Transaction methods
         "transaction_view" => handle_transaction_view(request.id, request.params).await,
+
+        // Logs methods
+        "get_logs" => handle_get_logs(request.id, request.params).await,
 
         _ => RpcResponse::error(
             request.id,

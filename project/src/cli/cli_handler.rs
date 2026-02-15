@@ -1,4 +1,4 @@
-use super::cli::{ChainCommands, Commands, MineCommands, TransactionCommands, WalletCommands};
+use super::cli::{ChainCommands, Commands, LogsArgs, MineCommands, TransactionCommands, WalletCommands};
 use crate::{
     cli::{RpcClient, cli::NodeCommands},
     daemon::types::WalletAccessParams,
@@ -158,6 +158,13 @@ fn print_help() {
 
     println!("\n📄 Transaction:");
     println!("  transaction view --id <hex_id>     - View transaction details");
+
+    println!("\n📋 Logs:");
+    println!("  logs                               - Show recent logs (last 50)");
+    println!("  logs --category <core|p2p|rpc>     - Filter by category");
+    println!("  logs --level <info|warning|error>   - Filter by level");
+    println!("  logs --limit <n>                   - Limit number of entries");
+    println!("    - Filters can be combined, e.g.: logs --category core --level error --limit 20");
     println!();
 }
 
@@ -376,6 +383,24 @@ fn parse_command(input: &str) -> Result<Commands, String> {
             }
         }
 
+        "logs" => {
+            let category = parse_flag_value(&parts, "--category").ok();
+            let level = parse_flag_value(&parts, "--level").ok();
+            let limit = if let Ok(limit_str) = parse_flag_value(&parts, "--limit") {
+                limit_str
+                    .parse::<usize>()
+                    .map_err(|_| "Invalid limit format. Must be a positive number".to_string())?
+            } else {
+                50
+            };
+
+            Ok(Commands::Logs(LogsArgs {
+                category,
+                level,
+                limit,
+            }))
+        }
+
         "transaction" | "tx" => {
             if parts.len() < 2 {
                 return Err("Usage: transaction view --id <hex_id>".to_string());
@@ -445,6 +470,10 @@ async fn execute_command(
         }
         Commands::Transaction(tx_cmd) => {
             handle_transaction(tx_cmd, client).await;
+            Ok(())
+        }
+        Commands::Logs(logs_args) => {
+            handle_logs(logs_args, client).await;
             Ok(())
         }
     }
@@ -958,4 +987,45 @@ async fn handle_transaction(command: TransactionCommands, client: &RpcClient) {
             println!();
         }
     }
+}
+
+async fn handle_logs(args: LogsArgs, client: &RpcClient) {
+    let logs = match client
+        .get_logs(
+            args.category.as_deref(),
+            args.level.as_deref(),
+            Some(args.limit),
+        )
+        .await
+    {
+        Ok(logs) => logs,
+        Err(e) => {
+            println!("✗ Could not retrieve logs: {}", e);
+            return;
+        }
+    };
+
+    if logs.is_empty() {
+        println!("⚠  No logs found matching the given filters");
+        return;
+    }
+
+    println!("\n=== Node Logs ({} entries) ===\n", logs.len());
+    for entry in &logs {
+        let level_tag = match entry.level {
+            crate::utils::LogLevel::Info => "INFO",
+            crate::utils::LogLevel::Warning => "WARN",
+            crate::utils::LogLevel::Error => "ERROR",
+        };
+        let category_tag = match entry.category {
+            crate::utils::LogCategory::Core => "Core",
+            crate::utils::LogCategory::P2P => "P2P",
+            crate::utils::LogCategory::RPC => "RPC",
+        };
+        println!(
+            "[{}] [{}] [{}] {}",
+            entry.timestamp, level_tag, category_tag, entry.message
+        );
+    }
+    println!();
 }
