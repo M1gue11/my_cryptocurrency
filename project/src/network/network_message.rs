@@ -31,4 +31,10 @@ pub enum NetworkMessage {
     GetBlocks {
         last_known_hash: [u8; 32],
     },
+
+    FindCommonAncestor {
+        local_block_hashes: Vec<[u8; 32]>,
+    },
+
+    SendCommonBlock(Block),
 }

@@ -173,6 +173,16 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                                 node.handle_get_blocks_request(last_known_hash, peer_addr.unwrap()).await;
                             },
 
+                            NetworkMessage::FindCommonAncestor { local_block_hashes } => {
+                                let node = get_node().await;
+                                node.handle_find_common_ancestor_request(local_block_hashes, peer_addr.unwrap()).await;
+                            },
+
+                            NetworkMessage::SendCommonBlock(block) => {
+                                let mut node = get_node_mut().await;
+                                node.handle_received_common_block(block, peer_addr).await;
+                            },
+
                             _ => println!("Received: {:?}", message),
                         }
 
