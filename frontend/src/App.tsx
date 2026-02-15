@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components';
-import { Dashboard, Blocks, Wallet, Transactions, Network } from './pages';
+import { Dashboard, Blocks, Wallet, Transactions, Network, Logs } from './pages';
 import { WalletProvider } from './contexts';
 
 function App() {
@@ -14,6 +14,7 @@ function App() {
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/network" element={<Network />} />
+            <Route path="/logs" element={<Logs />} />
           </Routes>
         </Layout>
       </BrowserRouter>

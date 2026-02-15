@@ -17,6 +17,7 @@ import type {
   WalletGenerateKeysResponse,
   TransactionViewResponse,
   WalletAccessParams,
+  LogEntry,
 } from "../types";
 
 // Global request ID counter
@@ -200,6 +201,22 @@ export class RpcClient {
 
   async transactionView(id: string): Promise<TransactionViewResponse> {
     return this.call<TransactionViewResponse>("transaction_view", { id });
+  }
+
+  // ==========================================================================
+  // Logs Methods
+  // ==========================================================================
+
+  async getLogs(
+    category?: string,
+    level?: string,
+    limit?: number,
+  ): Promise<LogEntry[]> {
+    const params: Record<string, unknown> = {};
+    if (category) params.category = category;
+    if (level) params.level = level;
+    if (limit !== undefined) params.limit = limit;
+    return this.call<LogEntry[]>("get_logs", params);
   }
 }
 

@@ -7,3 +7,4 @@ export * from './chain';
 export * from './mine';
 export * from './wallet';
 export * from './transaction';
+export * from './logs';

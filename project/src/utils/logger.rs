@@ -168,13 +168,15 @@ pub fn get_logs(
 ) -> Vec<LogEntry> {
     let logger = LOGGER.read().unwrap();
 
-    let filtered: Vec<LogEntry> = logger
+    let mut filtered: Vec<LogEntry> = logger
         .entries
         .iter()
         .filter(|e| category.map_or(true, |c| e.category == c))
         .filter(|e| level.map_or(true, |l| e.level == l))
         .cloned()
         .collect();
+
+    filtered.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
 
     match limit {
         Some(n) => filtered.into_iter().rev().take(n).rev().collect(),
