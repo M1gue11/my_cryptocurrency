@@ -63,6 +63,20 @@ impl Blockchain {
         self.chain.iter().find(|block| block.header_hash() == hash)
     }
 
+    pub fn find_block_height_by_hash(&self, hash: [u8; 32]) -> Option<usize> {
+        self.chain
+            .iter()
+            .position(|block| block.header_hash() == hash)
+    }
+
+    pub fn build_block_sequence(&self) -> Vec<[u8; 32]> {
+        self.chain.iter().map(|block| block.header_hash()).collect()
+    }
+
+    pub fn height(&self) -> usize {
+        self.chain.len()
+    }
+
     pub fn persist_chain(&self, path: Option<String>) {
         let path = path.unwrap_or_else(|| CONFIG.persisted_chain_path.to_string());
         utils::assert_parent_dir_exists(&path)

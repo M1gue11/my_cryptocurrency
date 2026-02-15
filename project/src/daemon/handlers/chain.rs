@@ -10,7 +10,7 @@ use crate::utils::transaction_model_to_view;
 
 pub async fn handle_chain_status(id: Option<u64>) -> RpcResponse {
     let node = get_node().await;
-    let block_count = node.blockchain.chain.len();
+    let block_count = node.blockchain.height();
     let validation = node.validate_bc();
 
     let (last_hash, last_date) = if block_count > 0 {

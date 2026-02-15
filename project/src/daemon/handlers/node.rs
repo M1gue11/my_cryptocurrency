@@ -21,7 +21,7 @@ pub async fn handle_node_init(id: Option<u64>) -> RpcResponse {
     restart_node().await;
     let node = get_node().await;
 
-    let block_count = node.blockchain.chain.len();
+    let block_count = node.blockchain.height();
     let response = serde_json::json!({
         "success": true,
         "block_count": block_count
