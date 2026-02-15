@@ -25,7 +25,7 @@ mod tests {
         let tx = Transaction::new(
             vec![],
             vec![TxOutput {
-                value: 100.0,
+                value: 100,
                 address: "test_address".to_string(),
             }],
             Some("test".to_string()),
@@ -54,7 +54,7 @@ mod tests {
         let tx = Transaction::new(
             vec![],
             vec![TxOutput {
-                value: 50.0,
+                value: 50,
                 address: addr.to_string(),
             }],
             Some("utxo-test".to_string()),
@@ -69,12 +69,12 @@ mod tests {
             header,
             transactions: vec![tx.clone()],
         };
-        repo.apply_block(block, &[tx]).unwrap();
+        repo.apply_block(block).unwrap();
 
         let utxos = repo.get_utxos_for_address(addr).unwrap();
         assert_eq!(utxos.len(), 1);
         assert_eq!(utxos[0].index, 0);
-        assert_eq!(utxos[0].output.value, 50.0);
+        assert_eq!(utxos[0].output.value, 50);
     }
 
     #[test]
@@ -96,7 +96,7 @@ mod tests {
         let tx1 = Transaction::new(
             vec![],
             vec![TxOutput {
-                value: 25.0,
+                value: 25,
                 address: addr1.clone(),
             }],
             Some("addr1".to_string()),
@@ -104,7 +104,7 @@ mod tests {
         let tx2 = Transaction::new(
             vec![],
             vec![TxOutput {
-                value: 75.0,
+                value: 75,
                 address: addr2.clone(),
             }],
             Some("addr2".to_string()),
@@ -117,9 +117,9 @@ mod tests {
         };
         let block = Block {
             header,
-            transactions: vec![tx1.clone(), tx2.clone()],
+            transactions: vec![tx1, tx2],
         };
-        repo.apply_block(block, &[tx1, tx2]).unwrap();
+        repo.apply_block(block).unwrap();
 
         let mut utxos = repo
             .get_utxos_for_addresses(&vec![addr1.clone(), addr2.clone()])
@@ -135,9 +135,9 @@ mod tests {
 
         assert_eq!(utxos.len(), 2);
         assert_eq!(utxos[0].output.address, addr1);
-        assert_eq!(utxos[0].output.value, 25.0);
+        assert_eq!(utxos[0].output.value, 25);
         assert_eq!(utxos[1].output.address, addr2);
-        assert_eq!(utxos[1].output.value, 75.0);
+        assert_eq!(utxos[1].output.value, 75);
     }
 
     #[test]
@@ -157,7 +157,7 @@ mod tests {
         let tx = Transaction::new(
             vec![],
             vec![TxOutput {
-                value: 50.0,
+                value: 50,
                 address: "miner_address".to_string(),
             }],
             Some("Genesis block".to_string()),
@@ -171,7 +171,7 @@ mod tests {
         let txid = tx.id();
 
         // Apply the genesis block
-        repo.apply_block(block, &[tx]).unwrap();
+        repo.apply_block(block).unwrap();
 
         // Verify the transaction was stored
         let retrieved = repo.get_transaction(&txid).unwrap();
@@ -180,6 +180,6 @@ mod tests {
         // Verify UTXOs were created
         let utxos = repo.get_utxos_for_address("miner_address").unwrap();
         assert_eq!(utxos.len(), 1);
-        assert_eq!(utxos[0].output.value, 50.0);
+        assert_eq!(utxos[0].output.value, 50);
     }
 }
