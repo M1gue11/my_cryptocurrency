@@ -5,3 +5,5 @@ keys/
 .docker-data/
 .env
 .claude
+caramuru.pid
+*.pid
