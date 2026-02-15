@@ -4,3 +4,4 @@ target/
 keys/
 .docker-data/
 .env
+.claude
