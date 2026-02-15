@@ -13,6 +13,8 @@ pub struct Settings {
     pub rpc_port: u16,
     pub http_port: u16,
     pub pbkdf2_iterations: u32,
+    pub log_file_path: String,
+    pub log_mode: String,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
@@ -52,6 +54,9 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(1),
+        log_file_path: env::var("LOG_FILE_PATH")
+            .unwrap_or_else(|_| "saved_files/node.log".to_string()),
+        log_mode: env::var("LOG_MODE").unwrap_or_else(|_| "full".to_string()),
     }
 });
 

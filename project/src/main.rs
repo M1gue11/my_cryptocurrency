@@ -83,6 +83,7 @@ async fn main() {
 async fn run_daemon_http() {
     let _pid_file = PidFile::create_or_exit("caramuru.pid");
     init_db();
+    utils::init_logger(&CONFIG.log_file_path, &CONFIG.log_mode);
 
     let p2p_port = CONFIG.p2p_port;
     let main_peers = CONFIG.peers.clone();
@@ -110,6 +111,7 @@ async fn run_daemon_http() {
 async fn run_daemon_rpc() {
     let _pid_file = PidFile::create_or_exit("caramuru.pid");
     init_db();
+    utils::init_logger(&CONFIG.log_file_path, &CONFIG.log_mode);
 
     let p2p_port = CONFIG.p2p_port;
     let main_peers = CONFIG.peers.clone();
@@ -152,6 +154,7 @@ async fn run_cli_attached() {
 async fn run_daemon_with_cli() {
     let _pid_file = PidFile::create_or_exit("caramuru.pid");
     init_db();
+    utils::init_logger(&CONFIG.log_file_path, &CONFIG.log_mode);
 
     let p2p_port = CONFIG.p2p_port;
     let main_peers = CONFIG.peers.clone();
