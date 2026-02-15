@@ -1,5 +1,5 @@
 // Transaction Handlers
-use crate::daemon::types::rpc::{INTERNAL_ERROR, INVALID_PARAMS};
+use crate::daemon::types::rpc::INVALID_PARAMS;
 use crate::daemon::types::{
     RpcResponse, TransactionViewParams, TransactionViewResponse, TxInputInfo, TxOutputInfo,
 };
@@ -30,19 +30,19 @@ pub async fn handle_transaction_view(id: Option<u64>, params: serde_json::Value)
 
     let repo = LedgerRepository::new();
     match repo.get_transaction(&tx_id_bytes) {
-        Ok(tx) => {
-            let inputs: Vec<TxInputInfo> = tx
+        Ok(Some(tx)) => {
+            let inputs = tx
                 .inputs
                 .iter()
                 .map(|i| TxInputInfo {
                     prev_tx_id: hex::encode(i.prev_tx_id),
                     output_index: i.output_index,
-                    public_key: i.public_key.clone(),
                     signature: i.signature.clone(),
+                    public_key: i.public_key.clone(),
                 })
                 .collect();
 
-            let outputs: Vec<TxOutputInfo> = tx
+            let outputs = tx
                 .outputs
                 .iter()
                 .map(|o| TxOutputInfo {
@@ -63,10 +63,15 @@ pub async fn handle_transaction_view(id: Option<u64>, params: serde_json::Value)
 
             RpcResponse::success(id, serde_json::to_value(response).unwrap())
         }
-        Err(_) => RpcResponse::error(
+        Ok(None) => RpcResponse::error(
             id,
             INVALID_PARAMS,
             "Unknown transaction ID: transaction not found".to_string(),
+        ),
+        Err(e) => RpcResponse::error(
+            id,
+            INVALID_PARAMS,
+            format!("Failed to query transaction: {}", e),
         ),
     }
 }
