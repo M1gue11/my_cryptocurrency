@@ -10,10 +10,11 @@ use crate::{
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub type BlockID = [u8; 32];
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlockHeader {
-    pub prev_block_hash: [u8; 32],
-    pub merkle_root: [u8; 32],
+    pub prev_block_hash: BlockID,
+    pub merkle_root: BlockID,
     pub nonce: u32,
     pub timestamp: NaiveDateTime,
 }
@@ -25,7 +26,7 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(prev_block_hash: [u8; 32]) -> Self {
+    pub fn new(prev_block_hash: BlockID) -> Self {
         let timestamp = Utc::now().naive_utc();
         let header = BlockHeader {
             prev_block_hash,
@@ -66,16 +67,16 @@ impl Block {
         size
     }
 
-    pub fn header_hash(&self) -> [u8; 32] {
+    pub fn header_hash(&self) -> BlockID {
         sha256(&self.header_bytes())
     }
 
-    pub fn id(&self) -> [u8; 32] {
+    pub fn id(&self) -> BlockID {
         self.header_hash()
     }
 
-    pub fn eval_merkle_root_from_transactions(txs: &[Transaction]) -> [u8; 32] {
-        let mut leaf_hashes: Vec<[u8; 32]> = Vec::new();
+    pub fn eval_merkle_root_from_transactions(txs: &[Transaction]) -> BlockID {
+        let mut leaf_hashes: Vec<BlockID> = Vec::new();
         for tx in txs {
             leaf_hashes.push(tx.id());
         }
@@ -148,5 +149,11 @@ impl std::fmt::Debug for Block {
             .field("nonce", &self.header.nonce)
             .field("date", &self.header.timestamp)
             .finish()
+    }
+}
+
+impl PartialEq for Block {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
     }
 }
