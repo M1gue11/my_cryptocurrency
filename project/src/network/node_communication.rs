@@ -63,11 +63,11 @@ pub fn ask_for_blocks(last_known_hash: [u8; 32]) {
         .send((get_blocks_msg, Delivery::Broadcast { exclude_peer: None }));
 }
 
-pub fn find_common_ancestor(local_block_hashes: Vec<[u8; 32]>) {
+pub fn find_common_ancestor(local_block_hashes: Vec<[u8; 32]>, target_peer: SocketAddr) {
     let get_blocks_msg = NetworkMessage::FindCommonAncestor { local_block_hashes };
     let _ = BROADCAST_CHANNEL
         .sender
-        .send((get_blocks_msg, Delivery::Broadcast { exclude_peer: None }));
+        .send((get_blocks_msg, Delivery::Direct { target_peer }));
 }
 
 pub fn send_common_block(block: &Block, target_peer: SocketAddr) {

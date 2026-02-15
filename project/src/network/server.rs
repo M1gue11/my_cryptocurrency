@@ -138,7 +138,7 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
                                     "Received VERSION: v={} height={} hash={}",
                                     ver.version, ver.height, bytes_to_hex_string(&ver.top_hash)
                                 );
-                                get_node().await.handle_version_message(ver).await;
+                                get_node().await.handle_version_message(ver, peer_addr).await;
                                 let ack = serde_json::to_string(&NetworkMessage::VerAck)?;
                                 writer.write_all(format!("{}\n", ack).as_bytes()).await?;
                             },

@@ -20,8 +20,12 @@ impl Blockchain {
         Blockchain { chain: Vec::new() }
     }
 
+    pub fn get_last_block(&self) -> Option<&Block> {
+        self.chain.last()
+    }
+
     pub fn get_last_block_hash(&self) -> [u8; 32] {
-        match self.chain.last() {
+        match self.get_last_block() {
             Some(block) => block.header_hash(),
             None => [0; 32],
         }
