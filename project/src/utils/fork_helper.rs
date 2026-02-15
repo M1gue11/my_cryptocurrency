@@ -42,7 +42,9 @@ impl Fork {
     }
 
     pub fn append_block(&mut self, block_hash: BlockID) {
-        self.blocks_sequence.push(block_hash);
+        if !self.blocks_sequence.contains(&block_hash) {
+            self.blocks_sequence.push(block_hash);
+        }
     }
 
     pub fn is_block_in_branch(&self, block_hash: &BlockID) -> bool {
@@ -59,21 +61,15 @@ impl ForkHelper {
         Self { forks: Vec::new() }
     }
 
-    pub fn create_or_update_fork(&mut self, last_block: &Block, new_block: &Block) {
+    pub fn create_or_update_fork(&mut self, _last_block: &Block, new_block: &Block) {
         for fork in &mut self.forks {
-            // Check if prev block hash of the new block matches any block in the fork
             if fork.is_block_in_branch(&new_block.header.prev_block_hash) {
                 fork.append_block(new_block.id());
                 return;
             }
         }
-        // If no existing fork matches, create a new one
-        let mut block_sequence = Vec::with_capacity(2);
-        if last_block.header.prev_block_hash == new_block.header.prev_block_hash {
-            // This means the new block is a direct sibling of the last block, so we start the fork from their common parent
-            block_sequence.push(new_block.header.prev_block_hash);
-            block_sequence.push(new_block.id());
-        }
+        // Always create a meaningful fork: [branching_point, new_block]
+        let block_sequence = vec![new_block.header.prev_block_hash, new_block.id()];
         let new_fork = Fork::new(block_sequence);
         self.forks.push(new_fork);
     }
@@ -87,22 +83,34 @@ impl ForkHelper {
         true
     }
 
-    /// Finds the longest fork without modifying the fork list.
-    ///
-    /// If a fork is found that has more blocks than the main chain,
-    /// it returns that fork for potential rebase
+    /// Register a fork starting from a known block hash (e.g., a common ancestor).
+    /// Used when we know a fork exists but don't yet have the fork's blocks.
+    pub fn register_fork_start(&mut self, block_hash: BlockID) {
+        if self
+            .forks
+            .iter()
+            .any(|f| f.get_fork_start() == Some(&block_hash))
+        {
+            return;
+        }
+        self.forks.push(Fork::new(vec![block_hash]));
+    }
+
+    /// Finds the longest fork that is strictly longer than the main chain.
+    /// Returns the best (longest) qualifying fork for potential rebase.
     pub fn evaluate_forks(&self, node: &Node) -> Option<Fork> {
-        let mut fork_to_rebase: Option<Fork> = None;
+        let mut best_fork: Option<Fork> = None;
+        let mut best_fork_size: usize = node.blockchain.height();
+
         for fork in &self.forks {
             println!("Evaluating fork: {:?}", fork);
             let fork_start = match fork.get_fork_start() {
                 Some(hash) => hash,
-                None => continue, // Skip empty forks
+                None => continue,
             };
             let forked_block_height = match node.blockchain.find_block_height_by_hash(*fork_start) {
                 Some(height) => height,
                 None => {
-                    // Skip forks with unknown starting block height
                     println!(
                         "Could not find forked block height for hash: {}",
                         bytes_to_hex_string(fork_start)
@@ -117,20 +125,19 @@ impl ForkHelper {
                 fork_size,
                 node.blockchain.height()
             );
-            if fork_size > node.blockchain.height() {
+            if fork_size > best_fork_size {
                 println!(
-                    "Found a fork with size {} that is larger than the main chain height {}",
-                    fork_size,
-                    node.blockchain.height()
+                    "Found a fork with size {} that is larger than current best {}",
+                    fork_size, best_fork_size
                 );
-                fork_to_rebase = Some(fork.clone());
+                best_fork = Some(fork.clone());
+                best_fork_size = fork_size;
             }
         }
-        fork_to_rebase
+        best_fork
     }
 
-    /// Removes a fork from the list by timestamp
-    pub fn remove_fork(&mut self, fork: &Fork) {
-        self.forks.retain(|f| f.timestamp != fork.timestamp);
+    pub fn clear_forks(&mut self) {
+        self.forks.clear();
     }
 }

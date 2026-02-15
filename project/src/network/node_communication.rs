@@ -56,11 +56,13 @@ pub fn ask_for_tx(tx_hash: [u8; 32]) {
         .send((get_data_msg, Delivery::Broadcast { exclude_peer: None }));
 }
 
-pub fn ask_for_blocks(last_known_hash: [u8; 32]) {
+pub fn ask_for_blocks(last_known_hash: [u8; 32], target_peer: Option<SocketAddr>) {
     let get_blocks_msg = NetworkMessage::GetBlocks { last_known_hash };
-    let _ = BROADCAST_CHANNEL
-        .sender
-        .send((get_blocks_msg, Delivery::Broadcast { exclude_peer: None }));
+    let delivery = match target_peer {
+        Some(peer) => Delivery::Direct { target_peer: peer },
+        None => Delivery::Broadcast { exclude_peer: None },
+    };
+    let _ = BROADCAST_CHANNEL.sender.send((get_blocks_msg, delivery));
 }
 
 pub fn find_common_ancestor(local_block_hashes: Vec<[u8; 32]>, target_peer: SocketAddr) {

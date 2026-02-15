@@ -259,20 +259,22 @@ impl Node {
         Ok(rolled_back_blocks)
     }
 
-    pub fn rebase_chain_to_fork(&mut self, fork: utils::Fork) {
+    pub fn rebase_chain_to_fork(&mut self, fork: utils::Fork, peer_addr: Option<SocketAddr>) {
         println!(
             "Starting rebase to fork with starting block {} and length {}",
             bytes_to_hex_string(fork.get_fork_start().unwrap()),
             fork.blocks_sequence.len()
         );
-        let _ = match self.rollback_to_block(&fork.get_fork_start().unwrap()) {
+        let _ = match self.rollback_to_block(fork.get_fork_start().unwrap()) {
             Ok(rb) => rb,
             Err(e) => {
                 println!("Failed to rollback to fork start: {}", e);
                 return;
             }
         };
-        network::ask_for_blocks(self.blockchain.get_last_block_hash());
+        // Clear all forks after a successful rebase -- old tracking data is invalid
+        self.fork_helper.clear_forks();
+        network::ask_for_blocks(self.blockchain.get_last_block_hash(), peer_addr);
     }
 
     pub fn is_all_inputs_utxos(&self, tx: &Transaction) -> Result<(), String> {
@@ -477,8 +479,7 @@ impl Node {
             );
             let new_bigger_branch = self.fork_helper.evaluate_forks(&self);
             if let Some(fork) = new_bigger_branch {
-                self.fork_helper.remove_fork(&fork);
-                self.rebase_chain_to_fork(fork);
+                self.rebase_chain_to_fork(fork, exclude_peer);
             }
             return;
         }
@@ -594,35 +595,36 @@ impl Node {
         block: Block,
         peer_addr: Option<SocketAddr>,
     ) {
-        if !self.blockchain.find_block_by_hash(block.id()).is_some() {
+        let block_hash = block.id();
+
+        if self.blockchain.find_block_by_hash(block_hash).is_none() {
             println!(
                 "Received common block {} from peer {:?} but it's not in our blockchain!",
-                bytes_to_hex_string(&block.id()),
+                bytes_to_hex_string(&block_hash),
                 peer_addr
             );
             return;
         }
 
-        if !self.fork_helper.verify_fork(
-            self.blockchain
-                .get_last_block()
-                .expect("Blockchain is empty!"),
-            &block,
-        ) {
-            println!(
-                "No fork detected with block {} from peer {:?}. Probably this is a bug.",
-                bytes_to_hex_string(&block.id()),
-                peer_addr
-            );
-            return;
+        // If the common block is our chain tip, there is no fork
+        if let Some(last_block) = self.blockchain.get_last_block() {
+            if last_block.id() == block_hash {
+                println!(
+                    "Common block {} is our chain tip -- no fork.",
+                    bytes_to_hex_string(&block_hash)
+                );
+                return;
+            }
         }
 
+        // Register this as a fork starting point and request diverging blocks
+        self.fork_helper.register_fork_start(block_hash);
         println!(
-            "Recived common block {} from peer {:?}. Fork detected! Added to fork helper.",
-            bytes_to_hex_string(&block.id()),
+            "Received common block {} from peer {:?}. Fork registered, requesting blocks.",
+            bytes_to_hex_string(&block_hash),
             peer_addr
         );
-        network::ask_for_blocks(block.id());
+        network::ask_for_blocks(block_hash, peer_addr);
     }
 }
 
