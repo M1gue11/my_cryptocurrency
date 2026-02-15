@@ -10,12 +10,13 @@ mod utils;
 #[cfg(test)]
 mod tests;
 
-use crate::cli::{run_cli, RpcClient};
+use crate::cli::{RpcClient, run_cli};
 use crate::daemon::http_server::HttpServer;
 use crate::daemon::rpc_server::RpcServer;
 use crate::db::db::init_db;
 use crate::globals::CONFIG;
 use crate::network::server::run_server;
+use crate::utils::PidFile;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -80,6 +81,7 @@ async fn main() {
 
 /// Daemon com HTTP server (para frontend)
 async fn run_daemon_http() {
+    let _pid_file = PidFile::create_or_exit("caramuru.pid");
     init_db();
 
     let p2p_port = CONFIG.p2p_port;
@@ -91,7 +93,10 @@ async fn run_daemon_http() {
         run_server(p2p_port, main_peers).await;
     });
 
-    println!("Daemon started (HTTP mode). P2P: {}, HTTP: {}", p2p_port, http_port);
+    println!(
+        "Daemon started (HTTP mode). P2P: {}, HTTP: {}",
+        p2p_port, http_port
+    );
     println!("Frontend can connect at http://localhost:{}/rpc", http_port);
 
     // HTTP server (blocking)
@@ -103,6 +108,7 @@ async fn run_daemon_http() {
 
 /// Daemon com RPC server (para CLI)
 async fn run_daemon_rpc() {
+    let _pid_file = PidFile::create_or_exit("caramuru.pid");
     init_db();
 
     let p2p_port = CONFIG.p2p_port;
@@ -114,7 +120,10 @@ async fn run_daemon_rpc() {
         run_server(p2p_port, main_peers).await;
     });
 
-    println!("Daemon started (RPC mode). P2P: {}, RPC: {}", p2p_port, rpc_port);
+    println!(
+        "Daemon started (RPC mode). P2P: {}, RPC: {}",
+        p2p_port, rpc_port
+    );
     println!("Use 'caramuru attach' to connect CLI");
 
     // RPC server (blocking)
@@ -141,6 +150,7 @@ async fn run_cli_attached() {
 
 /// Daemon + CLI integrada (modo desenvolvimento, RPC only)
 async fn run_daemon_with_cli() {
+    let _pid_file = PidFile::create_or_exit("caramuru.pid");
     init_db();
 
     let p2p_port = CONFIG.p2p_port;
