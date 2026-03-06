@@ -95,25 +95,38 @@ impl Node {
 
     fn validate_blockchain(bc: &Blockchain) -> Result<bool, String> {
         let chain_ref = &bc.chain;
+        let mut partial = Blockchain::new();
+
         for (i, block) in chain_ref.iter().enumerate() {
             if i == 0 {
                 if block.header.prev_block_hash != [0; 32] {
                     return Err("Genesis block has invalid previous hash".to_string());
                 }
+                partial.chain.push(block.clone());
                 continue;
             }
-            let prev_block = &chain_ref[i - 1];
+
+            let expected_difficulty = partial.calculate_next_difficulty();
+            if block.header.difficulty != expected_difficulty {
+                return Err(format!(
+                    "Block {} has invalid difficulty: expected {}, got {}",
+                    i, expected_difficulty, block.header.difficulty
+                ));
+            }
 
             if let Err(e) = block.validate() {
                 return Err(e);
             }
 
+            let prev_block = &chain_ref[i - 1];
             if block.header.prev_block_hash != prev_block.header_hash() {
                 return Err(format!(
                     "Block {} has invalid previous block hash",
                     bytes_to_hex_string(&block.id())
                 ));
             }
+
+            partial.chain.push(block.clone());
         }
         Ok(true)
     }
@@ -334,10 +347,12 @@ impl Node {
 
     pub fn mine(&mut self) -> Result<&Block, String> {
         let previous_hash = self.blockchain.get_last_block_hash();
+        let difficulty = self.blockchain.calculate_next_difficulty();
+        self.difficulty = difficulty;
 
         let mined_block = self
             .miner
-            .mine(&self.mempool, previous_hash, self.difficulty)?;
+            .mine(&self.mempool, previous_hash, difficulty)?;
 
         match self.submit_block(mined_block) {
             Ok(()) => {
