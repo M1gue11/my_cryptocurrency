@@ -54,7 +54,10 @@ impl Node {
         if bc.is_empty() {
             utils::log_info(utils::LogCategory::Core, "Blockchain is empty!");
         } else {
-            utils::log_info(utils::LogCategory::Core, &format!("Loaded existing blockchain with {} blocks.", bc.chain.len()));
+            utils::log_info(
+                utils::LogCategory::Core,
+                &format!("Loaded existing blockchain with {} blocks.", bc.chain.len()),
+            );
         }
         Node {
             blockchain: bc,
@@ -228,11 +231,14 @@ impl Node {
 
         // Invalidate mempool to revalidate all transactions
         self.invalidate_mempool();
-        utils::log_info(utils::LogCategory::Core, &format!(
-            "Rolled back block {} at height {}",
-            bytes_to_hex_string(&last_block.id()),
-            self.blockchain.height() + 1
-        ));
+        utils::log_info(
+            utils::LogCategory::Core,
+            &format!(
+                "Rolled back block {} at height {}",
+                bytes_to_hex_string(&last_block.id()),
+                self.blockchain.height() + 1
+            ),
+        );
 
         Ok((last_block, transactions))
     }
@@ -260,28 +266,40 @@ impl Node {
         }
 
         if rolled_back_blocks.is_empty() {
-            utils::log_info(utils::LogCategory::Core, "No blocks needed to be rolled back");
+            utils::log_info(
+                utils::LogCategory::Core,
+                "No blocks needed to be rolled back",
+            );
         } else {
-            utils::log_info(utils::LogCategory::Core, &format!(
-                "Successfully rolled back {} blocks to reach block {}",
-                rolled_back_blocks.len(),
-                bytes_to_hex_string(target_block_hash)
-            ));
+            utils::log_info(
+                utils::LogCategory::Core,
+                &format!(
+                    "Successfully rolled back {} blocks to reach block {}",
+                    rolled_back_blocks.len(),
+                    bytes_to_hex_string(target_block_hash)
+                ),
+            );
         }
 
         Ok(rolled_back_blocks)
     }
 
     pub fn rebase_chain_to_fork(&mut self, fork: utils::Fork, peer_addr: Option<SocketAddr>) {
-        utils::log_info(utils::LogCategory::Core, &format!(
-            "Starting rebase to fork with starting block {} and length {}",
-            bytes_to_hex_string(fork.get_fork_start().unwrap()),
-            fork.blocks_sequence.len()
-        ));
+        utils::log_info(
+            utils::LogCategory::Core,
+            &format!(
+                "Starting rebase to fork with starting block {} and length {}",
+                bytes_to_hex_string(fork.get_fork_start().unwrap()),
+                fork.blocks_sequence.len()
+            ),
+        );
         let _ = match self.rollback_to_block(fork.get_fork_start().unwrap()) {
             Ok(rb) => rb,
             Err(e) => {
-                utils::log_error(utils::LogCategory::Core, &format!("Failed to rollback to fork start: {}", e));
+                utils::log_error(
+                    utils::LogCategory::Core,
+                    &format!("Failed to rollback to fork start: {}", e),
+                );
                 return;
             }
         };
@@ -350,9 +368,7 @@ impl Node {
         let difficulty = self.blockchain.calculate_next_difficulty();
         self.difficulty = difficulty;
 
-        let mined_block = self
-            .miner
-            .mine(&self.mempool, previous_hash, difficulty)?;
+        let mined_block = self.miner.mine(&self.mempool, previous_hash, difficulty)?;
 
         match self.submit_block(mined_block) {
             Ok(()) => {
@@ -405,10 +421,13 @@ impl Node {
                     if self.blockchain.find_block_by_hash(item_id).is_some() {
                         continue;
                     }
-                    utils::log_info(utils::LogCategory::P2P, &format!(
-                        "Requesting block with ID: {}",
-                        bytes_to_hex_string(&item_id)
-                    ));
+                    utils::log_info(
+                        utils::LogCategory::P2P,
+                        &format!(
+                            "Requesting block with ID: {}",
+                            bytes_to_hex_string(&item_id)
+                        ),
+                    );
                     network::ask_for_block(item_id);
                 }
                 InventoryType::Tx => {
@@ -433,13 +452,19 @@ impl Node {
                     if let Some(peer) = requester {
                         network::send_block_to(block, peer);
                     } else {
-                        utils::log_warning(utils::LogCategory::P2P, "Requested peer is None, not sending block.");
+                        utils::log_warning(
+                            utils::LogCategory::P2P,
+                            "Requested peer is None, not sending block.",
+                        );
                     }
                 } else {
-                    utils::log_warning(utils::LogCategory::Core, &format!(
-                        "Requested block with ID {} not found.",
-                        bytes_to_hex_string(&item_id)
-                    ));
+                    utils::log_warning(
+                        utils::LogCategory::Core,
+                        &format!(
+                            "Requested block with ID {} not found.",
+                            bytes_to_hex_string(&item_id)
+                        ),
+                    );
                 }
             }
             InventoryType::Tx => {
@@ -447,7 +472,10 @@ impl Node {
                     if let Some(peer) = requester {
                         network::send_tx_to(&mem_tx.tx, peer);
                     } else {
-                        utils::log_warning(utils::LogCategory::P2P, "Requested peer is None, not sending transaction.");
+                        utils::log_warning(
+                            utils::LogCategory::P2P,
+                            "Requested peer is None, not sending transaction.",
+                        );
                     }
                 } else {
                     let repo = LedgerRepository::new();
@@ -456,14 +484,20 @@ impl Node {
                             if let Some(peer) = requester {
                                 network::send_tx_to(&tx, peer);
                             } else {
-                                utils::log_warning(utils::LogCategory::P2P, "Requested peer is None, not sending transaction.");
+                                utils::log_warning(
+                                    utils::LogCategory::P2P,
+                                    "Requested peer is None, not sending transaction.",
+                                );
                             }
                         }
                         _ => {
-                            utils::log_warning(utils::LogCategory::Core, &format!(
-                                "Requested transaction with ID {} not found.",
-                                bytes_to_hex_string(&item_id)
-                            ));
+                            utils::log_warning(
+                                utils::LogCategory::Core,
+                                &format!(
+                                    "Requested transaction with ID {} not found.",
+                                    bytes_to_hex_string(&item_id)
+                                ),
+                            );
                         }
                     }
                 }
@@ -473,11 +507,14 @@ impl Node {
 
     pub async fn handle_received_block(&mut self, block: Block, exclude_peer: Option<SocketAddr>) {
         if self.blockchain.find_block_by_hash(block.id()).is_some() {
-            utils::log_info(utils::LogCategory::P2P, &format!(
-                "Block already exists in the blockchain: {}. peer_addr: {:?}",
-                bytes_to_hex_string(&block.id()),
-                exclude_peer
-            ));
+            utils::log_info(
+                utils::LogCategory::P2P,
+                &format!(
+                    "Block already exists in the blockchain: {}. peer_addr: {:?}",
+                    bytes_to_hex_string(&block.id()),
+                    exclude_peer
+                ),
+            );
             return;
         }
 
@@ -487,11 +524,14 @@ impl Node {
                 .expect("Blockchain is empty"),
             &block,
         ) {
-            utils::log_info(utils::LogCategory::P2P, &format!(
-                "Received block {} from peer {:?} that creates or extends a fork.",
-                bytes_to_hex_string(&block.id()),
-                exclude_peer
-            ));
+            utils::log_info(
+                utils::LogCategory::P2P,
+                &format!(
+                    "Received block {} from peer {:?} that creates or extends a fork.",
+                    bytes_to_hex_string(&block.id()),
+                    exclude_peer
+                ),
+            );
             let new_bigger_branch = self.fork_helper.evaluate_forks(&self);
             if let Some(fork) = new_bigger_branch {
                 self.rebase_chain_to_fork(fork, exclude_peer);
@@ -502,15 +542,21 @@ impl Node {
         let block_hash = block.id();
         match self.submit_block(block) {
             Ok(()) => {
-                utils::log_info(utils::LogCategory::Core, &format!(
-                    "Block {} added to the blockchain successfully.",
-                    bytes_to_hex_string(&block_hash)
-                ));
+                utils::log_info(
+                    utils::LogCategory::Core,
+                    &format!(
+                        "Block {} added to the blockchain successfully.",
+                        bytes_to_hex_string(&block_hash)
+                    ),
+                );
                 network::broadcast_new_block_hash(block_hash, exclude_peer);
                 // TODO: optimize persistence
                 self.blockchain.persist_chain(None);
             }
-            Err(e) => utils::log_error(utils::LogCategory::Core, &format!("Failed to add block to the blockchain: {}", e)),
+            Err(e) => utils::log_error(
+                utils::LogCategory::Core,
+                &format!("Failed to add block to the blockchain: {}", e),
+            ),
         }
     }
 
@@ -528,17 +574,26 @@ impl Node {
         let utxos = match repo.get_utxos_from_ids(&utxos_ids) {
             Ok(u) => u,
             Err(e) => {
-                utils::log_error(utils::LogCategory::Core, &format!("Failed to get UTXOs for transaction: {}", e));
+                utils::log_error(
+                    utils::LogCategory::Core,
+                    &format!("Failed to get UTXOs for transaction: {}", e),
+                );
                 return;
             }
         };
         let tx_id = tx.id();
         match self.receive_transaction(MempoolTx { tx, utxos }) {
             Ok(()) => {
-                utils::log_info(utils::LogCategory::Core, "Transaction added to mempool successfully.");
+                utils::log_info(
+                    utils::LogCategory::Core,
+                    "Transaction added to mempool successfully.",
+                );
                 network::broadcast_new_tx_hash(tx_id, exclude_peer);
             }
-            Err(e) => utils::log_error(utils::LogCategory::Core, &format!("Failed to add transaction to mempool: {}", e)),
+            Err(e) => utils::log_error(
+                utils::LogCategory::Core,
+                &format!("Failed to add transaction to mempool: {}", e),
+            ),
         }
     }
 
@@ -572,18 +627,30 @@ impl Node {
         let peer = match peer_addr {
             Some(addr) => addr,
             None => {
-                utils::log_warning(utils::LogCategory::P2P, "Peer address is None, cannot log version info.");
+                utils::log_warning(
+                    utils::LogCategory::P2P,
+                    "Peer address is None, cannot log version info.",
+                );
                 return;
             }
         };
         if node_v.height == peer_v.height {
             if node_v.top_hash != peer_v.top_hash {
-                utils::log_warning(utils::LogCategory::P2P, "Peer has same height but different top hash.");
-                utils::log_info(utils::LogCategory::P2P, "This could indicate a fork. Requesting blocks to find common ancestor...");
+                utils::log_warning(
+                    utils::LogCategory::P2P,
+                    "Peer has same height but different top hash.",
+                );
+                utils::log_info(
+                    utils::LogCategory::P2P,
+                    "This could indicate a fork. Requesting blocks to find common ancestor...",
+                );
                 network::find_common_ancestor(self.blockchain.build_block_sequence(), peer);
             }
         } else if peer_v.height > node_v.height {
-            utils::log_info(utils::LogCategory::P2P, "Peer has a longer chain. Requesting blocks...");
+            utils::log_info(
+                utils::LogCategory::P2P,
+                "Peer has a longer chain. Requesting blocks...",
+            );
             network::find_common_ancestor(self.blockchain.build_block_sequence(), peer);
         }
     }
@@ -600,7 +667,10 @@ impl Node {
                 return;
             }
         }
-        utils::log_warning(utils::LogCategory::P2P, &format!("No common ancestor found with peer {}", target_peer));
+        utils::log_warning(
+            utils::LogCategory::P2P,
+            &format!("No common ancestor found with peer {}", target_peer),
+        );
     }
 
     pub async fn handle_received_common_block(
@@ -611,32 +681,41 @@ impl Node {
         let block_hash = block.id();
 
         if self.blockchain.find_block_by_hash(block_hash).is_none() {
-            utils::log_warning(utils::LogCategory::P2P, &format!(
-                "Received common block {} from peer {:?} but it's not in our blockchain!",
-                bytes_to_hex_string(&block_hash),
-                peer_addr
-            ));
+            utils::log_warning(
+                utils::LogCategory::P2P,
+                &format!(
+                    "Received common block {} from peer {:?} but it's not in our blockchain!",
+                    bytes_to_hex_string(&block_hash),
+                    peer_addr
+                ),
+            );
             return;
         }
 
         // If the common block is our chain tip, there is no fork
         if let Some(last_block) = self.blockchain.get_last_block() {
             if last_block.id() == block_hash {
-                utils::log_info(utils::LogCategory::P2P, &format!(
-                    "Common block {} is our chain tip -- no fork.",
-                    bytes_to_hex_string(&block_hash)
-                ));
+                utils::log_info(
+                    utils::LogCategory::P2P,
+                    &format!(
+                        "Common block {} is our chain tip -- no fork.",
+                        bytes_to_hex_string(&block_hash)
+                    ),
+                );
                 return;
             }
         }
 
         // Register this as a fork starting point and request diverging blocks
         self.fork_helper.register_fork_start(block_hash);
-        utils::log_info(utils::LogCategory::P2P, &format!(
-            "Received common block {} from peer {:?}. Fork registered, requesting blocks.",
-            bytes_to_hex_string(&block_hash),
-            peer_addr
-        ));
+        utils::log_info(
+            utils::LogCategory::P2P,
+            &format!(
+                "Received common block {} from peer {:?}. Fork registered, requesting blocks.",
+                bytes_to_hex_string(&block_hash),
+                peer_addr
+            ),
+        );
         network::ask_for_blocks(block_hash, peer_addr);
     }
 }
