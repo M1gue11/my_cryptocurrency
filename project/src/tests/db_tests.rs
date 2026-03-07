@@ -64,6 +64,7 @@ mod tests {
             merkle_root: [2u8; 32],
             nonce: 1,
             timestamp: Utc::now().naive_utc(),
+            difficulty: 1,
         };
         let block = Block {
             header,
@@ -114,6 +115,7 @@ mod tests {
             merkle_root: [3u8; 32],
             nonce: 2,
             timestamp: Utc::now().naive_utc(),
+            difficulty: 1,
         };
         let block = Block {
             header,
@@ -151,6 +153,7 @@ mod tests {
             merkle_root: [1u8; 32],
             nonce: 12345,
             timestamp: Utc::now().naive_utc(),
+            difficulty: 1,
         };
 
         // Create a coinbase transaction
