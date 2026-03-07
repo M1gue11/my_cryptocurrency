@@ -64,13 +64,20 @@ pub struct ConsensusRules {
     /// Difficulty level for mining in number of leading zero bits
     pub difficulty: usize,
     pub max_block_size_kb: f32,
+    /// TODO: Implement block reward halving every N blocks
     pub block_reward: i64,
+    /// LWMA window size: how many recent blocks to consider for difficulty adjustment
+    pub lwma_n: usize,
+    /// Target block time in seconds
+    pub target_block_time_secs: u64,
 }
 
 pub static CONSENSUS_RULES: Lazy<ConsensusRules> = Lazy::new(|| ConsensusRules {
-    difficulty: 8,
+    difficulty: 12,
     max_block_size_kb: 1.0,
     block_reward: 1 * COIN,
+    lwma_n: 10,
+    target_block_time_secs: 10,
 });
 
 pub const COIN: i64 = 1_000_000;

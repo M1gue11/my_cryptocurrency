@@ -47,7 +47,7 @@ impl Miner {
         selected_txs
     }
 
-    fn build_block(&mut self, mempool: &Vec<MempoolTx>, previous_hash: [u8; 32]) -> Block {
+    fn build_block(&mut self, mempool: &Vec<MempoolTx>, previous_hash: [u8; 32], difficulty: usize) -> Block {
         let mut txs = self.get_legit_txs(mempool);
         // Sort transactions descending by fee_rate
         txs.sort_by(|a, b| {
@@ -84,7 +84,7 @@ impl Miner {
         let reward_tx = Transaction::new_coinbase(self.wallet.get_receive_addr(), total_fees);
         block_txs.insert(0, reward_tx);
 
-        let mut new_block = Block::new(previous_hash);
+        let mut new_block = Block::new(previous_hash, difficulty);
         new_block.transactions = block_txs;
         new_block.evaluate_merkle_root();
         new_block
@@ -114,7 +114,7 @@ impl Miner {
                     CONFIG.max_mining_attempts
                 ));
             }
-            let mut block_to_mine = self.build_block(mempool, previous_hash);
+            let mut block_to_mine = self.build_block(mempool, previous_hash, difficulty);
             match self.mine_block(&mut block_to_mine, difficulty) {
                 Ok(()) => return Ok(block_to_mine),
                 Err(e) => {
