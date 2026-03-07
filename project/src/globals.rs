@@ -15,6 +15,7 @@ pub struct Settings {
     pub pbkdf2_iterations: u32,
     pub log_file_path: String,
     pub log_mode: String,
+    pub mining_threads: usize,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
@@ -31,7 +32,7 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
         max_mining_attempts: env::var("MAX_MINING_ATTEMPTS")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(1_000_000),
+            .unwrap_or(3),
         p2p_port: env::var("P2P_PORT")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -57,6 +58,10 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
         log_file_path: env::var("LOG_FILE_PATH")
             .unwrap_or_else(|_| "saved_files/node.log".to_string()),
         log_mode: env::var("LOG_MODE").unwrap_or_else(|_| "full".to_string()),
+        mining_threads: env::var("MINING_THREADS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1),
     }
 });
 

@@ -92,7 +92,7 @@ impl Blockchain {
         let next_d_f = avg_d * (target_secs as f64) * n_sums / t as f64;
 
         let prev_d = self.chain[height - 1].header.difficulty as f64;
-        let next_d_clamped = next_d_f.max(prev_d * 0.5).min(prev_d * 2.0).max(1.0);
+        let next_d_clamped = next_d_f.max(prev_d * 0.8).min(prev_d * 1.2).max(1.0);
 
         next_d_clamped.round() as usize
     }

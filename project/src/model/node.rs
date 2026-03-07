@@ -363,14 +363,17 @@ impl Node {
         Ok(())
     }
 
-    pub fn mine(&mut self) -> Result<&Block, String> {
+    pub fn prepare_mining(&mut self) -> (Vec<MempoolTx>, [u8; 32], usize, String) {
         let previous_hash = self.blockchain.get_last_block_hash();
         let difficulty = self.blockchain.calculate_next_difficulty();
         self.difficulty = difficulty;
+        let mempool = self.mempool.clone();
+        let receive_addr = self.miner.wallet.get_receive_addr();
+        (mempool, previous_hash, difficulty, receive_addr)
+    }
 
-        let mined_block = self.miner.mine(&self.mempool, previous_hash, difficulty)?;
-
-        match self.submit_block(mined_block) {
+    pub fn submit_mined_block(&mut self, block: Block) -> Result<&Block, String> {
+        match self.submit_block(block) {
             Ok(()) => {
                 let new_block = self.blockchain.chain.last().unwrap();
                 network::broadcast_new_block_hash(new_block.id(), None);
