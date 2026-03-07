@@ -1,4 +1,6 @@
-use crate::security_utils::{generate_sk_chain_code_from_data, sha256, sign_hash};
+use crate::security_utils::{
+    bytes_to_hex_string, generate_sk_chain_code_from_data, sha256, sign_hash,
+};
 use bs58;
 use ed25519_dalek::{SecretKey, SigningKey};
 use ed25519_dalek::{Signature, VerifyingKey};
@@ -75,8 +77,8 @@ impl HDKey {
 
 impl fmt::Display for HDKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let private_key_hex = hex::encode(&self.private_key);
-        let public_key_hex = hex::encode(self.get_public_key().as_bytes());
+        let private_key_hex = bytes_to_hex_string(&self.private_key);
+        let public_key_hex = bytes_to_hex_string(self.get_public_key().as_bytes());
         write!(
             f,
             "Private Key: {} | Public Key: {} | Address: {}",

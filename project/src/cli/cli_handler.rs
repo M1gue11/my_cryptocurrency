@@ -1,4 +1,6 @@
-use super::cli::{ChainCommands, Commands, LogsArgs, MineCommands, TransactionCommands, WalletCommands};
+use super::cli::{
+    ChainCommands, Commands, LogsArgs, MineCommands, TransactionCommands, WalletCommands,
+};
 use crate::{
     cli::{RpcClient, cli::NodeCommands},
     daemon::types::WalletAccessParams,
@@ -569,6 +571,11 @@ async fn handle_mine(command: MineCommands, client: &RpcClient) {
                     .len()
             );
             println!("  Nonce: {:?}", mine_response.nonce);
+            println!("  Difficulty: {:?} bits", mine_response.difficulty);
+            println!(
+                "  Next Difficulty: {:?} bits",
+                mine_response.next_difficulty
+            );
         }
     }
 }
@@ -597,6 +604,7 @@ async fn handle_chain(command: ChainCommands, client: &RpcClient) {
                 println!("  Merkle Root: {}", block.merkle_root);
                 println!("  Nonce: {}", block.nonce);
                 println!("  Date: {}", block.timestamp);
+                println!("  Difficulty: {}", block.difficulty);
                 println!("  Transactions: {}", block.transactions.len());
 
                 for (j, tx) in block.transactions.iter().enumerate() {

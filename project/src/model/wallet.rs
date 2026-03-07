@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use crate::db::repository::LedgerRepository;
 use crate::model::MempoolTx;
 use crate::model::io::UTXO;
-use crate::security_utils::Keystore;
 use crate::security_utils::keystore::Seed;
+use crate::security_utils::{Keystore, bytes_to_hex_string};
 use crate::{
     model::{HDKey, Transaction, TxInput, TxOutput},
     security_utils::public_key_to_hex,
@@ -305,7 +305,7 @@ impl Wallet {
                 path.push(derivation_index);
                 let child_hdkey = self.derive_path(&path);
                 let sig = child_hdkey.sign(tx_bytes);
-                mem_tx.tx.inputs[i].signature = hex::encode(sig.to_bytes());
+                mem_tx.tx.inputs[i].signature = bytes_to_hex_string(&sig.to_bytes());
                 mem_tx.tx.inputs[i].public_key = public_key_to_hex(&child_hdkey.get_public_key());
             } else {
                 return Err("Address not owned by wallet");

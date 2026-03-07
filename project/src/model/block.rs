@@ -11,12 +11,19 @@ use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub type BlockID = [u8; 32];
+
+fn default_difficulty() -> usize {
+    CONSENSUS_RULES.difficulty
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BlockHeader {
     pub prev_block_hash: BlockID,
     pub merkle_root: BlockID,
     pub nonce: u32,
     pub timestamp: NaiveDateTime,
+    #[serde(default = "default_difficulty")]
+    pub difficulty: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -26,13 +33,14 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(prev_block_hash: BlockID) -> Self {
+    pub fn new(prev_block_hash: BlockID, difficulty: usize) -> Self {
         let timestamp = Utc::now().naive_utc();
         let header = BlockHeader {
             prev_block_hash,
             merkle_root: [0; 32],
             nonce: 0,
             timestamp,
+            difficulty,
         };
         Block {
             header,
@@ -52,6 +60,7 @@ impl Block {
         out.extend_from_slice(&self.header.merkle_root);
         out.extend_from_slice(&self.header.nonce.to_be_bytes());
         out.extend_from_slice(format_date(&self.header.timestamp).as_bytes());
+        out.extend_from_slice(&(self.header.difficulty as u64).to_be_bytes());
         out
     }
 
@@ -104,7 +113,7 @@ impl Block {
             ));
         }
 
-        if !hash_starts_with_zero_bits(&self.header_hash(), CONSENSUS_RULES.difficulty) {
+        if !hash_starts_with_zero_bits(&self.header_hash(), self.header.difficulty) {
             return Err("Invalid proof of work".to_string());
         }
 

@@ -4,6 +4,7 @@ use crate::daemon::types::{
     RpcResponse, TransactionViewParams, TransactionViewResponse, TxInputInfo, TxOutputInfo,
 };
 use crate::db::repository::LedgerRepository;
+use crate::security_utils::bytes_to_hex_string;
 
 pub async fn handle_transaction_view(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
     let params: TransactionViewParams = match serde_json::from_value(params) {
@@ -35,7 +36,7 @@ pub async fn handle_transaction_view(id: Option<u64>, params: serde_json::Value)
                 .inputs
                 .iter()
                 .map(|i| TxInputInfo {
-                    prev_tx_id: hex::encode(i.prev_tx_id),
+                    prev_tx_id: bytes_to_hex_string(&i.prev_tx_id),
                     output_index: i.output_index,
                     signature: i.signature.clone(),
                     public_key: i.public_key.clone(),
@@ -52,7 +53,7 @@ pub async fn handle_transaction_view(id: Option<u64>, params: serde_json::Value)
                 .collect();
 
             let response = TransactionViewResponse {
-                id: hex::encode(tx.id()),
+                id: bytes_to_hex_string(&tx.id()),
                 date: tx.date.to_string(),
                 message: tx.message.clone(),
                 inputs,
