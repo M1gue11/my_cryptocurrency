@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use primitive_types::U256;
+
     use crate::db::db::init_db;
     use crate::db::repository::LedgerRepository;
     use crate::model::block::BlockHeader;
@@ -64,7 +66,7 @@ mod tests {
             merkle_root: [2u8; 32],
             nonce: 1,
             timestamp: get_current_timestamp(),
-            difficulty: 1,
+            target: U256::MAX,
         };
         let block = Block {
             header,
@@ -115,7 +117,7 @@ mod tests {
             merkle_root: [3u8; 32],
             nonce: 2,
             timestamp: get_current_timestamp(),
-            difficulty: 1,
+            target: U256::MAX,
         };
         let block = Block {
             header,
@@ -153,7 +155,7 @@ mod tests {
             merkle_root: [1u8; 32],
             nonce: 12345,
             timestamp: get_current_timestamp(),
-            difficulty: 1,
+            target: U256::MAX,
         };
 
         // Create a coinbase transaction

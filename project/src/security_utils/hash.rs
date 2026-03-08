@@ -1,3 +1,4 @@
+use primitive_types::U256;
 use sha2::{Digest, Sha256, Sha512};
 
 pub fn sha256(data: &[u8]) -> [u8; 32] {
@@ -16,23 +17,9 @@ pub fn bytes_to_hex_string(bytes: &[u8]) -> String {
     hex::encode(bytes)
 }
 
-pub fn hash_starts_with_zero_bits(hash: &[u8; 32], n: usize) -> bool {
-    let full_bytes = n / 8;
-    let remaining_bits = n % 8;
-
-    for i in 0..full_bytes {
-        if hash[i] != 0 {
-            return false;
-        }
-    }
-
-    if remaining_bits > 0 {
-        let mask = 0xFF << (8 - remaining_bits);
-        if hash[full_bytes] & mask != 0 {
-            return false;
-        }
-    }
-    true
+/// Returns true if the hash is less than the given target (proof of work check).
+pub fn hash_meets_target(hash: &[u8; 32], target: &U256) -> bool {
+    U256::from_big_endian(hash) < *target
 }
 
 pub fn generate_sk_chain_code_from_data(data: &[u8]) -> ([u8; 32], [u8; 32]) {

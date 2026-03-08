@@ -6,11 +6,13 @@ use std::sync::{
 
 use tokio::task::JoinSet;
 
+use primitive_types::U256;
+
 use crate::utils::log_info;
 use crate::{
     globals::{CONFIG, CONSENSUS_RULES},
     model::{Block, MempoolTx, Transaction, Wallet, transaction::TxId},
-    security_utils::hash_starts_with_zero_bits,
+    security_utils::hash_meets_target,
     utils,
 };
 
@@ -68,7 +70,7 @@ fn get_legit_txs<'a>(mempool: &'a Vec<MempoolTx>) -> Vec<&'a MempoolTx> {
 fn build_block(
     mempool: &Vec<MempoolTx>,
     previous_hash: [u8; 32],
-    difficulty: usize,
+    target: U256,
     receive_addr: &str,
 ) -> Block {
     let mut txs = get_legit_txs(mempool);
@@ -116,7 +118,7 @@ fn build_block(
     let reward_tx = Transaction::new_coinbase(receive_addr.to_string(), total_fees);
     block_txs.insert(0, reward_tx);
 
-    let mut new_block = Block::new(previous_hash, difficulty);
+    let mut new_block = Block::new(previous_hash, target);
     new_block.transactions = block_txs;
     new_block.evaluate_merkle_root();
     new_block
@@ -125,7 +127,7 @@ fn build_block(
 pub async fn mine_block(
     mempool: Vec<MempoolTx>,
     previous_hash: [u8; 32],
-    difficulty: usize,
+    target: U256,
     receive_addr: String,
 ) -> Result<Block, String> {
     let threads = CONFIG.mining_threads.max(1);
@@ -138,7 +140,7 @@ pub async fn mine_block(
             ));
         }
 
-        let block_template = build_block(&mempool, previous_hash, difficulty, &receive_addr);
+        let block_template = build_block(&mempool, previous_hash, target, &receive_addr);
         let found = Arc::new(AtomicBool::new(false));
         let range_size = u32::MAX / threads as u32;
 
@@ -168,7 +170,7 @@ pub async fn mine_block(
                     if found.load(Ordering::Relaxed) {
                         return None;
                     }
-                    if hash_starts_with_zero_bits(&block.header_hash(), difficulty) {
+                    if hash_meets_target(&block.header_hash(), &block.header.target) {
                         found.store(true, Ordering::Relaxed);
                         return Some(block);
                     }

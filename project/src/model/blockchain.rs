@@ -5,6 +5,7 @@ use crate::{
     security_utils::bytes_to_hex_string,
     utils,
 };
+use primitive_types::U256;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -38,27 +39,22 @@ impl Blockchain {
         self.chain.is_empty()
     }
 
-    /// Calculate the expected difficulty for the next block using LWMA (zawy12).
-    ///
-    /// Uses a sliding window of the last `lwma_n` blocks. Each solve time is
-    /// weighted linearly (oldest = weight 1, newest = weight k), so recent blocks
-    /// have more influence on the result. The result is clamped to [0.5×, 2×] of
-    /// the previous block's difficulty.
-    pub fn calculate_next_difficulty(&self) -> usize {
+    /// Calculate the target for the next block using LWMA (zawy12).
+    pub fn calculate_next_target(&self) -> U256 {
         let height = self.chain.len();
         let lwma_n = CONSENSUS_RULES.lwma_n;
         let target_secs = CONSENSUS_RULES.target_block_time_secs as i64;
 
         if height == 0 {
-            return CONSENSUS_RULES.difficulty;
+            return CONSENSUS_RULES.initial_target;
         }
 
         let k = lwma_n.min(height);
         let window_start = height - k;
 
-        let mut t = 0;
-        let mut sum_d: f64 = 0.0;
-        let mut weight = 1;
+        let mut t: i64 = 0;
+        let mut sum_target = U256::zero();
+        let mut weight = 1i64;
 
         for i in window_start..height {
             let prev_ts = if i > 0 {
@@ -79,22 +75,39 @@ impl Blockchain {
                 .min(6 * target_secs);
 
             t += solvetime * weight;
-            sum_d += curr.header.difficulty as f64;
+            sum_target = sum_target + curr.header.target;
             weight += 1;
         }
 
         if t == 0 {
-            return CONSENSUS_RULES.difficulty;
+            return CONSENSUS_RULES.initial_target;
         }
 
-        let avg_d = sum_d / k as f64;
-        let n_sums = (k * (k + 1) / 2) as f64;
-        let next_d_f = avg_d * (target_secs as f64) * n_sums / t as f64;
+        let avg_target = sum_target / U256::from(k);
+        let n_sums = U256::from((k * (k + 1) / 2) as u64);
+        let denom = U256::from(target_secs as u64) * n_sums;
+        let t_u256 = U256::from(t as u64);
 
-        let prev_d = self.chain[height - 1].header.difficulty as f64;
-        let next_d_clamped = next_d_f.max(prev_d * 0.8).min(prev_d * 1.2).max(1.0);
+        // next_target = avg_target * t / (target_secs * n_sums)
+        // When t > denom: blocks were slow -> target increases (easier)
+        // When t < denom: blocks were fast -> target decreases (harder)
+        // Use checked_mul to guard against overflow; saturate to U256::MAX if needed.
+        let next_target = match avg_target.checked_mul(t_u256) {
+            Some(product) => product / denom,
+            None => {
+                // Overflow: blocks extremely slow, use maximum possible target
+                U256::MAX
+            }
+        };
 
-        next_d_clamped.round() as usize
+        let prev_target = self.chain[height - 1].header.target;
+        next_target
+            .max(prev_target / 2)
+            .min(match prev_target.checked_mul(U256::from(2u32)) {
+                Some(v) => v,
+                None => U256::MAX,
+            })
+            .max(U256::one())
     }
 
     /** Validate the recently mined block and if valid, add it to the chain */
@@ -105,11 +118,11 @@ impl Blockchain {
             return Err("Previous block hash does not match".to_string());
         }
 
-        let expected_difficulty = self.calculate_next_difficulty();
-        if block.header.difficulty != expected_difficulty {
+        let expected_target = self.calculate_next_target();
+        if block.header.target != expected_target {
             return Err(format!(
-                "Invalid difficulty: expected {}, got {}",
-                expected_difficulty, block.header.difficulty
+                "Invalid target: expected {:x}, got {:x}",
+                expected_target, block.header.target
             ));
         }
 
