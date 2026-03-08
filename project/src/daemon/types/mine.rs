@@ -13,3 +13,7 @@ pub struct MineBlockResponse {
     pub difficulty: Option<usize>,
     pub next_difficulty: Option<usize>,
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct KeepMiningParams {
+    pub keep_mining: bool,
+}

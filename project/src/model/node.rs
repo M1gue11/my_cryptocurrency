@@ -3,7 +3,9 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
+use chrono::NaiveDateTime;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
@@ -15,6 +17,7 @@ use crate::model::{Block, Blockchain, MempoolTx, Miner, Transaction};
 use crate::network::get_peer_count;
 use crate::network::network_message::InventoryType;
 use crate::security_utils::bytes_to_hex_string;
+use crate::utils::get_current_timestamp;
 use crate::{network, utils};
 
 const MEMPOOL_FILE: &str = "mempool.json";
@@ -25,6 +28,8 @@ pub struct Node {
     mempool: Vec<MempoolTx>,
     difficulty: usize,
     fork_helper: utils::ForkHelper,
+    mining_started_at: Option<NaiveDateTime>,
+    keep_mining: Arc<AtomicBool>,
 }
 
 pub static NODE: Lazy<Arc<RwLock<Node>>> = Lazy::new(|| Arc::new(RwLock::new(Node::new())));
@@ -65,6 +70,8 @@ impl Node {
             miner: Miner::new(),
             difficulty: CONSENSUS_RULES.difficulty,
             fork_helper: utils::ForkHelper::new(),
+            mining_started_at: None,
+            keep_mining: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -363,16 +370,39 @@ impl Node {
         Ok(())
     }
 
+    pub fn set_keep_mining_flag(&mut self, value: bool) {
+        self.keep_mining
+            .store(value, std::sync::atomic::Ordering::Relaxed);
+        utils::log_info(
+            utils::LogCategory::Core,
+            &format!("Keep mining flag set to: {:?}", self.keep_mining),
+        );
+    }
+
+    pub fn flag_mining_start(&mut self) {
+        self.mining_started_at = Some(get_current_timestamp());
+    }
+
+    pub fn flag_mining_end(&mut self) {
+        self.mining_started_at = None;
+    }
+
+    pub fn get_mining_info(&self) -> Option<NaiveDateTime> {
+        self.mining_started_at
+    }
+
     pub fn prepare_mining(&mut self) -> (Vec<MempoolTx>, [u8; 32], usize, String) {
         let previous_hash = self.blockchain.get_last_block_hash();
         let difficulty = self.blockchain.calculate_next_difficulty();
         self.difficulty = difficulty;
         let mempool = self.mempool.clone();
         let receive_addr = self.miner.wallet.get_receive_addr();
+        self.flag_mining_start();
         (mempool, previous_hash, difficulty, receive_addr)
     }
 
     pub fn submit_mined_block(&mut self, block: Block) -> Result<&Block, String> {
+        self.flag_mining_end();
         match self.submit_block(block) {
             Ok(()) => {
                 let new_block = self.blockchain.chain.last().unwrap();

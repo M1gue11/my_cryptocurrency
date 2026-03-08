@@ -3,11 +3,13 @@ use crate::daemon::handlers::chain::{
     handle_chain_show, handle_chain_status, handle_chain_utxos, handle_chain_validate,
     handle_node_save,
 };
-use crate::daemon::handlers::mine::handle_mine_block;
+use crate::daemon::handlers::logs::handle_get_logs;
+use crate::daemon::handlers::mine::{
+    handle_get_mining_info, handle_keep_mining, handle_mine_block,
+};
 use crate::daemon::handlers::node::{
     handle_node_clear_mempool, handle_node_init, handle_node_mempool, handle_node_status,
 };
-use crate::daemon::handlers::logs::handle_get_logs;
 use crate::daemon::handlers::tx::handle_transaction_view;
 use crate::daemon::handlers::wallet::{
     handle_import_wallet, handle_new_wallet, handle_wallet_address, handle_wallet_balance,
@@ -35,11 +37,17 @@ impl RpcServer {
         let addr = format!("127.0.0.1:{}", self.port);
         let listener = TcpListener::bind(&addr).await?;
 
-        utils::log_info(utils::LogCategory::RPC, &format!("RPC Server listening on {}", addr));
+        utils::log_info(
+            utils::LogCategory::RPC,
+            &format!("RPC Server listening on {}", addr),
+        );
 
         loop {
             let (stream, peer_addr) = listener.accept().await?;
-            utils::log_info(utils::LogCategory::RPC, &format!("New connection from {}", peer_addr));
+            utils::log_info(
+                utils::LogCategory::RPC,
+                &format!("New connection from {}", peer_addr),
+            );
 
             tokio::spawn(async move {
                 if let Err(e) = handle_connection(stream).await {
@@ -87,7 +95,10 @@ pub async fn process_request(request_str: &str) -> RpcResponse {
             return RpcResponse::error(None, PARSE_ERROR, format!("Parse error: {}", e));
         }
     };
-    utils::log_info(utils::LogCategory::RPC, &format!("Received request: {}", request.method));
+    utils::log_info(
+        utils::LogCategory::RPC,
+        &format!("Received request: {}", request.method),
+    );
 
     // Validate jsonrpc version
     if request.jsonrpc != "2.0" {
@@ -109,6 +120,8 @@ pub async fn process_request(request_str: &str) -> RpcResponse {
 
         // Mining methods
         "mine_block" => handle_mine_block(request.id).await,
+        "mine_info" => handle_get_mining_info(request.id).await,
+        "mine_keep_mining" => handle_keep_mining(request.id, request.params).await,
 
         // Chain methods
         "chain_status" => handle_chain_status(request.id).await,
