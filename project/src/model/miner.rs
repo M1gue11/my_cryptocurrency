@@ -20,13 +20,23 @@ pub struct Miner {
 
 impl Miner {
     pub fn new() -> Self {
-        Miner {
-            wallet: Wallet::from_keystore_file(
-                &CONFIG.miner_wallet_seed_path,
-                &CONFIG.miner_wallet_password,
-            )
-            .unwrap(),
-        }
+        let wallet = match Wallet::from_keystore_file(
+            &CONFIG.miner_wallet_seed_path,
+            &CONFIG.miner_wallet_password,
+        ) {
+            Ok(w) => w,
+            Err(e) => {
+                utils::log_error(
+                    utils::LogCategory::Core,
+                    &format!(
+                        "Failed to load miner wallet! Path: {} - Error: {}",
+                        CONFIG.miner_wallet_seed_path, e
+                    ),
+                );
+                std::process::exit(1);
+            }
+        };
+        Miner { wallet }
     }
 }
 

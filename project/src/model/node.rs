@@ -521,12 +521,14 @@ impl Node {
             return;
         }
 
-        if self.fork_helper.verify_fork(
-            self.blockchain
-                .get_last_block()
-                .expect("Blockchain is empty"),
-            &block,
-        ) {
+        if !self.blockchain.is_empty()
+            && self.fork_helper.verify_fork(
+                self.blockchain
+                    .get_last_block()
+                    .expect("Blockchain is empty"),
+                &block,
+            )
+        {
             utils::log_info(
                 utils::LogCategory::P2P,
                 &format!(
@@ -663,6 +665,11 @@ impl Node {
         peer_blocks_hashes: Vec<[u8; 32]>,
         target_peer: SocketAddr,
     ) {
+        if peer_blocks_hashes.is_empty() {
+            self.handle_get_blocks_request([0; 32], target_peer).await;
+            return;
+        }
+
         for hash in peer_blocks_hashes.iter().rev() {
             let block = self.blockchain.find_block_by_hash(*hash);
             if block.is_some() {

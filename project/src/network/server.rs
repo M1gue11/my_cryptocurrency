@@ -48,8 +48,14 @@ pub async fn run_server(port: u16, peers: Vec<String>) {
         .await
         .expect("Failed to bind P2P server to address");
 
-    utils::log_info(utils::LogCategory::P2P, &format!("P2P Server listening on {}", addr));
-    utils::log_info(utils::LogCategory::P2P, &format!("Known peers: {:?}", peers));
+    utils::log_info(
+        utils::LogCategory::P2P,
+        &format!("P2P Server listening on {}", addr),
+    );
+    utils::log_info(
+        utils::LogCategory::P2P,
+        &format!("Known peers: {:?}", peers),
+    );
 
     // 1. Try to connect to known peers (seeds)
     for peer_addr in peers {
@@ -63,30 +69,50 @@ pub async fn run_server(port: u16, peers: Vec<String>) {
     loop {
         match listener.accept().await {
             Ok((socket, addr)) => {
-                utils::log_info(utils::LogCategory::P2P, &format!("New connection received from: {}", addr));
+                utils::log_info(
+                    utils::LogCategory::P2P,
+                    &format!("New connection received from: {}", addr),
+                );
                 // Spawn a task to handle this connection without blocking the rest
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(socket).await {
-                        utils::log_warning(utils::LogCategory::P2P, &format!("Connection lost with {}: {}", addr, e));
+                        utils::log_warning(
+                            utils::LogCategory::P2P,
+                            &format!("Connection lost with {}: {}", addr, e),
+                        );
                     }
                 });
             }
-            Err(e) => utils::log_error(utils::LogCategory::P2P, &format!("Connection error: {}", e)),
+            Err(e) => {
+                utils::log_error(utils::LogCategory::P2P, &format!("Connection error: {}", e))
+            }
         }
     }
 }
 
 async fn connect_to_peer(address: String) {
-    utils::log_info(utils::LogCategory::P2P, &format!("Trying to connect to peer: {}", address));
+    utils::log_info(
+        utils::LogCategory::P2P,
+        &format!("Trying to connect to peer: {}", address),
+    );
     match TcpStream::connect(&address).await {
         Ok(stream) => {
-            utils::log_info(utils::LogCategory::P2P, &format!("Connected to {}", address));
+            utils::log_info(
+                utils::LogCategory::P2P,
+                &format!("Connected to {}", address),
+            );
             // Initiate handshake actively
             if let Err(e) = handle_connection(stream).await {
-                utils::log_warning(utils::LogCategory::P2P, &format!("Connection lost with {}: {}", address, e));
+                utils::log_warning(
+                    utils::LogCategory::P2P,
+                    &format!("Connection lost with {}: {}", address, e),
+                );
             }
         }
-        Err(e) => utils::log_warning(utils::LogCategory::P2P, &format!("Failed to connect to {}: {}", address, e)),
+        Err(e) => utils::log_warning(
+            utils::LogCategory::P2P,
+            &format!("Failed to connect to {}: {}", address, e),
+        ),
     }
 }
 
@@ -96,11 +122,14 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
     // Add peer to connected peers list
     if let Some(addr) = peer_addr {
         CONNECTED_PEERS.write().await.insert(addr);
-        utils::log_info(utils::LogCategory::P2P, &format!(
-            "Peer connected: {}. Total peers: {}",
-            addr,
-            get_peer_count().await
-        ));
+        utils::log_info(
+            utils::LogCategory::P2P,
+            &format!(
+                "Peer connected: {}. Total peers: {}",
+                addr,
+                get_peer_count().await
+            ),
+        );
     }
 
     let (reader, mut writer) = stream.split();
@@ -218,11 +247,14 @@ async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn std::err
     // Remove peer from connected peers list when disconnecting
     if let Some(addr) = peer_addr {
         CONNECTED_PEERS.write().await.remove(&addr);
-        utils::log_info(utils::LogCategory::P2P, &format!(
-            "Peer disconnected: {}. Total peers: {}",
-            addr,
-            get_peer_count().await
-        ));
+        utils::log_info(
+            utils::LogCategory::P2P,
+            &format!(
+                "Peer disconnected: {}. Total peers: {}",
+                addr,
+                get_peer_count().await
+            ),
+        );
     }
 
     Ok(())
