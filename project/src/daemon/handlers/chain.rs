@@ -49,7 +49,7 @@ pub async fn handle_chain_show(id: Option<u64>) -> RpcResponse {
             merkle_root: bytes_to_hex_string(&block.header.merkle_root),
             nonce: block.header.nonce,
             timestamp: block.header.timestamp.to_string(),
-            difficulty: block.header.difficulty,
+            difficulty: format!("{:#x}", block.header.target),
             transactions: block
                 .transactions
                 .iter()

@@ -1,4 +1,5 @@
 use once_cell::sync::Lazy;
+use primitive_types::U256;
 use std::env;
 
 #[derive(Debug, Clone)]
@@ -66,8 +67,9 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
 });
 
 pub struct ConsensusRules {
-    /// Difficulty level for mining in number of leading zero bits
-    pub difficulty: usize,
+    /// Initial mining target as a 256-bit integer. Hash must be less than this value.
+    /// Lower = harder. Corresponds to 12 leading zero bits: U256::MAX >> 12.
+    pub initial_target: U256,
     pub max_block_size_kb: f32,
     /// TODO: Implement block reward halving every N blocks
     pub block_reward: i64,
@@ -78,7 +80,8 @@ pub struct ConsensusRules {
 }
 
 pub static CONSENSUS_RULES: Lazy<ConsensusRules> = Lazy::new(|| ConsensusRules {
-    difficulty: 12,
+    // 20 leading zero bits: hash < 2^(256-12) = U256::MAX >> 12
+    initial_target: U256::MAX >> 20u32,
     max_block_size_kb: 1.0,
     block_reward: 1 * COIN,
     lwma_n: 10,

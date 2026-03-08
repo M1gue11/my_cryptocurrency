@@ -19,6 +19,7 @@ use crate::network::network_message::InventoryType;
 use crate::security_utils::bytes_to_hex_string;
 use crate::utils::get_current_timestamp;
 use crate::{network, utils};
+use primitive_types::U256;
 
 const MEMPOOL_FILE: &str = "mempool.json";
 
@@ -26,7 +27,7 @@ pub struct Node {
     pub miner: Miner,
     pub blockchain: Blockchain,
     mempool: Vec<MempoolTx>,
-    difficulty: usize,
+    target: U256,
     fork_helper: utils::ForkHelper,
     mining_started_at: Option<NaiveDateTime>,
     keep_mining: Arc<AtomicBool>,
@@ -68,7 +69,7 @@ impl Node {
             blockchain: bc,
             mempool: Node::load_mempool(),
             miner: Miner::new(),
-            difficulty: CONSENSUS_RULES.difficulty,
+            target: CONSENSUS_RULES.initial_target,
             fork_helper: utils::ForkHelper::new(),
             mining_started_at: None,
             keep_mining: Arc::new(AtomicBool::new(false)),
@@ -116,11 +117,11 @@ impl Node {
                 continue;
             }
 
-            let expected_difficulty = partial.calculate_next_difficulty();
-            if block.header.difficulty != expected_difficulty {
+            let expected_target = partial.calculate_next_target();
+            if block.header.target != expected_target {
                 return Err(format!(
-                    "Block {} has invalid difficulty: expected {}, got {}",
-                    i, expected_difficulty, block.header.difficulty
+                    "Block {} has invalid target: expected {:x}, got {:x}",
+                    i, expected_target, block.header.target
                 ));
             }
 
@@ -391,14 +392,14 @@ impl Node {
         self.mining_started_at
     }
 
-    pub fn prepare_mining(&mut self) -> (Vec<MempoolTx>, [u8; 32], usize, String) {
+    pub fn prepare_mining(&mut self) -> (Vec<MempoolTx>, [u8; 32], U256, String) {
         let previous_hash = self.blockchain.get_last_block_hash();
-        let difficulty = self.blockchain.calculate_next_difficulty();
-        self.difficulty = difficulty;
+        let target = self.blockchain.calculate_next_target();
+        self.target = target;
         let mempool = self.mempool.clone();
         let receive_addr = self.miner.wallet.get_receive_addr();
         self.flag_mining_start();
-        (mempool, previous_hash, difficulty, receive_addr)
+        (mempool, previous_hash, target, receive_addr)
     }
 
     pub fn submit_mined_block(&mut self, block: Block) -> Result<&Block, String> {

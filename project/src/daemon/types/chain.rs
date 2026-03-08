@@ -21,7 +21,7 @@ pub struct BlockInfo {
     pub timestamp: String,
     pub transactions: Vec<TransactionViewResponse>,
     pub size_bytes: usize,
-    pub difficulty: usize,
+    pub difficulty: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
