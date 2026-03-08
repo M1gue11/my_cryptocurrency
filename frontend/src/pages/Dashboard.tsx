@@ -14,7 +14,6 @@ export function Dashboard() {
   const [mempool, setMempool] = useState<MempoolResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mining, setMining] = useState(false);
 
   // UTXOs state
   const [utxos, setUtxos] = useState<UtxosResponse | null>(null);
@@ -67,25 +66,7 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleMineBlock = async () => {
-    try {
-      setMining(true);
-      const result = await rpcClient.mineBlock();
-      if (result.success) {
-        alert(`Block mined successfully! Hash: ${result.block_hash}`);
-        fetchData();
-        fetchUtxos(utxoLimit);
-      } else {
-        alert(`Mining failed: ${result.error}`);
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Mining failed');
-    } finally {
-      setMining(false);
-    }
-  };
-
-  if (loading && !nodeStatus) {
+if (loading && !nodeStatus) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-gray-400">Connecting to daemon...</div>
@@ -107,9 +88,6 @@ export function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-white">Dashboard</h2>
-        <Button onClick={handleMineBlock} loading={mining}>
-          Mine Block
-        </Button>
       </div>
 
       {/* Stats Grid */}

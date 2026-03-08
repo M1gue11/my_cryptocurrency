@@ -9,4 +9,13 @@ export interface MineBlockResponse {
   block_hash?: string;
   nonce?: number;
   error?: string;
+  difficulty?: number;
+  next_difficulty?: number;
+}
+
+// Returned by mine_info: ISO datetime string if currently mining, null otherwise
+export type MiningInfoResponse = string | null;
+
+export interface KeepMiningResponse {
+  success: boolean;
 }

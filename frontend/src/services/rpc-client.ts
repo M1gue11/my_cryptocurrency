@@ -10,6 +10,8 @@ import type {
   ChainShowResponse,
   UtxosResponse,
   MineBlockResponse,
+  MiningInfoResponse,
+  KeepMiningResponse,
   WalletNewResponse,
   WalletAddressResponse,
   WalletBalanceResponse,
@@ -110,6 +112,14 @@ export class RpcClient {
 
   async mineBlock(): Promise<MineBlockResponse> {
     return this.call<MineBlockResponse>("mine_block");
+  }
+
+  async mineInfo(): Promise<MiningInfoResponse> {
+    return this.call<MiningInfoResponse>("mine_info");
+  }
+
+  async keepMining(keepMining: boolean): Promise<KeepMiningResponse> {
+    return this.call<KeepMiningResponse>("mine_keep_mining", { keep_mining: keepMining });
   }
 
   // ==========================================================================

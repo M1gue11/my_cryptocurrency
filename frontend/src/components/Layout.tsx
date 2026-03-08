@@ -22,6 +22,7 @@ export function Layout({ children }: LayoutProps) {
               <NavItem to="/wallet">Wallet</NavItem>
               <NavItem to="/transactions">Transactions</NavItem>
               <NavItem to="/network">Network</NavItem>
+              <NavItem to="/mining">Mining</NavItem>
               <NavItem to="/logs">Logs</NavItem>
             </nav>
           </div>
