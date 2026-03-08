@@ -4,7 +4,7 @@ mod tests {
     use crate::db::repository::LedgerRepository;
     use crate::model::block::BlockHeader;
     use crate::model::{Block, Transaction, TxOutput};
-    use chrono::Utc;
+    use crate::utils::get_current_timestamp;
 
     #[test]
     fn test_db_creation_and_schema() {
@@ -63,7 +63,7 @@ mod tests {
             prev_block_hash: [0u8; 32],
             merkle_root: [2u8; 32],
             nonce: 1,
-            timestamp: Utc::now().naive_utc(),
+            timestamp: get_current_timestamp(),
             difficulty: 1,
         };
         let block = Block {
@@ -114,7 +114,7 @@ mod tests {
             prev_block_hash: [0u8; 32],
             merkle_root: [3u8; 32],
             nonce: 2,
-            timestamp: Utc::now().naive_utc(),
+            timestamp: get_current_timestamp(),
             difficulty: 1,
         };
         let block = Block {
@@ -152,7 +152,7 @@ mod tests {
             prev_block_hash: [0u8; 32],
             merkle_root: [1u8; 32],
             nonce: 12345,
-            timestamp: Utc::now().naive_utc(),
+            timestamp: get_current_timestamp(),
             difficulty: 1,
         };
 

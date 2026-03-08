@@ -5,9 +5,9 @@ use crate::{
         bytes_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
         verify_signature,
     },
-    utils::format_date,
+    utils::{format_date, get_current_timestamp},
 };
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 pub type TxId = [u8; 32];
@@ -20,7 +20,7 @@ pub struct Transaction {
 }
 impl Transaction {
     pub fn new(inputs: Vec<TxInput>, outputs: Vec<TxOutput>, message: Option<String>) -> Self {
-        let date = Utc::now().naive_utc();
+        let date = get_current_timestamp();
         Transaction {
             inputs,
             outputs,
@@ -34,7 +34,7 @@ impl Transaction {
     }
 
     pub fn new_coinbase(miner_address: String, fees: i64) -> Self {
-        let date = Utc::now().naive_utc();
+        let date = get_current_timestamp();
         let inputs = Vec::new();
         let reward_amount = CONSENSUS_RULES.block_reward + fees;
         let outputs = vec![TxOutput {

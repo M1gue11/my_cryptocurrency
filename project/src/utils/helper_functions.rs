@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 
 use crate::{
     daemon::types::{TransactionViewResponse, TxInputInfo, TxOutputInfo},
@@ -8,6 +8,10 @@ use crate::{
 
 pub fn format_date(date: &NaiveDateTime) -> String {
     date.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+pub fn get_current_timestamp() -> NaiveDateTime {
+    Utc::now().naive_utc()
 }
 
 pub fn assert_parent_dir_exists(file_path: &str) -> Result<(), String> {

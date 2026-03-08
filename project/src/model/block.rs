@@ -3,11 +3,12 @@ use std::collections::HashSet;
 use super::Transaction;
 use crate::globals::CONSENSUS_RULES;
 use crate::security_utils::hash_starts_with_zero_bits;
+use crate::utils::get_current_timestamp;
 use crate::{
     security_utils::{bytes_to_hex_string, sha256},
     utils::{MerkleTree, format_date},
 };
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 pub type BlockID = [u8; 32];
@@ -34,7 +35,7 @@ pub struct Block {
 
 impl Block {
     pub fn new(prev_block_hash: BlockID, difficulty: usize) -> Self {
-        let timestamp = Utc::now().naive_utc();
+        let timestamp = get_current_timestamp();
         let header = BlockHeader {
             prev_block_hash,
             merkle_root: [0; 32],

@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -6,7 +6,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::{Arc, RwLock};
 
-use crate::utils;
+use crate::utils::{self, get_current_timestamp};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LogMode {
@@ -118,7 +118,7 @@ pub fn init_logger(file_path: &str, mode: &str) {
 
 fn log(level: LogLevel, category: LogCategory, message: &str) {
     let entry = LogEntry {
-        timestamp: Utc::now().naive_utc(),
+        timestamp: get_current_timestamp(),
         level,
         category,
         message: message.to_string(),

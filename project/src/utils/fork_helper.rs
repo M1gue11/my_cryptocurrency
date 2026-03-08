@@ -1,10 +1,11 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 
+use super::logger::{LogCategory, log_info, log_warning};
 use crate::{
     model::{Block, block::BlockID, node::Node},
     security_utils::bytes_to_hex_string,
+    utils::get_current_timestamp,
 };
-use super::logger::{log_info, log_warning, LogCategory};
 
 #[derive(Clone)]
 pub struct Fork {
@@ -34,7 +35,7 @@ impl Fork {
     pub fn new(blocks_sequence: Vec<BlockID>) -> Self {
         Self {
             blocks_sequence,
-            timestamp: Utc::now().naive_utc(),
+            timestamp: get_current_timestamp(),
         }
     }
 
@@ -112,25 +113,37 @@ impl ForkHelper {
             let forked_block_height = match node.blockchain.find_block_height_by_hash(*fork_start) {
                 Some(height) => height,
                 None => {
-                    log_warning(LogCategory::Core, &format!(
-                        "Could not find forked block height for hash: {}",
-                        bytes_to_hex_string(fork_start)
-                    ));
+                    log_warning(
+                        LogCategory::Core,
+                        &format!(
+                            "Could not find forked block height for hash: {}",
+                            bytes_to_hex_string(fork_start)
+                        ),
+                    );
                     continue;
                 }
             };
-            log_info(LogCategory::Core, &format!("Forked block height: {}", forked_block_height));
+            log_info(
+                LogCategory::Core,
+                &format!("Forked block height: {}", forked_block_height),
+            );
             let fork_size = fork.blocks_sequence.len() + forked_block_height;
-            log_info(LogCategory::Core, &format!(
-                "Calculated fork size: {} - BC height: {}",
-                fork_size,
-                node.blockchain.height()
-            ));
+            log_info(
+                LogCategory::Core,
+                &format!(
+                    "Calculated fork size: {} - BC height: {}",
+                    fork_size,
+                    node.blockchain.height()
+                ),
+            );
             if fork_size > best_fork_size {
-                log_info(LogCategory::Core, &format!(
-                    "Found a fork with size {} that is larger than current best {}",
-                    fork_size, best_fork_size
-                ));
+                log_info(
+                    LogCategory::Core,
+                    &format!(
+                        "Found a fork with size {} that is larger than current best {}",
+                        fork_size, best_fork_size
+                    ),
+                );
                 best_fork = Some(fork.clone());
                 best_fork_size = fork_size;
             }
