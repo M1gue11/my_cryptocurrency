@@ -571,6 +571,11 @@ async fn handle_mine(command: MineCommands, client: &RpcClient) {
                     .len()
             );
             println!("  Nonce: {:?}", mine_response.nonce);
+            println!("  Difficulty: {:?} bits", mine_response.difficulty);
+            println!(
+                "  Next Difficulty: {:?} bits",
+                mine_response.next_difficulty
+            );
         }
     }
 }

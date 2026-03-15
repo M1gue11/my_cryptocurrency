@@ -6,6 +6,7 @@ use crate::daemon::types::{
 };
 use crate::db::repository::LedgerRepository;
 use crate::model::get_node;
+use crate::security_utils::bytes_to_hex_string;
 use crate::utils::transaction_model_to_view;
 
 pub async fn handle_chain_status(id: Option<u64>) -> RpcResponse {
@@ -16,7 +17,7 @@ pub async fn handle_chain_status(id: Option<u64>) -> RpcResponse {
     let (last_hash, last_date) = if block_count > 0 {
         let last_block = node.blockchain.chain.last().unwrap();
         (
-            Some(hex::encode(last_block.header_hash())),
+            Some(bytes_to_hex_string(&last_block.header_hash())),
             Some(last_block.header.timestamp.to_string()),
         )
     } else {
@@ -43,9 +44,9 @@ pub async fn handle_chain_show(id: Option<u64>) -> RpcResponse {
         .enumerate()
         .map(|(i, block)| BlockInfo {
             height: i,
-            hash: hex::encode(block.header_hash()),
-            prev_hash: hex::encode(block.header.prev_block_hash),
-            merkle_root: hex::encode(block.header.merkle_root),
+            hash: bytes_to_hex_string(&block.header_hash()),
+            prev_hash: bytes_to_hex_string(&block.header.prev_block_hash),
+            merkle_root: bytes_to_hex_string(&block.header.merkle_root),
             nonce: block.header.nonce,
             timestamp: block.header.timestamp.to_string(),
             difficulty: block.header.difficulty,
@@ -104,7 +105,7 @@ pub async fn handle_chain_utxos(id: Option<u64>, params: serde_json::Value) -> R
     let utxo_list: Vec<UtxoInfo> = utxos
         .iter()
         .map(|u| UtxoInfo {
-            tx_id: hex::encode(u.tx_id),
+            tx_id: bytes_to_hex_string(&u.tx_id),
             index: u.index,
             value: u.output.value,
             address: u.output.address.clone(),
