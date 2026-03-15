@@ -10,8 +10,8 @@ use sha2::Sha256;
 use std::fs::File;
 use std::io::{Read, Write};
 
-use crate::globals::CONFIG;
 use crate::utils;
+use crate::{globals::CONFIG, security_utils::bytes_to_hex_string};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Keystore {
@@ -58,9 +58,9 @@ impl Keystore {
             .map_err(|e| format!("Encryption error: {}", e))?;
 
         let keystore = Keystore {
-            salt: hex::encode(salt),
-            nonce: hex::encode(nonce_bytes),
-            ciphertext: hex::encode(ciphertext),
+            salt: bytes_to_hex_string(&salt),
+            nonce: bytes_to_hex_string(&nonce_bytes),
+            ciphertext: bytes_to_hex_string(&ciphertext),
         };
         Keystore::save_to_file(&keystore, file_path)?;
         Ok(seed)
@@ -97,7 +97,12 @@ impl Keystore {
         let ciphertext = hex::decode(&self.ciphertext).map_err(|_| "Ciphertext inválido")?;
 
         let mut key = [0u8; 32];
-        match pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, CONFIG.pbkdf2_iterations, &mut key) {
+        match pbkdf2::<Hmac<Sha256>>(
+            password.as_bytes(),
+            &salt,
+            CONFIG.pbkdf2_iterations,
+            &mut key,
+        ) {
             Ok(_) => {}
             Err(e) => return Err(e.to_string()),
         }

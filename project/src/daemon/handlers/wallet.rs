@@ -126,7 +126,7 @@ pub async fn handle_wallet_balance(id: Option<u64>, params: serde_json::Value) -
     let utxo_infos: Vec<UtxoInfo> = utxos
         .iter()
         .map(|u| UtxoInfo {
-            tx_id: hex::encode(u.tx_id),
+            tx_id: bytes_to_hex_string(&u.tx_id),
             index: u.index,
             value: u.output.value,
             address: u.output.address.clone(),
@@ -237,7 +237,7 @@ pub async fn handle_wallet_generate_keys(
         .iter()
         .map(|k| GeneratedKey {
             address: k.get_address(),
-            public_key: hex::encode(k.get_public_key().as_bytes()),
+            public_key: bytes_to_hex_string(k.get_public_key().as_bytes()),
         })
         .collect();
 

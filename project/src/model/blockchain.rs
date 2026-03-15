@@ -46,24 +46,26 @@ impl Blockchain {
     /// the previous block's difficulty.
     pub fn calculate_next_difficulty(&self) -> usize {
         let height = self.chain.len();
-        let n = CONSENSUS_RULES.lwma_n;
+        let lwma_n = CONSENSUS_RULES.lwma_n;
         let target_secs = CONSENSUS_RULES.target_block_time_secs as i64;
 
         if height == 0 {
             return CONSENSUS_RULES.difficulty;
         }
 
-        let k = n.min(height);
+        let k = lwma_n.min(height);
         let window_start = height - k;
 
         let mut t = 0;
-        let mut sum_d = 0f64;
-        let mut weight = 1i64;
+        let mut sum_d: f64 = 0.0;
+        let mut weight = 1;
 
         for i in window_start..height {
             let prev_ts = if i > 0 {
+                // normal case: use timestamp of previous block
                 self.chain[i - 1].header.timestamp
             } else {
+                // edge case: if we're at the first block, use its timestamp as "previous"
                 self.chain[0].header.timestamp
             };
             let curr = &self.chain[i];
@@ -87,7 +89,7 @@ impl Blockchain {
 
         let avg_d = sum_d / k as f64;
         let n_sums = (k * (k + 1) / 2) as f64;
-        let next_d_f = avg_d * target_secs as f64 * n_sums / t as f64;
+        let next_d_f = avg_d * (target_secs as f64) * n_sums / t as f64;
 
         let prev_d = self.chain[height - 1].header.difficulty as f64;
         let next_d_clamped = next_d_f.max(prev_d * 0.5).min(prev_d * 2.0).max(1.0);
