@@ -49,6 +49,8 @@ pub enum NodeCommands {
 pub enum MineCommands {
     /// Mine a new block with pending transactions
     Block,
+    /// Enable or disable continuous background mining
+    KeepMining { enable: bool },
 }
 
 #[derive(Subcommand)]

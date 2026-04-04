@@ -123,6 +123,7 @@ fn print_help() {
 
     println!("\n⛏  Mining:");
     println!("  mine block                 - Mine a new block with pending transactions");
+    println!("  mine keep-mining <true|false> - Enable or disable continuous background mining");
 
     println!("\n🔗 Blockchain:");
     println!("  chain show                 - Display the entire blockchain");
@@ -193,10 +194,19 @@ fn parse_command(input: &str) -> Result<Commands, String> {
 
         "mine" => {
             if parts.len() < 2 {
-                return Err("Usage: mine block".to_string());
+                return Err("Usage: mine <block|keep-mining>".to_string());
             }
             match parts[1] {
                 "block" => Ok(Commands::Mine(MineCommands::Block)),
+                "keep-mining" => {
+                    if parts.len() < 3 {
+                        return Err("Usage: mine keep-mining <true|false>".to_string());
+                    }
+                    let enable = parts[2]
+                        .parse::<bool>()
+                        .map_err(|_| "Expected true or false".to_string())?;
+                    Ok(Commands::Mine(MineCommands::KeepMining { enable }))
+                }
                 _ => Err(format!("Unknown mine command: {}", parts[1])),
             }
         }
@@ -576,6 +586,18 @@ async fn handle_mine(command: MineCommands, client: &RpcClient) {
                 "  Next Difficulty: {:?} bits",
                 mine_response.next_difficulty
             );
+        }
+        MineCommands::KeepMining { enable } => {
+            match client.keep_mining(enable).await {
+                Ok(_) => {
+                    if enable {
+                        println!("⛏  Continuous mining enabled. The node will keep mining in the background.");
+                    } else {
+                        println!("⏹  Continuous mining disabled.");
+                    }
+                }
+                Err(e) => println!("✗ Failed to set keep-mining: {}", e),
+            }
         }
     }
 }

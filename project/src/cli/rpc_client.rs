@@ -109,6 +109,11 @@ impl RpcClient {
         self.call("mine_block", serde_json::json!({})).await
     }
 
+    pub async fn keep_mining(&self, enable: bool) -> Result<serde_json::Value, String> {
+        self.call("mine_keep_mining", serde_json::json!({ "keep_mining": enable }))
+            .await
+    }
+
     // ========================================================================
     // Chain Methods
     // ========================================================================

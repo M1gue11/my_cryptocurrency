@@ -375,8 +375,17 @@ impl Node {
             .store(value, std::sync::atomic::Ordering::Relaxed);
         utils::log_info(
             utils::LogCategory::Core,
-            &format!("Keep mining flag set to: {:?}", self.keep_mining),
+            &format!("Keep mining flag set to: {}", value),
         );
+    }
+
+    pub fn get_keep_mining_flag(&self) -> bool {
+        self.keep_mining
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_keep_mining_arc(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.keep_mining)
     }
 
     pub fn flag_mining_start(&mut self) {

@@ -127,6 +127,7 @@ pub async fn mine_block(
     previous_hash: [u8; 32],
     difficulty: usize,
     receive_addr: String,
+    cancel: Arc<AtomicBool>,
 ) -> Result<Block, String> {
     let threads = CONFIG.mining_threads.max(1);
     let mut attempts = 0;
@@ -146,6 +147,7 @@ pub async fn mine_block(
         for i in 0..threads {
             let mut block = block_template.clone();
             let found = Arc::clone(&found);
+            let cancel = Arc::clone(&cancel);
             let nonce_start = i as u32 * range_size;
             let nonce_end = if i + 1 == threads {
                 u32::MAX
@@ -165,7 +167,7 @@ pub async fn mine_block(
                 let log_interval = 500_000u32;
                 let mut last_log_nonce = nonce_start;
                 loop {
-                    if found.load(Ordering::Relaxed) {
+                    if found.load(Ordering::Relaxed) || cancel.load(Ordering::Relaxed) {
                         return None;
                     }
                     if hash_starts_with_zero_bits(&block.header_hash(), difficulty) {
@@ -202,6 +204,10 @@ pub async fn mine_block(
             }
         }
         set.abort_all();
+
+        if cancel.load(Ordering::Relaxed) {
+            return Err("Mining cancelled".to_string());
+        }
 
         if let Some(block) = result {
             return Ok(block);
