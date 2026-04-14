@@ -10,8 +10,8 @@ pub struct MineBlockResponse {
     pub block_hash: Option<String>,
     pub nonce: Option<u32>,
     pub error: Option<String>,
-    pub difficulty: Option<usize>,
-    pub next_difficulty: Option<usize>,
+    pub difficulty: Option<String>,
+    pub next_difficulty: Option<String>,
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KeepMiningParams {
