@@ -17,9 +17,9 @@ pub fn bytes_to_hex_string(bytes: &[u8]) -> String {
     hex::encode(bytes)
 }
 
-/// Returns true if the hash is less than the given target (proof of work check).
+/// Returns true if the hash is less than or equal to the given target (proof of work check).
 pub fn hash_meets_target(hash: &[u8; 32], target: &U256) -> bool {
-    U256::from_big_endian(hash) < *target
+    U256::from_big_endian(hash) <= *target
 }
 
 pub fn generate_sk_chain_code_from_data(data: &[u8]) -> ([u8; 32], [u8; 32]) {
