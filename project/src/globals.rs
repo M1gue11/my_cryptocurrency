@@ -68,7 +68,6 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
 
 pub struct ConsensusRules {
     /// Initial mining target as a 256-bit integer. Hash must be less than this value.
-    /// Lower = harder. Corresponds to 12 leading zero bits: U256::MAX >> 12.
     pub initial_target: U256,
     pub max_block_size_kb: f32,
     /// TODO: Implement block reward halving every N blocks
@@ -80,7 +79,7 @@ pub struct ConsensusRules {
 }
 
 pub static CONSENSUS_RULES: Lazy<ConsensusRules> = Lazy::new(|| ConsensusRules {
-    // 20 leading zero bits: hash < 2^(256-12) = U256::MAX >> 12
+    // 20 leading zero bits: hash < 2^(256-20) = U256::MAX >> 20
     initial_target: U256::MAX >> 20u32,
     max_block_size_kb: 1.0,
     block_reward: 1 * COIN,

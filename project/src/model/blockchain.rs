@@ -53,6 +53,8 @@ impl Blockchain {
         let window_start = height - k;
 
         let mut t: i64 = 0;
+        // TODO: take a look if sum_target can overflow and if we
+        // need to use U256 for it.
         let mut sum_target = U256::zero();
         let mut weight = 1i64;
 
