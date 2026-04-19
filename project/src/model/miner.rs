@@ -220,6 +220,13 @@ async fn mine_block_impl(
             return Ok(block);
         }
 
+        if cancel.load(Ordering::Relaxed) {
+            return Err(
+                "Mining cancelled because the chain tip changed or mining was interrupted."
+                    .to_string(),
+            );
+        }
+
         attempts += 1;
         utils::log_warning(
             utils::LogCategory::Core,
@@ -305,10 +312,17 @@ pub async fn run_keep_mining_loop(keep_mining_enabled: Arc<AtomicBool>, cancel: 
         let block = match mined_block {
             Ok(block) => block,
             Err(e) => {
-                utils::log_warning(
-                    utils::LogCategory::Core,
-                    &format!("Keep mining round failed: {}", e),
-                );
+                if e.starts_with("Mining cancelled") {
+                    utils::log_info(
+                        utils::LogCategory::Core,
+                        &format!("Keep mining round cancelled: {}", e),
+                    );
+                } else {
+                    utils::log_warning(
+                        utils::LogCategory::Core,
+                        &format!("Keep mining round failed: {}", e),
+                    );
+                }
                 continue;
             }
         };
