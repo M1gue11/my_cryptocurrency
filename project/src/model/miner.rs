@@ -74,6 +74,7 @@ fn build_block(
     previous_hash: [u8; 32],
     target: U256,
     receive_addr: &str,
+    block_height: usize,
 ) -> Block {
     let mut txs = get_legit_txs(mempool);
     // Sort transactions descending by fee_rate
@@ -82,7 +83,7 @@ fn build_block(
         let fee_rate_b: f64 = b.calculate_fee_per_byte();
         fee_rate_b.partial_cmp(&fee_rate_a).unwrap()
     });
-    let estimated_coinbase_tx_size = Transaction::new_coinbase(receive_addr.to_string(), 0)
+    let estimated_coinbase_tx_size = Transaction::new_coinbase(receive_addr.to_string(), 0, block_height)
         .as_bytes()
         .len();
     let max_block_size_bytes =
@@ -117,7 +118,7 @@ fn build_block(
 
     let total_fees: i64 = txs.iter().map(|mtx| mtx.calculate_fee()).sum();
     let mut block_txs: Vec<Transaction> = txs.iter().map(|mtx| mtx.tx.clone()).collect();
-    let reward_tx = Transaction::new_coinbase(receive_addr.to_string(), total_fees);
+    let reward_tx = Transaction::new_coinbase(receive_addr.to_string(), total_fees, block_height);
     block_txs.insert(0, reward_tx);
 
     let mut new_block = Block::new(previous_hash, target);
@@ -131,6 +132,7 @@ async fn mine_block_impl(
     previous_hash: [u8; 32],
     target: U256,
     receive_addr: String,
+    block_height: usize,
     cancel: Arc<AtomicBool>,
 ) -> Result<Block, String> {
     let threads = CONFIG.mining_threads.max(1);
@@ -147,7 +149,7 @@ async fn mine_block_impl(
             ));
         }
 
-        let block_template = build_block(&mempool, previous_hash, target, &receive_addr);
+        let block_template = build_block(&mempool, previous_hash, target, &receive_addr, block_height);
         let found = Arc::new(AtomicBool::new(false));
         let range_size = u32::MAX / threads as u32;
 
@@ -232,7 +234,7 @@ async fn mine_block_impl(
 }
 
 pub async fn mine() -> Result<Block, String> {
-    let (mempool, previous_hash, target, receive_addr, cancel) = {
+    let (mempool, previous_hash, target, receive_addr, block_height, cancel) = {
         let mut node = get_node_mut().await;
         if node.is_keep_mining_enabled() || node.is_mining_task_running() {
             return Err(
@@ -241,10 +243,11 @@ pub async fn mine() -> Result<Block, String> {
         }
         let cancel = node.mining_cancel_flag();
         node.reset_mining_cancel();
-        let (mempool, previous_hash, target, receive_addr) = node.prepare_mining_snapshot();
-        (mempool, previous_hash, target, receive_addr, cancel)
+        let (mempool, previous_hash, target, receive_addr, block_height) =
+            node.prepare_mining_snapshot();
+        (mempool, previous_hash, target, receive_addr, block_height, cancel)
     };
-    mine_block_impl(mempool, previous_hash, target, receive_addr, cancel).await
+    mine_block_impl(mempool, previous_hash, target, receive_addr, block_height, cancel).await
 }
 
 pub async fn submit_block(mined_block: Block) -> Result<(Block, U256), String> {
@@ -284,7 +287,7 @@ pub async fn run_keep_mining_loop(keep_mining_enabled: Arc<AtomicBool>, cancel: 
             break;
         }
 
-        let (mempool, previous_hash, target, receive_addr) = {
+        let (mempool, previous_hash, target, receive_addr, block_height) = {
             let mut node = get_node_mut().await;
             if !node.is_keep_mining_enabled() {
                 break;
@@ -298,6 +301,7 @@ pub async fn run_keep_mining_loop(keep_mining_enabled: Arc<AtomicBool>, cancel: 
             previous_hash,
             target,
             receive_addr,
+            block_height,
             Arc::clone(&cancel),
         )
         .await;

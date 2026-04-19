@@ -33,10 +33,10 @@ impl Transaction {
         sha256(&self.as_bytes())
     }
 
-    pub fn new_coinbase(miner_address: String, fees: i64) -> Self {
+    pub fn new_coinbase(miner_address: String, fees: i64, block_height: usize) -> Self {
         let date = get_current_timestamp();
         let inputs = Vec::new();
-        let reward_amount = CONSENSUS_RULES.block_reward + fees;
+        let reward_amount = CONSENSUS_RULES.block_reward(block_height) + fees;
         let outputs = vec![TxOutput {
             value: reward_amount,
             address: miner_address,
