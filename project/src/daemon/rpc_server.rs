@@ -5,7 +5,7 @@ use crate::daemon::handlers::chain::{
 };
 use crate::daemon::handlers::logs::handle_get_logs;
 use crate::daemon::handlers::mine::{
-    handle_get_mining_info, handle_keep_mining, handle_mine_block,
+    handle_get_last_mined_block, handle_get_mining_info, handle_keep_mining, handle_mine_block,
 };
 use crate::daemon::handlers::node::{
     handle_node_clear_mempool, handle_node_init, handle_node_mempool, handle_node_status,
@@ -121,6 +121,7 @@ pub async fn process_request(request_str: &str) -> RpcResponse {
         // Mining methods
         "mine_block" => handle_mine_block(request.id).await,
         "mine_info" => handle_get_mining_info(request.id).await,
+        "mine_last_block" => handle_get_last_mined_block(request.id).await,
         "mine_keep_mining" => handle_keep_mining(request.id, request.params).await,
 
         // Chain methods

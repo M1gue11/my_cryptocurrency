@@ -30,6 +30,12 @@ pub async fn handle_get_mining_info(id: Option<u64>) -> RpcResponse {
     RpcResponse::success(id, response)
 }
 
+pub async fn handle_get_last_mined_block(id: Option<u64>) -> RpcResponse {
+    let last_mined_block = get_node().await.get_last_mined_block();
+    let response = serde_json::to_value(last_mined_block).unwrap();
+    RpcResponse::success(id, response)
+}
+
 pub async fn handle_keep_mining(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
     let params: KeepMiningParams = match serde_json::from_value(params) {
         Ok(p) => p,

@@ -450,6 +450,10 @@ impl Node {
         self.last_mined_block = Some(response);
     }
 
+    pub fn get_last_mined_block(&self) -> Option<crate::daemon::types::MineBlockResponse> {
+        self.last_mined_block.clone()
+    }
+
     pub fn cancel_current_mining_round(&self) {
         self.mining_cancel.store(true, Ordering::Relaxed);
     }
