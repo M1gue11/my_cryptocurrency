@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { rpcClient } from '../services';
-import { ConsolePill } from './Console';
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { rpcClient } from "../services";
+import { ConsolePill } from "./Console";
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,7 +12,7 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const [nodeOnline, setNodeOnline] = useState(true);
   const [height, setHeight] = useState<number | null>(null);
-  const [miningState, setMiningState] = useState<'mining' | 'idle'>('idle');
+  const [miningState, setMiningState] = useState<"mining" | "idle">("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -28,11 +28,11 @@ export function Layout({ children }: LayoutProps) {
 
         setNodeOnline(true);
         setHeight(nodeStatus.block_height);
-        setMiningState(miningInfo?.is_currently_mining ? 'mining' : 'idle');
+        setMiningState(miningInfo?.is_currently_mining ? "mining" : "idle");
       } catch {
         if (cancelled) return;
         setNodeOnline(false);
-        setMiningState('idle');
+        setMiningState("idle");
       }
     };
 
@@ -45,25 +45,25 @@ export function Layout({ children }: LayoutProps) {
   }, []);
 
   const footerLabel = (() => {
-    if (location.pathname === '/blocks') return 'blockchain explorer';
-    if (location.pathname === '/transactions') return 'transaction workbench';
-    if (location.pathname === '/wallet') return 'wallet console';
-    if (location.pathname === '/network') return 'runtime and peers';
-    if (location.pathname === '/mining') return 'mining center';
-    if (location.pathname === '/logs') return 'diagnostics';
-    return 'operator overview';
+    if (location.pathname === "/blocks") return "blockchain explorer";
+    if (location.pathname === "/transactions") return "transaction workbench";
+    if (location.pathname === "/wallet") return "wallet console";
+    if (location.pathname === "/network") return "runtime and peers";
+    if (location.pathname === "/mining") return "mining center";
+    if (location.pathname === "/logs") return "diagnostics";
+    return "operator overview";
   })();
 
   return (
     <div className="crm-shell">
       <header className="crm-topbar">
-        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-6">
+        <div className="mx-auto flex w-full max-w-360 flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-6">
           <div className="flex items-center gap-2">
             <span className="crm-logo-mark" />
-            <div className="text-[13px] font-semibold tracking-[-0.02em] text-[var(--crm-fg)]">
+            <div className="text-[13px] font-semibold tracking-[-0.02em] text-(--crm-fg)">
               caramuru
             </div>
-            <div className="crm-mono text-[10.5px] text-[var(--crm-dim)]">
+            <div className="crm-mono text-[10.5px] text-(--crm-dim)">
               v0.3.1
             </div>
           </div>
@@ -80,10 +80,12 @@ export function Layout({ children }: LayoutProps) {
 
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--crm-dim)] lg:justify-end">
             <span className="crm-mono">rpc http://localhost:7001/rpc</span>
-            <ConsolePill tone={nodeOnline ? 'accent' : 'warn'} dot>
-              {nodeOnline ? 'live' : 'offline'}
+            <ConsolePill tone={nodeOnline ? "accent" : "warn"} dot>
+              {nodeOnline ? "live" : "offline"}
             </ConsolePill>
-            <ConsolePill>{height !== null ? `#${height.toLocaleString()}` : '-'}</ConsolePill>
+            <ConsolePill>
+              {height !== null ? `#${height.toLocaleString()}` : "-"}
+            </ConsolePill>
             <ConsolePill>{miningState}</ConsolePill>
           </div>
         </div>
@@ -95,7 +97,7 @@ export function Layout({ children }: LayoutProps) {
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
           <span>local operator panel</span>
           <span>.</span>
-          <span>{nodeOnline ? 'node healthy' : 'daemon unreachable'}</span>
+          <span>{nodeOnline ? "node healthy" : "daemon unreachable"}</span>
           <span>.</span>
           <span>{footerLabel}</span>
           <span className="ml-auto">caramuru . pow node . live rpc data</span>
@@ -110,7 +112,7 @@ function NavItem({ to, children }: { to: string; children: ReactNode }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        isActive ? 'crm-nav-link crm-nav-link--active' : 'crm-nav-link'
+        isActive ? "crm-nav-link crm-nav-link--active" : "crm-nav-link"
       }
     >
       {children}

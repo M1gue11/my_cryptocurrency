@@ -58,6 +58,7 @@ a {
 
 .crm-shell {
   min-height: 100vh;
+  padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
   color: var(--crm-fg);
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--crm-accent) 8%, transparent) 0, transparent 30%),
@@ -74,13 +75,20 @@ a {
 }
 
 .crm-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 35;
   border-top: 1px solid var(--crm-border);
   background: color-mix(in srgb, var(--crm-panel) 96%, transparent);
+  backdrop-filter: blur(14px);
   color: var(--crm-dim);
   font-family: "Geist Mono", ui-monospace, monospace;
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.2);
 }
 
 .crm-logo-mark {
@@ -529,6 +537,10 @@ a {
 }
 
 @media (max-width: 640px) {
+  .crm-shell {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+
   .crm-main {
     padding: 0.75rem;
   }

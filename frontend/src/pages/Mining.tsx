@@ -33,6 +33,35 @@ function parseApiDate(raw: string): Date {
   return new Date(`${raw.slice(0, 19)}Z`);
 }
 
+function compactTarget(value: string, edge = 10): string {
+  if (!value) return '-';
+  if (value.length <= edge * 2 + 5) return value;
+  return `${value.slice(0, edge + 2)}...${value.slice(-edge)}`;
+}
+
+function TargetValue({
+  value,
+  edge = 10,
+  className = '',
+}: {
+  value?: string | null;
+  edge?: number;
+  className?: string;
+}) {
+  if (!value) {
+    return <span>-</span>;
+  }
+
+  return (
+    <span
+      className={`block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap ${className}`.trim()}
+      title={value}
+    >
+      {compactTarget(value, edge)}
+    </span>
+  );
+}
+
 export function Mining() {
   const [miningInfo, setMiningInfo] = useState<MiningInfoResponse>({
     keep_mining_enabled: false,
@@ -213,8 +242,18 @@ export function Mining() {
         />
         <ConsoleStat
           label="last target"
-          value={lastResult?.target ?? '-'}
-          subtitle={lastResult?.next_target ?? 'awaiting mined block'}
+          value={<TargetValue value={lastResult?.target} edge={10} />}
+          subtitle={
+            lastResult?.next_target ? (
+              <TargetValue
+                value={lastResult.next_target}
+                edge={12}
+                className="text-[0.64rem] text-[var(--crm-dim)]"
+              />
+            ) : (
+              'awaiting mined block'
+            )
+          }
         />
       </ConsoleStatStrip>
 
@@ -254,7 +293,11 @@ export function Mining() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="target" value={lastResult?.target ?? '-'} subtitle="current" />
+            <Metric
+              label="target"
+              value={<TargetValue value={lastResult?.target} edge={10} />}
+              subtitle="current"
+            />
             <Metric
               label="difficulty"
               value={lastResult?.next_difficulty ?? '-'}
@@ -326,8 +369,14 @@ export function Mining() {
               <div className="mt-4">
                 <ConsoleRow label="hash" value={lastResult.block_hash ?? '-'} />
                 <ConsoleRow label="nonce" value={lastResult.nonce?.toLocaleString() ?? '-'} />
-                <ConsoleRow label="target" value={lastResult.target ?? '-'} />
-                <ConsoleRow label="next target" value={lastResult.next_target ?? '-'} />
+                <ConsoleRow
+                  label="target"
+                  value={<TargetValue value={lastResult.target} edge={14} />}
+                />
+                <ConsoleRow
+                  label="next target"
+                  value={<TargetValue value={lastResult.next_target} edge={14} />}
+                />
                 <ConsoleRow
                   label="next difficulty"
                   value={lastResult.next_difficulty ?? '-'}
@@ -439,13 +488,13 @@ function Metric({
   subtitle,
 }: {
   label: string;
-  value: string;
-  subtitle: string;
+  value: ReactNode;
+  subtitle: ReactNode;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="crm-field-label">{label}</div>
-      <div className="crm-mono text-base text-[var(--crm-fg)]">{value}</div>
+      <div className="crm-mono min-w-0 text-base text-[var(--crm-fg)]">{value}</div>
       <div className="mt-1 text-xs text-[var(--crm-dim)]">{subtitle}</div>
     </div>
   );
