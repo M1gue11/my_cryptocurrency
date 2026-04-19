@@ -32,6 +32,32 @@ pub static BROADCAST_CHANNEL: Lazy<Broadcast> = Lazy::new(|| {
     }
 });
 
+const JSON_PREVIEW_LIMIT: usize = 160;
+
+fn format_message_preview(message: &str) -> String {
+    let mut preview = String::new();
+    let mut chars = message.chars();
+
+    for ch in chars.by_ref().take(JSON_PREVIEW_LIMIT) {
+        match ch {
+            '\n' => preview.push_str("\\n"),
+            '\r' => preview.push_str("\\r"),
+            '\t' => preview.push_str("\\t"),
+            _ => preview.push(ch),
+        }
+    }
+
+    if chars.next().is_some() {
+        preview.push_str("...");
+    }
+
+    if preview.is_empty() {
+        "<empty>".to_string()
+    } else {
+        preview
+    }
+}
+
 pub async fn run_server(port: u16, peers: Vec<String>) {
     let addr = format!("0.0.0.0:{}", port);
     let listener = TcpListener::bind(&addr)
@@ -165,10 +191,21 @@ async fn handle_connection(
                     Ok(0) => break,
                     Ok(_) => {
                         // Process received message (same as before)
-                        let message: NetworkMessage = match serde_json::from_str(line.trim()) {
+                        let trimmed_line = line.trim();
+                        let message: NetworkMessage = match serde_json::from_str(trimmed_line) {
                             Ok(msg) => msg,
                             Err(e) => {
-                                utils::log_error(utils::LogCategory::P2P, &format!("JSON Error: {}", e));
+                                utils::log_error(
+                                    utils::LogCategory::P2P,
+                                    &format!(
+                                        "JSON Error from peer {:?}: {} | raw_len={} trimmed_len={} preview={:?}",
+                                        peer_addr,
+                                        e,
+                                        line.len(),
+                                        trimmed_line.len(),
+                                        format_message_preview(trimmed_line)
+                                    ),
+                                );
                                 line.clear();
                                 continue;
                             }

@@ -845,10 +845,11 @@ impl Node {
                 utils::log_info(
                     utils::LogCategory::P2P,
                     &format!(
-                        "Common block {} is our chain tip -- no fork.",
+                        "Common block {} is our chain tip -- requesting the remaining blocks.",
                         bytes_to_hex_string(&block_hash)
                     ),
                 );
+                network::ask_for_blocks(block_hash, peer_addr);
                 return;
             }
         }
