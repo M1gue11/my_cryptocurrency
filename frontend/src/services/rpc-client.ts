@@ -118,6 +118,10 @@ export class RpcClient {
     return this.call<MiningInfoResponse>("mine_info");
   }
 
+  async lastMinedBlock(): Promise<MineBlockResponse | null> {
+    return this.call<MineBlockResponse | null>("mine_last_block");
+  }
+
   async keepMining(keepMining: boolean): Promise<KeepMiningResponse> {
     return this.call<KeepMiningResponse>("mine_keep_mining", { keep_mining: keepMining });
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, StatCard, Button } from "../components";
 import { rpcClient } from "../services";
 import type { MineBlockResponse, MiningInfoResponse } from "../types";
@@ -26,13 +26,18 @@ function parseApiDate(raw: string): Date {
 }
 
 export function Mining() {
-  const [miningInfo, setMiningInfo] = useState<MiningInfoResponse>(null);
-  const [keepMining, setKeepMining] = useState(false);
+  const [miningInfo, setMiningInfo] = useState<MiningInfoResponse>({
+    keep_mining_enabled: false,
+    is_currently_mining: false,
+    started_at: null,
+    last_mined_block: null,
+  });
   const [lastResult, setLastResult] = useState<MineBlockResponse | null>(null);
   const [mining, setMining] = useState(false);
   const [togglingKeepMining, setTogglingKeepMining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const previousStartedAtRef = useRef<string | null>(null);
 
   const fetchMiningInfo = async () => {
     try {
@@ -57,15 +62,53 @@ export function Mining() {
     return () => clearInterval(tick);
   }, []);
 
-  const isCurrentlyMining = miningInfo !== null;
+  useEffect(() => {
+    const previousStartedAt = previousStartedAtRef.current;
+    const currentStartedAt = miningInfo.started_at ?? null;
+
+    const syncLastMinedBlock = async () => {
+      try {
+        const block = await rpcClient.lastMinedBlock();
+        if (block?.success) {
+          setLastResult((current) => {
+            if (current?.block_hash === block.block_hash) {
+              return current;
+            }
+
+            return block;
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch last mined block:", err);
+      }
+    };
+
+    if (previousStartedAt !== null && previousStartedAt !== currentStartedAt) {
+      void syncLastMinedBlock();
+    }
+
+    previousStartedAtRef.current = currentStartedAt;
+  }, [miningInfo.started_at]);
+
+  const isCurrentlyMining = miningInfo.is_currently_mining;
+  const keepMining = miningInfo.keep_mining_enabled;
 
   const elapsedSeconds =
-    miningInfo ?
-      Math.max(0, Math.floor((now - parseApiDate(miningInfo).getTime()) / 1000))
+    miningInfo.started_at ?
+      Math.max(
+        0,
+        Math.floor(
+          (now - parseApiDate(miningInfo.started_at).getTime()) / 1000,
+        ),
+      )
     : 0;
 
   const handleMineBlock = async () => {
     try {
+      if (keepMining) {
+        setError("Auto-mining is active. Disable it before mining manually.");
+        return;
+      }
       setMining(true);
       setError(null);
       setLastResult(null);
@@ -88,7 +131,7 @@ export function Mining() {
       setError(null);
       const newValue = !keepMining;
       await rpcClient.keepMining(newValue);
-      setKeepMining(newValue);
+      await fetchMiningInfo();
     } catch (err) {
       setError(
         err instanceof Error ?
@@ -99,7 +142,6 @@ export function Mining() {
       setTogglingKeepMining(false);
     }
   };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -117,6 +159,7 @@ export function Mining() {
             onClick={handleMineBlock}
             loading={mining}
             loadingText="Mining..."
+            disabled={keepMining}
           >
             Mine Block
           </Button>
@@ -158,8 +201,8 @@ export function Mining() {
         />
         <StatCard
           icon="#"
-          label="Last Difficulty"
-          value={lastResult?.difficulty ?? "-"}
+          label="Last Target"
+          value={lastResult?.target ?? "-"}
         />
       </div>
 
@@ -175,7 +218,7 @@ export function Mining() {
             <div className="flex justify-between items-center">
               <span className="text-gray-400">Started at</span>
               <span className="text-white font-mono">
-                {dateFormatter.format(parseApiDate(miningInfo!))}
+                {dateFormatter.format(parseApiDate(miningInfo.started_at!))}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -210,8 +253,16 @@ export function Mining() {
               <dd className="text-white font-mono">{lastResult.nonce}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-gray-400">Difficulty</dt>
-              <dd className="text-white">{lastResult.difficulty}</dd>
+              <dt className="text-gray-400">Target</dt>
+              <dd className="text-white font-mono text-xs truncate max-w-xs">
+                {lastResult.target}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-gray-400">Next Target</dt>
+              <dd className="text-white font-mono text-xs truncate max-w-xs">
+                {lastResult.next_target}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-gray-400">Next Difficulty</dt>
