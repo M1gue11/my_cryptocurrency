@@ -81,7 +81,7 @@ pub struct ConsensusRules {
 pub static CONSENSUS_RULES: Lazy<ConsensusRules> = Lazy::new(|| ConsensusRules {
     // 12 leading zero bits.
     initial_target: U256::MAX >> 12u32,
-    max_block_size_kb: 1.0,
+    max_block_size_kb: 10.0,
     block_reward: 1 * COIN,
     lwma_n: 10,
     target_block_time_secs: 10,
