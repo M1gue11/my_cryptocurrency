@@ -11,9 +11,22 @@ pub struct MineBlockResponse {
     pub nonce: Option<u32>,
     pub error: Option<String>,
     pub target: Option<String>,
-    pub difficulty: Option<String>,
     pub next_target: Option<String>,
     pub next_difficulty: Option<String>,
+}
+impl MineBlockResponse {
+    pub fn empty() -> Self {
+        MineBlockResponse {
+            success: false,
+            block_hash: None,
+            transactions: Vec::new(),
+            nonce: None,
+            error: None,
+            target: None,
+            next_target: None,
+            next_difficulty: None,
+        }
+    }
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KeepMiningParams {

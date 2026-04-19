@@ -1,80 +1,43 @@
 // Mining Handlers
-use crate::daemon::types::rpc::INVALID_PARAMS;
+use crate::daemon::types::rpc::{INTERNAL_ERROR, INVALID_PARAMS};
 use crate::daemon::types::{KeepMiningParams, MineBlockResponse, RpcResponse};
-use crate::model::miner::mine_block;
+use crate::model::miner::{mine, submit_block};
 use crate::model::{get_node, get_node_mut};
 use crate::security_utils::bytes_to_hex_string;
 use crate::utils::{format_difficulty, format_target_hex, transaction_model_to_view};
 
 pub async fn handle_mine_block(id: Option<u64>) -> RpcResponse {
-    let (mempool, previous_hash, target, receive_addr) = {
-        let mut node = get_node_mut().await;
-        node.prepare_mining()
-    };
-
-    let mined_block = match mine_block(mempool, previous_hash, target, receive_addr).await {
+    let mined_block = match mine().await {
         Ok(b) => b,
         Err(e) => {
-            let response = MineBlockResponse {
-                success: false,
-                block_hash: None,
-                transactions: Vec::new(),
-                nonce: None,
-                error: Some(e),
-                target: None,
-                difficulty: None,
-                next_target: None,
-                next_difficulty: None,
-            };
+            let mut response = MineBlockResponse::empty();
+            response.error = Some(e);
             return RpcResponse::success(id, serde_json::to_value(response).unwrap());
         }
     };
-    // submit the mined block to the node
-    let mut node = get_node_mut().await;
-    match node.submit_mined_block(mined_block) {
-        Ok(block) => {
-            let (block_hash, nonce, transactions, target) = {
-                let block_hash = bytes_to_hex_string(&block.header_hash());
-                let nonce = block.header.nonce;
-                let transactions: Vec<_> = block
-                    .transactions
-                    .iter()
-                    .map(|tx| transaction_model_to_view(tx))
-                    .collect();
-                let target = block.header.target;
 
-                (block_hash, nonce, transactions, target)
-            };
-            let next_target = node.blockchain.calculate_next_target();
-            let response = MineBlockResponse {
-                success: true,
-                block_hash: Some(block_hash),
-                transactions,
-                nonce: Some(nonce),
-                error: None,
-                target: Some(format_target_hex(target)),
-                difficulty: Some(format_difficulty(target)),
-                next_target: Some(format_target_hex(next_target)),
-                next_difficulty: Some(format_difficulty(next_target)),
-            };
-            node.save_node();
-            RpcResponse::success(id, serde_json::to_value(response).unwrap())
-        }
-        Err(e) => {
-            let response = MineBlockResponse {
-                success: false,
-                block_hash: None,
-                transactions: Vec::new(),
-                nonce: None,
-                error: Some(e),
-                target: None,
-                difficulty: None,
-                next_target: None,
-                next_difficulty: None,
-            };
-            RpcResponse::success(id, serde_json::to_value(response).unwrap())
-        }
-    }
+    let (block, next_target) = match submit_block(mined_block).await {
+        Ok(result) => result,
+        Err(e) => return RpcResponse::error(id, INTERNAL_ERROR, e),
+    };
+
+    let transactions: Vec<_> = block
+        .transactions
+        .iter()
+        .map(|tx| transaction_model_to_view(tx))
+        .collect();
+    let response = MineBlockResponse {
+        success: true,
+        block_hash: Some(bytes_to_hex_string(&block.header_hash())),
+        transactions,
+        nonce: Some(block.header.nonce),
+        error: None,
+        target: Some(format_target_hex(block.header.target)),
+        next_target: Some(format_target_hex(next_target)),
+        next_difficulty: Some(format_difficulty(next_target)),
+    };
+
+    RpcResponse::success(id, serde_json::to_value(response).unwrap())
 }
 
 pub async fn handle_get_mining_info(id: Option<u64>) -> RpcResponse {

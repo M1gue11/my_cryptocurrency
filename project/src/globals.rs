@@ -84,7 +84,7 @@ pub static CONSENSUS_RULES: Lazy<ConsensusRules> = Lazy::new(|| ConsensusRules {
     max_block_size_kb: 1.0,
     block_reward: 1 * COIN,
     lwma_n: 10,
-    target_block_time_secs: 10,
+    target_block_time_secs: 20,
 });
 
 pub const COIN: i64 = 1_000_000;

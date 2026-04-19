@@ -8,6 +8,7 @@ use tokio::task::JoinSet;
 
 use primitive_types::U256;
 
+use crate::model::get_node_mut;
 use crate::utils::log_info;
 use crate::{
     globals::{CONFIG, CONSENSUS_RULES},
@@ -124,7 +125,7 @@ fn build_block(
     new_block
 }
 
-pub async fn mine_block(
+async fn mine_block_impl(
     mempool: Vec<MempoolTx>,
     previous_hash: [u8; 32],
     target: U256,
@@ -218,4 +219,22 @@ pub async fn mine_block(
             ),
         );
     }
+}
+
+pub async fn mine() -> Result<Block, String> {
+    let (mempool, previous_hash, target, receive_addr) = {
+        let mut node = get_node_mut().await;
+        node.prepare_mining()
+    };
+    mine_block_impl(mempool, previous_hash, target, receive_addr).await
+}
+
+pub async fn submit_block(mined_block: Block) -> Result<(Block, U256), String> {
+    let mut node = get_node_mut().await;
+
+    let block = node.submit_mined_block(mined_block)?.clone();
+    let next_target = node.blockchain.calculate_next_target();
+    node.save_node();
+
+    Ok((block, next_target))
 }

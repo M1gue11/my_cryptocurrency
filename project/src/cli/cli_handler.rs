@@ -572,7 +572,6 @@ async fn handle_mine(command: MineCommands, client: &RpcClient) {
             );
             println!("  Nonce: {:?}", mine_response.nonce);
             println!("  Target: {:?}", mine_response.target);
-            println!("  Difficulty: {:?}", mine_response.difficulty);
             println!("  Next Target: {:?}", mine_response.next_target);
             println!("  Next Difficulty: {:?}", mine_response.next_difficulty);
         }
