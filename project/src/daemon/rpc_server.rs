@@ -10,6 +10,7 @@ use crate::daemon::handlers::mine::{
 use crate::daemon::handlers::node::{
     handle_node_clear_mempool, handle_node_init, handle_node_mempool, handle_node_status,
 };
+use crate::daemon::handlers::peer::{handle_peer_disconnect, handle_peers_list};
 use crate::daemon::handlers::tx::handle_transaction_view;
 use crate::daemon::handlers::wallet::{
     handle_import_wallet, handle_new_wallet, handle_wallet_address, handle_wallet_balance,
@@ -117,6 +118,10 @@ pub async fn process_request(request_str: &str) -> RpcResponse {
         "node_mempool" => handle_node_mempool(request.id).await,
         "node_clear_mempool" => handle_node_clear_mempool(request.id).await,
         "node_save" => handle_node_save(request.id).await,
+
+        // Peer methods
+        "peers_list" => handle_peers_list(request.id).await,
+        "peer_disconnect" => handle_peer_disconnect(request.id, request.params).await,
 
         // Mining methods
         "mine_block" => handle_mine_block(request.id).await,

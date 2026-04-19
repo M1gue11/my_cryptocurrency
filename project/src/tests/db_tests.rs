@@ -1,15 +1,37 @@
 #[cfg(test)]
 mod tests {
     use primitive_types::U256;
+    use std::path::Path;
 
     use crate::db::db::init_db;
     use crate::db::repository::LedgerRepository;
+    use crate::globals::CONFIG;
     use crate::model::block::BlockHeader;
     use crate::model::{Block, Transaction, TxOutput};
     use crate::utils::get_current_timestamp;
 
+    fn reset_test_db() {
+        let db_path = Path::new(&CONFIG.db_path);
+        if db_path.exists() {
+            let _ = std::fs::remove_file(db_path);
+        }
+
+        let wal_path = format!("{}-wal", CONFIG.db_path);
+        let wal_path = Path::new(&wal_path);
+        if wal_path.exists() {
+            let _ = std::fs::remove_file(wal_path);
+        }
+
+        let shm_path = format!("{}-shm", CONFIG.db_path);
+        let shm_path = Path::new(&shm_path);
+        if shm_path.exists() {
+            let _ = std::fs::remove_file(shm_path);
+        }
+    }
+
     #[test]
     fn test_db_creation_and_schema() {
+        reset_test_db();
         init_db();
         let repo = LedgerRepository::new();
 
@@ -20,6 +42,7 @@ mod tests {
 
     #[test]
     fn test_mempool_operations() {
+        reset_test_db();
         init_db();
         let repo = LedgerRepository::new();
 
@@ -49,6 +72,7 @@ mod tests {
 
     #[test]
     fn test_get_utxos_for_address() {
+        reset_test_db();
         init_db();
         let mut repo = LedgerRepository::new();
 
@@ -82,6 +106,7 @@ mod tests {
 
     #[test]
     fn test_get_utxos_for_addresses_empty_list() {
+        reset_test_db();
         init_db();
         let repo = LedgerRepository::new();
 
@@ -91,6 +116,7 @@ mod tests {
 
     #[test]
     fn test_get_utxos_for_addresses_multiple() {
+        reset_test_db();
         init_db();
         let mut repo = LedgerRepository::new();
 
@@ -146,6 +172,7 @@ mod tests {
 
     #[test]
     fn test_apply_block_genesis() {
+        reset_test_db();
         init_db();
         let mut repo = LedgerRepository::new();
 

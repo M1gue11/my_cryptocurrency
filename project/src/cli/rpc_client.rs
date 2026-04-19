@@ -4,9 +4,10 @@ use tokio::net::TcpStream;
 
 use crate::daemon::types::{
     ChainShowResponse, ChainStatusResponse, MempoolResponse, MineBlockResponse, NodeInitResponse,
-    NodeStatusResponse, RpcRequest, RpcResponse, SimpleSuccessResponse, TransactionViewResponse,
-    UtxosResponse, WalletAccessParams, WalletAddressResponse, WalletBalanceResponse,
-    WalletGenerateKeysResponse, WalletNewResponse, WalletSendResponse,
+    NodeStatusResponse, PeerDisconnectResponse, PeersListResponse, RpcRequest, RpcResponse,
+    SimpleSuccessResponse, TransactionViewResponse, UtxosResponse, WalletAccessParams,
+    WalletAddressResponse, WalletBalanceResponse, WalletGenerateKeysResponse, WalletNewResponse,
+    WalletSendResponse,
 };
 use crate::utils::LogEntry;
 
@@ -100,6 +101,18 @@ impl RpcClient {
 
     pub async fn node_save(&self) -> Result<SimpleSuccessResponse, String> {
         self.call("node_save", serde_json::json!({})).await
+    }
+
+    // ========================================================================
+    // Peer Methods
+    // ========================================================================
+    pub async fn peers_list(&self) -> Result<PeersListResponse, String> {
+        self.call("peers_list", serde_json::json!({})).await
+    }
+
+    pub async fn peer_disconnect(&self, addr: &str) -> Result<PeerDisconnectResponse, String> {
+        self.call("peer_disconnect", serde_json::json!({ "addr": addr }))
+            .await
     }
 
     // ========================================================================
