@@ -571,11 +571,10 @@ async fn handle_mine(command: MineCommands, client: &RpcClient) {
                     .len()
             );
             println!("  Nonce: {:?}", mine_response.nonce);
-            println!("  Difficulty: {:?} bits", mine_response.difficulty);
-            println!(
-                "  Next Difficulty: {:?} bits",
-                mine_response.next_difficulty
-            );
+            println!("  Target: {:?}", mine_response.target);
+            println!("  Difficulty: {:?}", mine_response.difficulty);
+            println!("  Next Target: {:?}", mine_response.next_target);
+            println!("  Next Difficulty: {:?}", mine_response.next_difficulty);
         }
     }
 }
@@ -604,6 +603,7 @@ async fn handle_chain(command: ChainCommands, client: &RpcClient) {
                 println!("  Merkle Root: {}", block.merkle_root);
                 println!("  Nonce: {}", block.nonce);
                 println!("  Date: {}", block.timestamp);
+                println!("  Target: {}", block.target);
                 println!("  Difficulty: {}", block.difficulty);
                 println!("  Transactions: {}", block.transactions.len());
 

@@ -7,7 +7,7 @@ use crate::daemon::types::{
 use crate::db::repository::LedgerRepository;
 use crate::model::get_node;
 use crate::security_utils::bytes_to_hex_string;
-use crate::utils::transaction_model_to_view;
+use crate::utils::{format_difficulty, format_target_hex, transaction_model_to_view};
 
 pub async fn handle_chain_status(id: Option<u64>) -> RpcResponse {
     let node = get_node().await;
@@ -49,7 +49,8 @@ pub async fn handle_chain_show(id: Option<u64>) -> RpcResponse {
             merkle_root: bytes_to_hex_string(&block.header.merkle_root),
             nonce: block.header.nonce,
             timestamp: block.header.timestamp.to_string(),
-            difficulty: format!("{:#x}", block.header.target),
+            target: format_target_hex(block.header.target),
+            difficulty: format_difficulty(block.header.target),
             transactions: block
                 .transactions
                 .iter()
