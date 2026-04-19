@@ -5,6 +5,8 @@ import type {
   RpcRequest,
   RpcResponse,
   NodeStatusResponse,
+  PeersListResponse,
+  PeerDisconnectResponse,
   MempoolResponse,
   ChainStatusResponse,
   ChainShowResponse,
@@ -104,6 +106,18 @@ export class RpcClient {
 
   async nodeSave(): Promise<{ success: boolean }> {
     return this.call("node_save");
+  }
+
+  // ==========================================================================
+  // Peer Methods
+  // ==========================================================================
+
+  async peersList(): Promise<PeersListResponse> {
+    return this.call<PeersListResponse>("peers_list");
+  }
+
+  async peerDisconnect(addr: string): Promise<PeerDisconnectResponse> {
+    return this.call<PeerDisconnectResponse>("peer_disconnect", { addr });
   }
 
   // ==========================================================================

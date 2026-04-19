@@ -3,6 +3,7 @@
 
 export * from './rpc';
 export * from './node';
+export * from './peer';
 export * from './chain';
 export * from './mine';
 export * from './wallet';
