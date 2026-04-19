@@ -443,10 +443,7 @@ impl Node {
         self.background_task = None;
     }
 
-    pub fn set_last_mined_block(
-        &mut self,
-        response: crate::daemon::types::MineBlockResponse,
-    ) {
+    pub fn set_last_mined_block(&mut self, response: crate::daemon::types::MineBlockResponse) {
         self.last_mined_block = Some(response);
     }
 
