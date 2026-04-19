@@ -1,26 +1,34 @@
-import { useEffect, useRef, useState } from "react";
-import { Card, StatCard, Button } from "../components";
-import { rpcClient } from "../services";
-import type { MineBlockResponse, MiningInfoResponse } from "../types";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  ConsoleButton,
+  ConsoleEmpty,
+  ConsolePageHeader,
+  ConsolePanel,
+  ConsolePill,
+  ConsoleRow,
+  ConsoleStat,
+  ConsoleStatStrip,
+  shortHash,
+} from '../components';
+import { rpcClient } from '../services';
+import type { MineBlockResponse, MiningInfoResponse } from '../types';
 
 function formatElapsed(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return [hours, minutes, remainingSeconds]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':');
 }
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-});
-
-// The API returns NaiveDateTime serialized from Utc::now().naive_utc() -- pure UTC.
-// Append "Z" so the browser parses it as UTC, matching Date.now().
 function parseApiDate(raw: string): Date {
   return new Date(`${raw.slice(0, 19)}Z`);
 }
@@ -39,24 +47,25 @@ export function Mining() {
   const [now, setNow] = useState(() => Date.now());
   const previousStartedAtRef = useRef<string | null>(null);
 
-  const fetchMiningInfo = async () => {
+  const loadMiningInfo = useCallback(async () => {
     try {
       const info = await rpcClient.mineInfo();
       setMiningInfo(info);
-    } catch (err) {
-      console.error("Failed to fetch mining info:", err);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to fetch mining info',
+      );
     }
-  };
-
-  // Poll mining info every 5s
-  useEffect(() => {
-    fetchMiningInfo();
-    const interval = setInterval(fetchMiningInfo, 5000);
-    return () => clearInterval(interval);
   }, []);
 
-  // Tick every second unconditionally -- cheap and avoids dependency issues
-  // when the page loads with mining already in progress.
+  useEffect(() => {
+    void loadMiningInfo();
+    const interval = setInterval(() => {
+      void loadMiningInfo();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [loadMiningInfo]);
+
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
@@ -74,12 +83,11 @@ export function Mining() {
             if (current?.block_hash === block.block_hash) {
               return current;
             }
-
             return block;
           });
         }
-      } catch (err) {
-        console.error("Failed to fetch last mined block:", err);
+      } catch {
+        // Keep the previous result visible if this secondary request fails.
       }
     };
 
@@ -94,32 +102,35 @@ export function Mining() {
   const keepMining = miningInfo.keep_mining_enabled;
 
   const elapsedSeconds =
-    miningInfo.started_at ?
-      Math.max(
-        0,
-        Math.floor(
-          (now - parseApiDate(miningInfo.started_at).getTime()) / 1000,
-        ),
-      )
-    : 0;
+    miningInfo.started_at
+      ? Math.max(
+          0,
+          Math.floor((now - parseApiDate(miningInfo.started_at).getTime()) / 1000),
+        )
+      : 0;
+
+  const statusTone = isCurrentlyMining ? 'accent' : 'neutral';
+  const derivedStatusLabel = isCurrentlyMining ? 'searching nonce' : 'miner idle';
 
   const handleMineBlock = async () => {
     try {
       if (keepMining) {
-        setError("Auto-mining is active. Disable it before mining manually.");
+        setError('Auto-mining is active. Disable it before mining manually.');
         return;
       }
+
       setMining(true);
       setError(null);
-      setLastResult(null);
       const result = await rpcClient.mineBlock();
       setLastResult(result);
+
       if (!result.success) {
-        setError(result.error ?? "Mining failed");
+        setError(result.error ?? 'Mining failed');
       }
-      fetchMiningInfo();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Mining failed");
+
+      await loadMiningInfo();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Mining failed');
     } finally {
       setMining(false);
     }
@@ -129,171 +140,335 @@ export function Mining() {
     try {
       setTogglingKeepMining(true);
       setError(null);
-      const newValue = !keepMining;
-      await rpcClient.keepMining(newValue);
-      await fetchMiningInfo();
-    } catch (err) {
+      await rpcClient.keepMining(!keepMining);
+      await loadMiningInfo();
+    } catch (nextError) {
       setError(
-        err instanceof Error ?
-          err.message
-        : "Failed to update keep mining flag",
+        nextError instanceof Error
+          ? nextError.message
+          : 'Failed to update keep mining flag',
       );
     } finally {
       setTogglingKeepMining(false);
     }
   };
+
+  const latestTransactions = useMemo(
+    () => lastResult?.transactions ?? [],
+    [lastResult],
+  );
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">Mining</h2>
-        <div className="flex gap-3">
-          <Button
-            onClick={handleToggleKeepMining}
-            loading={togglingKeepMining}
-            variant={keepMining ? "danger" : "secondary"}
-          >
-            {keepMining ? "Stop Auto-Mining" : "Start Auto-Mining"}
-          </Button>
-          <Button
-            onClick={handleMineBlock}
-            loading={mining}
-            loadingText="Mining..."
-            disabled={keepMining}
-          >
-            Mine Block
-          </Button>
-        </div>
-      </div>
-
-      {/* Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div
-          className={`rounded-lg border p-4 transition-colors ${
-            isCurrentlyMining ?
-              "bg-amber-950/40 border-amber-500/60"
-            : "bg-gray-800 border-gray-700"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className={`text-2xl ${isCurrentlyMining ? "animate-pulse" : ""}`}
+    <div className="space-y-5">
+      <ConsolePageHeader
+        eyebrow="mine_info . mine_block . mine_keep_mining"
+        title="Mining Center"
+        actions={
+          <>
+            <ConsolePill tone={keepMining ? 'accent' : 'neutral'}>
+              keep_mining {keepMining ? 'on' : 'off'}
+            </ConsolePill>
+            <ConsoleButton
+              onClick={handleToggleKeepMining}
+              loading={togglingKeepMining}
             >
-              {isCurrentlyMining ? "⛏" : "-"}
-            </span>
-            <div>
-              <p className="text-sm text-gray-400">Status</p>
-              <p
-                className={`text-2xl font-bold ${
-                  isCurrentlyMining ? "text-amber-400" : "text-white"
-                }`}
-              >
-                {isCurrentlyMining ? "Mining" : "Idle"}
-              </p>
-            </div>
-          </div>
-        </div>
+              toggle keep_on
+            </ConsoleButton>
+            <ConsoleButton
+              tone="primary"
+              onClick={handleMineBlock}
+              loading={mining}
+              loadingText="mining..."
+              disabled={keepMining}
+            >
+              mine block now
+            </ConsoleButton>
+          </>
+        }
+      />
 
-        <StatCard
-          icon="~"
-          label="Auto-Mining"
-          value={keepMining ? "Enabled" : "Disabled"}
-        />
-        <StatCard
-          icon="#"
-          label="Last Target"
-          value={lastResult?.target ?? "-"}
-        />
-      </div>
-
-      {/* Active Mining Session */}
-      {isCurrentlyMining && (
-        <div className="rounded-lg border border-amber-500/60 bg-amber-950/40">
-          <div className="px-4 py-3 border-b border-amber-500/40">
-            <h3 className="text-lg font-semibold text-amber-400">
-              Active Mining Session
-            </h3>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Started at</span>
-              <span className="text-white font-mono">
-                {dateFormatter.format(parseApiDate(miningInfo.started_at!))}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Elapsed</span>
-              <span className="text-amber-400 font-mono text-xl font-bold tabular-nums">
-                {formatElapsed(elapsedSeconds)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="p-4 bg-red-900/40 border border-red-700 rounded-lg text-red-400">
+      {error ? (
+        <div className="rounded-sm border border-[var(--crm-warn)]/40 bg-[var(--crm-warn-bg)] px-4 py-3 text-sm text-[var(--crm-warn)]">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {/* Last Block Result */}
-      {lastResult && lastResult.success && (
-        <Card title="Last Mined Block">
-          <dl className="space-y-3">
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Block Hash</dt>
-              <dd className="text-white font-mono text-xs truncate max-w-xs">
-                {lastResult.block_hash}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Nonce</dt>
-              <dd className="text-white font-mono">{lastResult.nonce}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Target</dt>
-              <dd className="text-white font-mono text-xs truncate max-w-xs">
-                {lastResult.target}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Next Target</dt>
-              <dd className="text-white font-mono text-xs truncate max-w-xs">
-                {lastResult.next_target}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Next Difficulty</dt>
-              <dd className="text-white">{lastResult.next_difficulty}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Transactions Included</dt>
-              <dd className="text-white">{lastResult.transactions.length}</dd>
-            </div>
-          </dl>
+      <ConsoleStatStrip columns={4}>
+        <ConsoleStat
+          label="status"
+          value={isCurrentlyMining ? 'mining' : 'idle'}
+          subtitle={derivedStatusLabel}
+          tone={statusTone}
+        />
+        <ConsoleStat
+          label="keep mining"
+          value={keepMining ? 'enabled' : 'disabled'}
+          subtitle="daemon flag"
+          tone={keepMining ? 'accent' : 'neutral'}
+        />
+        <ConsoleStat
+          label="started"
+          value={miningInfo.started_at ? formatElapsed(elapsedSeconds) : '-'}
+          subtitle={miningInfo.started_at ?? 'no active session'}
+        />
+        <ConsoleStat
+          label="last target"
+          value={lastResult?.target ?? '-'}
+          subtitle={lastResult?.next_target ?? 'awaiting mined block'}
+        />
+      </ConsoleStatStrip>
 
-          {lastResult.transactions.length > 0 && (
-            <div className="mt-4 space-y-2">
-              <h4 className="text-gray-400 text-sm">Transactions</h4>
-              {lastResult.transactions.map((tx, i) => (
-                <div
-                  key={i}
-                  className="flex justify-between items-center p-2 bg-gray-700 rounded"
-                >
-                  <span className="font-mono text-xs truncate max-w-xs">
-                    {tx.id}
-                  </span>
-                  <span className="text-green-400 ml-4 whitespace-nowrap">
-                    {tx.outputs.reduce((sum, o) => sum + o.value, 0)} units
-                  </span>
+      <div className="rounded-sm border border-[var(--crm-border)] bg-[var(--crm-panel)] p-5">
+        <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
+          <div className="flex items-center gap-5">
+            <div className="relative h-24 w-24 shrink-0">
+              <div className="absolute inset-0 rounded-full border border-[var(--crm-border)]" />
+              {isCurrentlyMining ? (
+                <>
+                  <div
+                    className="absolute inset-0 rounded-full border border-[var(--crm-accent)] border-r-transparent border-b-transparent"
+                    style={{ animation: 'crm-spin 1.6s linear infinite' }}
+                  />
+                  <div
+                    className="absolute inset-[10px] rounded-full border border-[var(--crm-accent-dim)] border-l-transparent border-t-transparent"
+                    style={{ animation: 'crm-spin 2.4s linear infinite reverse' }}
+                  />
+                </>
+              ) : null}
+              <div className="absolute inset-0 grid place-items-center crm-mono text-xs tracking-[0.12em] text-[var(--crm-accent)]">
+                {isCurrentlyMining ? 'HASH' : 'IDLE'}
+              </div>
+            </div>
+
+            <div>
+              <div className="crm-field-label">{derivedStatusLabel}</div>
+              <div className="crm-mono text-3xl tracking-[-0.05em] text-[var(--crm-accent)]">
+                {miningInfo.started_at ? formatElapsed(elapsedSeconds) : '--:--:--'}
+              </div>
+              <div className="mt-1 text-sm text-[var(--crm-dim)]">
+                {miningInfo.started_at
+                  ? `started at ${parseApiDate(miningInfo.started_at).toLocaleTimeString()}`
+                  : 'No active mining session'}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="target" value={lastResult?.target ?? '-'} subtitle="current" />
+            <Metric
+              label="difficulty"
+              value={lastResult?.next_difficulty ?? '-'}
+              subtitle="next difficulty"
+            />
+            <Metric
+              label="last block"
+              value={lastResult?.block_hash ? shortHash(lastResult.block_hash, 10) : '-'}
+              subtitle="accepted block"
+            />
+            <Metric
+              label="nonce"
+              value={lastResult?.nonce?.toLocaleString() ?? '-'}
+              subtitle="most recent result"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-sm border border-[var(--crm-border)] bg-[var(--crm-panel)] p-4">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="crm-field-label">mining progress . conceptual</div>
+          <div className="ml-auto crm-mono text-xs text-[var(--crm-dim)]">
+            {isCurrentlyMining
+              ? 'trying nonces... waiting for valid target'
+              : 'miner idle - toggle keep_mining or run a manual attempt'}
+          </div>
+        </div>
+        <div className="relative h-2 overflow-hidden rounded-full bg-[var(--crm-panel-2)]">
+          {isCurrentlyMining ? (
+            <div
+              className="absolute inset-y-0 w-[40%] bg-[linear-gradient(90deg,transparent,var(--crm-accent),transparent)]"
+              style={{ animation: 'crm-slide 1.8s ease-in-out infinite' }}
+            />
+          ) : null}
+        </div>
+        <div className="mt-3 flex flex-wrap justify-between gap-2 crm-mono text-[10px] text-[var(--crm-dim)]">
+          <span>candidate block built</span>
+          <span>transactions selected</span>
+          <span className={isCurrentlyMining ? 'text-[var(--crm-accent)]' : ''}>
+            hashing header
+          </span>
+          <span>valid nonce found</span>
+          <span>block submitted</span>
+        </div>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-[1.25fr_1fr]">
+        <ConsolePanel
+          title="last mined block"
+          subtitle="mine_last_block"
+          icon="#"
+          chip={
+            lastResult?.success ? (
+              <ConsolePill tone="good">accepted</ConsolePill>
+            ) : (
+              <ConsolePill tone="neutral">no result</ConsolePill>
+            )
+          }
+        >
+          {lastResult?.success ? (
+            <>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="crm-mono text-4xl tracking-[-0.05em] text-[var(--crm-accent)]">
+                  {shortHash(lastResult.block_hash, 10)}
                 </div>
-              ))}
-            </div>
+                <ConsolePill tone="good">latest success</ConsolePill>
+              </div>
+              <div className="mt-4">
+                <ConsoleRow label="hash" value={lastResult.block_hash ?? '-'} />
+                <ConsoleRow label="nonce" value={lastResult.nonce?.toLocaleString() ?? '-'} />
+                <ConsoleRow label="target" value={lastResult.target ?? '-'} />
+                <ConsoleRow label="next target" value={lastResult.next_target ?? '-'} />
+                <ConsoleRow
+                  label="next difficulty"
+                  value={lastResult.next_difficulty ?? '-'}
+                />
+                <ConsoleRow
+                  label="tx included"
+                  value={lastResult.transactions.length}
+                />
+              </div>
+            </>
+          ) : (
+            <ConsoleEmpty
+              title="no mined block yet"
+              hint="Run a manual mining attempt or enable keep_mining to see accepted block details here."
+            />
           )}
-        </Card>
-      )}
+        </ConsolePanel>
+
+        <ConsolePanel title="controls" subtitle="runtime toggles" icon="!">
+          <div className="space-y-3">
+            <ControlCard
+              title="Keep mining"
+              description="When enabled, the node continues mining as soon as it can assemble a candidate block."
+              action={
+                <ConsoleButton
+                  onClick={handleToggleKeepMining}
+                  loading={togglingKeepMining}
+                >
+                  {keepMining ? 'disable' : 'enable'}
+                </ConsoleButton>
+              }
+            />
+            <ControlCard
+              title="One-shot mine"
+              description="Attempt a single block immediately using the current daemon state."
+              action={
+                <ConsoleButton
+                  tone="primary"
+                  onClick={handleMineBlock}
+                  loading={mining}
+                  loadingText="mining..."
+                  disabled={keepMining}
+                >
+                  mine block now
+                </ConsoleButton>
+              }
+            />
+            <ControlCard
+              title="Known mining errors"
+              description="no transactions in mempool . blockchain empty or inconsistent . block submission rejected"
+            />
+          </div>
+        </ConsolePanel>
+      </div>
+
+      <ConsolePanel
+        title="transactions included"
+        subtitle={`${latestTransactions.length} transactions in latest mined block`}
+        icon="tx"
+        padded={false}
+      >
+        {latestTransactions.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>tx id</th>
+                  <th>type</th>
+                  <th>inputs</th>
+                  <th>outputs</th>
+                  <th className="text-right">value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {latestTransactions.map((tx) => (
+                  <tr key={tx.id}>
+                    <td className="text-[var(--crm-accent)]">
+                      {shortHash(tx.id, 12)}
+                    </td>
+                    <td>
+                      <ConsolePill tone={tx.is_coinbase ? 'accent' : 'neutral'}>
+                        {tx.is_coinbase ? 'coinbase' : 'transfer'}
+                      </ConsolePill>
+                    </td>
+                    <td>{tx.inputs.length}</td>
+                    <td>{tx.outputs.length}</td>
+                    <td className="text-right text-[var(--crm-accent)]">
+                      {tx.outputs.reduce((total, output) => total + output.value, 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <ConsoleEmpty
+            title="no mined transaction set"
+            hint="Successful mining responses will list the transactions included in the accepted block."
+          />
+        )}
+      </ConsolePanel>
+    </div>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  subtitle,
+}: {
+  label: string;
+  value: string;
+  subtitle: string;
+}) {
+  return (
+    <div>
+      <div className="crm-field-label">{label}</div>
+      <div className="crm-mono text-base text-[var(--crm-fg)]">{value}</div>
+      <div className="mt-1 text-xs text-[var(--crm-dim)]">{subtitle}</div>
+    </div>
+  );
+}
+
+function ControlCard({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="rounded-sm border border-[var(--crm-border)] bg-[var(--crm-panel-2)] p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-sm font-medium text-[var(--crm-fg)]">{title}</div>
+          <div className="mt-1 text-sm text-[var(--crm-dim)]">{description}</div>
+        </div>
+        {action}
+      </div>
     </div>
   );
 }

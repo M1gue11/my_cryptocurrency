@@ -1,38 +1,106 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { rpcClient } from '../services';
+import { ConsolePill } from './Console';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
+  const location = useLocation();
+  const [nodeOnline, setNodeOnline] = useState(true);
+  const [height, setHeight] = useState<number | null>(null);
+  const [miningState, setMiningState] = useState<'mining' | 'idle'>('idle');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchStatus = async () => {
+      try {
+        const [nodeStatus, miningInfo] = await Promise.all([
+          rpcClient.nodeStatus(),
+          rpcClient.mineInfo().catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        setNodeOnline(true);
+        setHeight(nodeStatus.block_height);
+        setMiningState(miningInfo?.is_currently_mining ? 'mining' : 'idle');
+      } catch {
+        if (cancelled) return;
+        setNodeOnline(false);
+        setMiningState('idle');
+      }
+    };
+
+    void fetchStatus();
+    const interval = setInterval(fetchStatus, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const footerLabel = (() => {
+    if (location.pathname === '/blocks') return 'blockchain explorer';
+    if (location.pathname === '/transactions') return 'transaction workbench';
+    if (location.pathname === '/wallet') return 'wallet console';
+    if (location.pathname === '/network') return 'runtime and peers';
+    if (location.pathname === '/mining') return 'mining center';
+    if (location.pathname === '/logs') return 'diagnostics';
+    return 'operator overview';
+  })();
+
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-bold text-blue-400">[C]</span>
-              <h1 className="text-xl font-bold text-white">Caramuru</h1>
+    <div className="crm-shell">
+      <header className="crm-topbar">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-6">
+          <div className="flex items-center gap-2">
+            <span className="crm-logo-mark" />
+            <div className="text-[13px] font-semibold tracking-[-0.02em] text-[var(--crm-fg)]">
+              caramuru
             </div>
-            <nav className="flex gap-4">
-              <NavItem to="/">Dashboard</NavItem>
-              <NavItem to="/blocks">Blocks</NavItem>
-              <NavItem to="/wallet">Wallet</NavItem>
-              <NavItem to="/transactions">Transactions</NavItem>
-              <NavItem to="/network">Network</NavItem>
-              <NavItem to="/mining">Mining</NavItem>
-              <NavItem to="/logs">Logs</NavItem>
-            </nav>
+            <div className="crm-mono text-[10.5px] text-[var(--crm-dim)]">
+              v0.3.1
+            </div>
+          </div>
+
+          <nav className="flex min-w-0 flex-1 gap-1 overflow-x-auto pb-1 lg:pb-0">
+            <NavItem to="/">dashboard</NavItem>
+            <NavItem to="/blocks">blockchain</NavItem>
+            <NavItem to="/transactions">transactions</NavItem>
+            <NavItem to="/wallet">wallet</NavItem>
+            <NavItem to="/mining">mining</NavItem>
+            <NavItem to="/network">node</NavItem>
+            <NavItem to="/logs">logs</NavItem>
+          </nav>
+
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--crm-dim)] lg:justify-end">
+            <span className="crm-mono">rpc http://localhost:7001/rpc</span>
+            <ConsolePill tone={nodeOnline ? 'accent' : 'warn'} dot>
+              {nodeOnline ? 'live' : 'offline'}
+            </ConsolePill>
+            <ConsolePill>{height !== null ? `#${height.toLocaleString()}` : '-'}</ConsolePill>
+            <ConsolePill>{miningState}</ConsolePill>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
+      <main className="crm-main">{children}</main>
+
+      <footer className="crm-footer">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+          <span>local operator panel</span>
+          <span>.</span>
+          <span>{nodeOnline ? 'node healthy' : 'daemon unreachable'}</span>
+          <span>.</span>
+          <span>{footerLabel}</span>
+          <span className="ml-auto">caramuru . pow node . live rpc data</span>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -42,11 +110,7 @@ function NavItem({ to, children }: { to: string; children: ReactNode }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-          isActive
-            ? 'bg-gray-900 text-white'
-            : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-        }`
+        isActive ? 'crm-nav-link crm-nav-link--active' : 'crm-nav-link'
       }
     >
       {children}

@@ -1,7 +1,546 @@
 @import "tailwindcss";
 
-/* Custom Scrollbar Styles */
-/* For Webkit browsers (Chrome, Safari, Edge) */
+:root {
+  --crm-bg: oklch(0.14 0.008 260);
+  --crm-bg-2: oklch(0.12 0.008 260);
+  --crm-panel: oklch(0.18 0.01 260);
+  --crm-panel-2: oklch(0.22 0.012 260);
+  --crm-panel-3: oklch(0.26 0.012 260);
+  --crm-border: oklch(0.27 0.012 260);
+  --crm-border-strong: oklch(0.34 0.012 260);
+  --crm-fg: oklch(0.96 0.005 260);
+  --crm-muted: oklch(0.7 0.01 260);
+  --crm-dim: oklch(0.52 0.01 260);
+  --crm-faint: oklch(0.38 0.01 260);
+  --crm-accent: oklch(0.62 0.2 25);
+  --crm-accent-dim: oklch(0.48 0.16 25);
+  --crm-accent-bg: oklch(0.3 0.1 25);
+  --crm-accent-fg: oklch(0.98 0.01 25);
+  --crm-good: oklch(0.74 0.14 150);
+  --crm-good-bg: oklch(0.28 0.08 150);
+  --crm-warn: oklch(0.8 0.14 85);
+  --crm-warn-bg: oklch(0.3 0.08 85);
+  --crm-bad: oklch(0.66 0.2 25);
+  --crm-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+html, body, #root {
+  min-height: 100%;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--crm-accent) 10%, transparent) 0, transparent 38%),
+    linear-gradient(180deg, color-mix(in srgb, var(--crm-bg-2) 88%, black) 0%, var(--crm-bg) 100%);
+  color: var(--crm-fg);
+}
+
+body {
+  font-family: "Geist", "Inter Tight", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+.crm-shell {
+  min-height: 100vh;
+  color: var(--crm-fg);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--crm-accent) 8%, transparent) 0, transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--crm-bg-2) 92%, black) 0%, var(--crm-bg) 100%);
+}
+
+.crm-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--crm-border);
+  background: color-mix(in srgb, var(--crm-panel) 94%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.crm-footer {
+  border-top: 1px solid var(--crm-border);
+  background: color-mix(in srgb, var(--crm-panel) 96%, transparent);
+  color: var(--crm-dim);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.crm-logo-mark {
+  width: 16px;
+  height: 16px;
+  background: var(--crm-accent);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--crm-accent) 40%, transparent);
+}
+
+.crm-nav-link {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  border-bottom: 1px solid transparent;
+  padding: 0.45rem 0.8rem;
+  color: var(--crm-muted);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  transition: 120ms ease;
+}
+
+.crm-nav-link:hover {
+  color: var(--crm-fg);
+  background: var(--crm-panel-2);
+}
+
+.crm-nav-link--active {
+  color: var(--crm-fg);
+  background: var(--crm-panel-2);
+  border-bottom-color: var(--crm-accent);
+}
+
+.crm-main {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.crm-panel {
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--crm-panel) 96%, transparent), var(--crm-panel));
+  box-shadow: var(--crm-shadow);
+}
+
+.crm-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid var(--crm-border);
+  background: color-mix(in srgb, var(--crm-panel-2) 88%, transparent);
+}
+
+.crm-panel__body {
+  padding: 1rem;
+}
+
+.crm-panel__icon {
+  width: 0.85rem;
+  color: var(--crm-accent);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.crm-panel__title,
+.crm-eyebrow,
+.crm-stat__label,
+.crm-stat__subtitle,
+.crm-row__label,
+.crm-empty__title,
+.crm-tab,
+.crm-pill,
+.crm-btn,
+.crm-table thead,
+.crm-field-label {
+  font-family: "Geist Mono", ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.crm-panel__title {
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.crm-panel__subtitle {
+  margin-top: 0.15rem;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.65rem;
+  color: var(--crm-dim);
+}
+
+.crm-eyebrow {
+  font-size: 0.62rem;
+  color: var(--crm-dim);
+}
+
+.crm-h1 {
+  margin: 0.25rem 0 0;
+  font-size: clamp(1.75rem, 2vw, 2.15rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.crm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  border-radius: 3px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.65rem;
+}
+
+.crm-pill__dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.crm-pill--accent {
+  background: var(--crm-accent-bg);
+  color: var(--crm-accent);
+}
+
+.crm-pill--good {
+  background: var(--crm-good-bg);
+  color: var(--crm-good);
+}
+
+.crm-pill--warn,
+.crm-pill--danger {
+  background: var(--crm-warn-bg);
+  color: var(--crm-warn);
+}
+
+.crm-pill--neutral {
+  background: var(--crm-panel-3);
+  color: var(--crm-muted);
+}
+
+.crm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: 120ms ease;
+}
+
+.crm-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.crm-btn--sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.65rem;
+}
+
+.crm-btn--md {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.69rem;
+}
+
+.crm-btn--lg {
+  padding: 0.7rem 1rem;
+  font-size: 0.72rem;
+}
+
+.crm-btn--default {
+  border-color: var(--crm-border);
+  background: var(--crm-panel-2);
+  color: var(--crm-fg);
+}
+
+.crm-btn--default:hover:not(:disabled) {
+  border-color: var(--crm-border-strong);
+}
+
+.crm-btn--primary {
+  border-color: var(--crm-accent);
+  background: var(--crm-accent);
+  color: var(--crm-accent-fg);
+}
+
+.crm-btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--crm-accent) 90%, white);
+}
+
+.crm-btn--danger {
+  border-color: var(--crm-bad);
+  background: transparent;
+  color: var(--crm-bad);
+}
+
+.crm-btn--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--crm-bad) 12%, transparent);
+}
+
+.crm-btn--ghost {
+  background: transparent;
+  color: var(--crm-muted);
+}
+
+.crm-btn--ghost:hover:not(:disabled) {
+  color: var(--crm-fg);
+}
+
+.crm-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px dashed var(--crm-border);
+  font-size: 0.78rem;
+}
+
+.crm-row:last-child {
+  border-bottom: 0;
+}
+
+.crm-row__label {
+  flex-shrink: 0;
+  color: var(--crm-dim);
+  font-size: 0.68rem;
+}
+
+.crm-row__value {
+  text-align: right;
+  word-break: break-word;
+}
+
+.crm-stat-strip {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--crm-border);
+  border-radius: 4px;
+  background: var(--crm-border);
+  grid-template-columns: repeat(var(--crm-columns), minmax(0, 1fr));
+}
+
+.crm-stat {
+  background: var(--crm-panel);
+  padding: 0.9rem;
+}
+
+.crm-stat__label {
+  font-size: 0.62rem;
+  color: var(--crm-dim);
+}
+
+.crm-stat__value {
+  margin-top: 0.15rem;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  letter-spacing: -0.03em;
+}
+
+.crm-stat__subtitle {
+  margin-top: 0.2rem;
+  font-size: 0.64rem;
+  color: var(--crm-dim);
+}
+
+.crm-text--accent {
+  color: var(--crm-accent);
+}
+
+.crm-text--good {
+  color: var(--crm-good);
+}
+
+.crm-text--warn,
+.crm-text--danger {
+  color: var(--crm-warn);
+}
+
+.crm-text--neutral {
+  color: var(--crm-fg);
+}
+
+.crm-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.crm-empty__glyph {
+  color: var(--crm-faint);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 1.4rem;
+}
+
+.crm-empty__title {
+  margin-top: 0.4rem;
+  color: var(--crm-muted);
+  font-size: 0.72rem;
+}
+
+.crm-empty__hint {
+  margin-top: 0.45rem;
+  color: var(--crm-dim);
+  font-size: 0.8rem;
+}
+
+.crm-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--crm-border);
+  padding-bottom: 0.1rem;
+}
+
+.crm-tabs__trailing {
+  color: var(--crm-dim);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+}
+
+.crm-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--crm-dim);
+  padding: 0.55rem 0.95rem;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.crm-tab--active {
+  border-bottom-color: var(--crm-accent);
+  color: var(--crm-fg);
+}
+
+.crm-input,
+.crm-select,
+.crm-textarea {
+  width: 100%;
+  border: 1px solid var(--crm-border);
+  border-radius: 3px;
+  background: var(--crm-bg-2);
+  color: var(--crm-fg);
+  padding: 0.65rem 0.8rem;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.crm-input:focus,
+.crm-select:focus,
+.crm-textarea:focus {
+  border-color: var(--crm-accent);
+}
+
+.crm-field-label {
+  margin-bottom: 0.4rem;
+  color: var(--crm-dim);
+  font-size: 0.62rem;
+}
+
+.crm-field-hint {
+  margin-top: 0.35rem;
+  color: var(--crm-dim);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+}
+
+.crm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+.crm-table thead {
+  background: color-mix(in srgb, var(--crm-panel-2) 90%, transparent);
+  color: var(--crm-dim);
+  font-size: 0.62rem;
+}
+
+.crm-table th,
+.crm-table td {
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.crm-table tbody tr {
+  border-top: 1px solid var(--crm-border);
+}
+
+.crm-table--interactive tbody tr {
+  cursor: pointer;
+  transition: 120ms ease;
+}
+
+.crm-table--interactive tbody tr:hover {
+  background: color-mix(in srgb, var(--crm-panel-2) 86%, transparent);
+}
+
+.crm-mono {
+  font-family: "Geist Mono", ui-monospace, monospace;
+}
+
+.crm-glow {
+  box-shadow: 0 0 18px color-mix(in srgb, var(--crm-accent) 30%, transparent);
+}
+
+.crm-divider {
+  border-color: var(--crm-border);
+}
+
+@keyframes crm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes crm-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@media (max-width: 900px) {
+  .crm-stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .crm-main {
+    padding: 0.75rem;
+  }
+
+  .crm-panel__header {
+    flex-wrap: wrap;
+  }
+
+  .crm-stat-strip {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* Main page scrollbar */
 html::-webkit-scrollbar,
@@ -12,18 +551,18 @@ body::-webkit-scrollbar {
 
 html::-webkit-scrollbar-track,
 body::-webkit-scrollbar-track {
-  background: #111827;
+  background: var(--crm-bg);
 }
 
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb {
-  background: #374151;
+  background: var(--crm-border-strong);
   border-radius: 4px;
 }
 
 html::-webkit-scrollbar-thumb:hover,
 body::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+  background: color-mix(in srgb, var(--crm-border-strong) 88%, white);
 }
 
 /* All other scrollbars */
@@ -33,27 +572,27 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1f2937;
+  background: var(--crm-panel);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4b5563;
+  background: var(--crm-border-strong);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: color-mix(in srgb, var(--crm-border-strong) 88%, white);
 }
 
 /* For Firefox */
 html, body {
   scrollbar-width: thin;
-  scrollbar-color: #374151 #111827;
+  scrollbar-color: var(--crm-border-strong) var(--crm-bg);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #4b5563 #1f2937;
+  scrollbar-color: var(--crm-border-strong) var(--crm-panel);
 }
 
 /* Custom scrollbar class for specific elements */
@@ -62,17 +601,17 @@ html, body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #1f2937;
+  background: var(--crm-panel);
   border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #374151;
+  background: var(--crm-border);
   border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+  background: var(--crm-border-strong);
 }
 
 /* Hide number input spinners */

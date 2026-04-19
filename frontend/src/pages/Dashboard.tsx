@@ -1,208 +1,457 @@
-import { useEffect, useState } from 'react';
-import { Card, StatCard, Button } from '../components';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useWallet } from '../contexts';
+import {
+  ConsoleButton,
+  ConsoleEmpty,
+  ConsolePageHeader,
+  ConsolePanel,
+  ConsolePill,
+  ConsoleRow,
+  ConsoleStat,
+  ConsoleStatStrip,
+  formatCount,
+  formatRelativeTimestamp,
+  formatTimestamp,
+  shortHash,
+  sumTransactionOutputs,
+} from '../components';
 import { rpcClient } from '../services';
 import type {
-  NodeStatusResponse,
+  BlockInfo,
   ChainStatusResponse,
   MempoolResponse,
+  MiningInfoResponse,
+  NodeStatusResponse,
   UtxosResponse,
 } from '../types';
 
 export function Dashboard() {
+  const navigate = useNavigate();
+  const { activeWallet } = useWallet();
   const [nodeStatus, setNodeStatus] = useState<NodeStatusResponse | null>(null);
   const [chainStatus, setChainStatus] = useState<ChainStatusResponse | null>(null);
   const [mempool, setMempool] = useState<MempoolResponse | null>(null);
+  const [utxos, setUtxos] = useState<UtxosResponse | null>(null);
+  const [miningInfo, setMiningInfo] = useState<MiningInfoResponse | null>(null);
+  const [blocks, setBlocks] = useState<BlockInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // UTXOs state
-  const [utxos, setUtxos] = useState<UtxosResponse | null>(null);
-  const [utxoLimit, setUtxoLimit] = useState(10);
-  const [loadingUtxos, setLoadingUtxos] = useState(false);
-
-  const fetchData = async () => {
+  const loadDashboard = useCallback(async (background = false) => {
     try {
-      setLoading(true);
+      if (background) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
-      const [status, chain, mem] = await Promise.all([
+      const [
+        nextNodeStatus,
+        nextChainStatus,
+        nextMempool,
+        nextUtxos,
+        nextMiningInfo,
+        nextBlocks,
+      ] = await Promise.all([
         rpcClient.nodeStatus(),
         rpcClient.chainStatus(),
         rpcClient.nodeMempool(),
+        rpcClient.chainUtxos(8),
+        rpcClient.mineInfo().catch(() => null),
+        rpcClient.chainShow().catch(() => ({ blocks: [] })),
       ]);
 
-      setNodeStatus(status);
-      setChainStatus(chain);
-      setMempool(mem);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to connect to daemon');
+      setNodeStatus(nextNodeStatus);
+      setChainStatus(nextChainStatus);
+      setMempool(nextMempool);
+      setUtxos(nextUtxos);
+      setMiningInfo(nextMiningInfo);
+      setBlocks(nextBlocks.blocks.slice().sort((a, b) => b.height - a.height));
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Failed to connect to the daemon',
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-  const fetchUtxos = async (limit: number) => {
-    try {
-      setLoadingUtxos(true);
-      const result = await rpcClient.chainUtxos(limit);
-      setUtxos(result);
-    } catch (err) {
-      console.error('Failed to fetch UTXOs:', err);
-    } finally {
-      setLoadingUtxos(false);
-    }
-  };
-
-  const loadMoreUtxos = () => {
-    const newLimit = utxoLimit + 10;
-    setUtxoLimit(newLimit);
-    fetchUtxos(newLimit);
-  };
-
-  useEffect(() => {
-    fetchData();
-    fetchUtxos(utxoLimit);
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
   }, []);
 
-if (loading && !nodeStatus) {
+  useEffect(() => {
+    void loadDashboard();
+    const interval = setInterval(() => {
+      void loadDashboard(true);
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [loadDashboard]);
+
+  const topBlock = blocks[0];
+  const activeBalance = activeWallet?.balance?.balance ?? 0;
+  const activeUtxoCount = activeWallet?.balance?.utxo_count ?? 0;
+
+  const mempoolTotal = useMemo(
+    () =>
+      mempool?.transactions.reduce(
+        (total, entry) => total + sumTransactionOutputs(entry.tx),
+        0,
+      ) ?? 0,
+    [mempool],
+  );
+
+  if (loading && !nodeStatus) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400">Connecting to daemon...</div>
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="crm-mono text-sm text-[var(--crm-dim)]">
+          Connecting to daemon...
+        </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !nodeStatus) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="text-red-400">{error}</div>
-        <Button onClick={fetchData}>Retry</Button>
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
+        <div className="max-w-lg text-center text-sm text-[var(--crm-warn)]">
+          {error}
+        </div>
+        <ConsoleButton tone="primary" onClick={() => void loadDashboard()}>
+          Retry
+        </ConsoleButton>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">Dashboard</h2>
-      </div>
+    <div className="space-y-5">
+      <ConsolePageHeader
+        eyebrow="operator overview . node healthy"
+        title="Dashboard"
+        actions={
+          <>
+            <ConsolePill>
+              local-demo . {new Date().toLocaleDateString()}
+            </ConsolePill>
+            <ConsoleButton
+              onClick={() => void loadDashboard(true)}
+              loading={refreshing}
+            >
+              refresh
+            </ConsoleButton>
+            <ConsoleButton
+              tone="primary"
+              onClick={() => navigate('/mining')}
+            >
+              open mining
+            </ConsoleButton>
+          </>
+        }
+      />
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon="#"
-          label="Block Height"
-          value={nodeStatus?.block_height ?? 0}
-        />
-        <StatCard
-          icon="@"
-          label="Connected Peers"
-          value={nodeStatus?.peers_connected ?? 0}
-        />
-        <StatCard
-          icon=">"
-          label="Mempool Size"
-          value={mempool?.count ?? 0}
-        />
-        <StatCard
-          icon={chainStatus?.is_valid ? '+' : 'x'}
-          label="Chain Status"
-          value={chainStatus?.is_valid ? 'Valid' : 'Invalid'}
-        />
-      </div>
+      {error ? (
+        <div className="rounded-sm border border-[var(--crm-warn)]/40 bg-[var(--crm-warn-bg)] px-4 py-3 text-sm text-[var(--crm-warn)]">
+          {error}
+        </div>
+      ) : null}
 
-      {/* Node Info & Mempool */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Node Information">
-          <dl className="space-y-3">
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Version</dt>
-              <dd className="text-white font-mono">{nodeStatus?.version}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Top Block Hash</dt>
-              <dd className="text-white font-mono text-xs truncate max-w-xs">
-                {nodeStatus?.top_block_hash}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-400">Last Block Date</dt>
-              <dd className="text-white">{chainStatus?.last_block_date ?? 'N/A'}</dd>
-            </div>
-          </dl>
-        </Card>
+      <ConsoleStatStrip columns={6}>
+        <ConsoleStat
+          label="chain height"
+          value={`#${formatCount(nodeStatus?.block_height)}`}
+          subtitle={chainStatus?.is_valid ? 'valid' : 'invalid'}
+          tone={chainStatus?.is_valid ? 'good' : 'warn'}
+        />
+        <ConsoleStat
+          label="peers"
+          value={formatCount(nodeStatus?.peers_connected)}
+          subtitle={(nodeStatus?.peers_connected ?? 0) > 0 ? 'connected' : 'no peers'}
+          tone={(nodeStatus?.peers_connected ?? 0) > 0 ? 'neutral' : 'warn'}
+        />
+        <ConsoleStat
+          label="mempool"
+          value={formatCount(mempool?.count)}
+          subtitle={`${mempoolTotal.toFixed(3)} total units`}
+          tone={(mempool?.count ?? 0) > 0 ? 'warn' : 'neutral'}
+        />
+        <ConsoleStat
+          label="hashrate"
+          value={miningInfo?.is_currently_mining ? 'active' : 'idle'}
+          subtitle={miningInfo?.keep_mining_enabled ? 'keep_on' : 'manual'}
+          tone={miningInfo?.is_currently_mining ? 'accent' : 'neutral'}
+        />
+        <ConsoleStat
+          label="last block"
+          value={chainStatus?.last_block_date ? formatTimestamp(chainStatus.last_block_date) : '-'}
+          subtitle={topBlock ? shortHash(topBlock.hash, 6) : 'no chain data'}
+        />
+        <ConsoleStat
+          label="visible utxos"
+          value={formatCount(utxos?.utxos.length)}
+          subtitle={`${utxos?.total_value ?? 0} units`}
+        />
+      </ConsoleStatStrip>
 
-        <Card title="Mempool">
-          {mempool && mempool.count > 0 ? (
-            <div className="space-y-2">
-              {mempool.transactions.slice(0, 5).map((entry, i) => (
-                <div
-                  key={i}
-                  className="flex justify-between items-center p-2 bg-gray-700 rounded"
-                >
-                  <span className="font-mono text-xs truncate max-w-xs">
-                    {entry.tx.id}
-                  </span>
-                  <span className="text-green-400">
-                    {entry.tx.outputs.reduce((sum, o) => sum + o.value, 0)} units
-                  </span>
-                </div>
-              ))}
-              {mempool.count > 5 && (
-                <p className="text-gray-400 text-sm text-center">
-                  +{mempool.count - 5} more transactions
-                </p>
-              )}
+      <div className="grid gap-3 xl:grid-cols-[1.1fr_1fr_0.9fr]">
+        <ConsolePanel
+          title="mining"
+          subtitle="mine_info"
+          icon="*"
+          chip={
+            <ConsolePill tone={miningInfo?.keep_mining_enabled ? 'accent' : 'neutral'}>
+              keep_mining {miningInfo?.keep_mining_enabled ? 'on' : 'off'}
+            </ConsolePill>
+          }
+        >
+          <div className="crm-field-label">
+            {miningInfo?.is_currently_mining ? 'searching nonce' : 'idle'}
+          </div>
+          <div className="crm-mono text-3xl tracking-[-0.04em] text-[var(--crm-accent)]">
+            {miningInfo?.started_at ? formatTimestamp(miningInfo.started_at) : '--:--:--'}
+          </div>
+          <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--crm-panel-2)]">
+            <div
+              className={miningInfo?.is_currently_mining ? 'h-full w-[40%] bg-[var(--crm-accent)]/70' : 'h-full w-0'}
+              style={
+                miningInfo?.is_currently_mining
+                  ? { animation: 'crm-slide 1.8s ease-in-out infinite' }
+                  : undefined
+              }
+            />
+          </div>
+          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+            <div className="crm-mono text-[var(--crm-dim)]">
+              keep_on: {miningInfo?.keep_mining_enabled ? 'true' : 'false'}
             </div>
-          ) : (
-            <p className="text-gray-400 text-center py-4">No pending transactions</p>
-          )}
-        </Card>
-      </div>
-
-      {/* Network UTXOs */}
-      <Card title={`Network UTXOs (${utxos?.utxos.length ?? 0} shown, ${utxos?.total_value ?? 0} total units)`}>
-        {utxos && utxos.utxos.length > 0 ? (
-          <div className="space-y-3">
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {utxos.utxos.map((utxo) => (
-                <div
-                  key={`${utxo.tx_id}-${utxo.index}`}
-                  className="flex justify-between items-center p-3 bg-gray-700 rounded"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-mono text-xs text-gray-400 truncate">
-                      {utxo.tx_id}:{utxo.index}
-                    </div>
-                    <div className="font-mono text-xs text-gray-500 truncate mt-1">
-                      {utxo.address}
-                    </div>
-                  </div>
-                  <span className="text-green-400 font-bold ml-4 whitespace-nowrap">
-                    {utxo.value} units
-                  </span>
-                </div>
-              ))}
+            <div className="crm-mono text-[var(--crm-dim)]">
+              last result: {miningInfo?.last_mined_block?.success ? 'accepted' : 'n/a'}
             </div>
-            <div className="flex justify-center pt-2">
-              <Button
-                onClick={loadMoreUtxos}
-                variant="secondary"
-                loading={loadingUtxos}
-              >
-                Load More (+10)
-              </Button>
+            <div className="crm-mono text-[var(--crm-dim)]">
+              started: {miningInfo?.started_at ? formatRelativeTimestamp(miningInfo.started_at) : '-'}
+            </div>
+            <div className="crm-mono text-[var(--crm-dim)]">
+              route: /mining
             </div>
           </div>
-        ) : (
-          <p className="text-gray-400 text-center py-4">
-            {loadingUtxos ? 'Loading UTXOs...' : 'No UTXOs in the network'}
-          </p>
-        )}
-      </Card>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <ConsoleButton tone="primary" onClick={() => navigate('/mining')}>
+              mining center
+            </ConsoleButton>
+            <ConsoleButton onClick={() => navigate('/blocks')}>
+              inspect chain
+            </ConsoleButton>
+          </div>
+        </ConsolePanel>
+
+        <ConsolePanel
+          title="top of chain"
+          subtitle="chain_status"
+          icon="<>"
+          action={
+            <button
+              className="crm-mono text-xs text-[var(--crm-accent)]"
+              onClick={() => navigate('/blocks')}
+              type="button"
+            >
+              explore
+            </button>
+          }
+        >
+          {topBlock ? (
+            <>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="crm-mono text-4xl tracking-[-0.05em] text-[var(--crm-accent)]">
+                  #{topBlock.height.toLocaleString()}
+                </div>
+                <ConsolePill tone={chainStatus?.is_valid ? 'good' : 'warn'}>
+                  {chainStatus?.is_valid ? 'valid' : 'invalid'}
+                </ConsolePill>
+              </div>
+              <div className="mt-4">
+                <ConsoleRow label="hash" value={topBlock.hash} />
+                <ConsoleRow label="prev" value={topBlock.prev_hash} />
+                <ConsoleRow label="merkle" value={topBlock.merkle_root} />
+                <ConsoleRow label="nonce" value={topBlock.nonce.toLocaleString()} />
+                <ConsoleRow
+                  label="txs"
+                  value={`${topBlock.transactions.length} (${topBlock.transactions.filter((tx) => tx.is_coinbase).length} coinbase)`}
+                />
+              </div>
+            </>
+          ) : (
+            <ConsoleEmpty
+              title="no block data"
+              hint="The explorer view will populate once the daemon returns chain data."
+            />
+          )}
+        </ConsolePanel>
+
+        <ConsolePanel
+          title="active wallet"
+          subtitle="session"
+          icon="[]"
+          action={
+            <button
+              className="crm-mono text-xs text-[var(--crm-accent)]"
+              onClick={() => navigate('/wallet')}
+              type="button"
+            >
+              open
+            </button>
+          }
+        >
+          {activeWallet ? (
+            <>
+              <div className="crm-field-label">
+                {activeWallet.keyPath} . loaded
+              </div>
+              <div className="crm-mono text-3xl tracking-[-0.04em]">
+                {activeBalance.toFixed(3)}{' '}
+                <span className="text-sm text-[var(--crm-dim)]">units</span>
+              </div>
+              <div className="mt-2 text-sm text-[var(--crm-muted)]">
+                {shortHash(activeWallet.address, 10)} . {activeUtxoCount} UTXOs
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <ConsoleButton
+                  tone="primary"
+                  onClick={() => navigate('/wallet?tab=send')}
+                >
+                  send
+                </ConsoleButton>
+                <ConsoleButton onClick={() => navigate('/wallet?tab=receive')}>
+                  receive
+                </ConsoleButton>
+              </div>
+              <div className="mt-4 rounded-sm border border-dashed border-[var(--crm-border)] bg-[var(--crm-panel-2)] px-3 py-3 text-sm text-[var(--crm-dim)]">
+                Session-backed wallet access lives entirely in the frontend; no
+                password is written to disk.
+              </div>
+            </>
+          ) : (
+            <ConsoleEmpty
+              title="no wallet loaded"
+              hint="Import or create a wallet to unlock send, receive, and key management."
+              action={
+                <ConsoleButton tone="primary" onClick={() => navigate('/wallet')}>
+                  open wallet
+                </ConsoleButton>
+              }
+            />
+          )}
+        </ConsolePanel>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-[1.4fr_1fr]">
+        <ConsolePanel
+          title="recent blocks"
+          subtitle={`chain_show . last ${Math.min(blocks.length, 8)}`}
+          icon="#"
+          padded={false}
+          action={
+            <button
+              className="crm-mono text-xs text-[var(--crm-accent)]"
+              onClick={() => navigate('/blocks')}
+              type="button"
+            >
+              all
+            </button>
+          }
+        >
+          {blocks.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="crm-table crm-table--interactive">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>hash</th>
+                    <th>txs</th>
+                    <th>size</th>
+                    <th>time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {blocks.slice(0, 8).map((block) => (
+                    <tr
+                      key={block.hash}
+                      onClick={() => navigate(`/blocks?height=${block.height}`)}
+                    >
+                      <td className="text-[var(--crm-accent)]">
+                        {block.height}
+                      </td>
+                      <td>{shortHash(block.hash, 10)}</td>
+                      <td>{block.transactions.length}</td>
+                      <td>{(block.size_bytes / 1024).toFixed(1)} kB</td>
+                      <td className="text-[var(--crm-dim)]">
+                        {formatRelativeTimestamp(block.timestamp)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <ConsoleEmpty title="no blocks returned" />
+          )}
+        </ConsolePanel>
+
+        <ConsolePanel
+          title="mempool"
+          subtitle={`${mempool?.count ?? 0} pending`}
+          icon="tx"
+          padded={false}
+          action={
+            <button
+              className="crm-mono text-xs text-[var(--crm-accent)]"
+              onClick={() => navigate('/transactions')}
+              type="button"
+            >
+              inspect
+            </button>
+          }
+        >
+          {mempool && mempool.transactions.length > 0 ? (
+            <div>
+              {mempool.transactions.slice(0, 5).map((entry) => (
+                <div
+                  key={entry.tx.id}
+                  className="border-t border-[var(--crm-border)] px-4 py-3 first:border-t-0"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="crm-mono text-sm text-[var(--crm-muted)]">
+                      {shortHash(entry.tx.id, 12)}
+                    </div>
+                    <div className="crm-mono text-sm text-[var(--crm-accent)]">
+                      {sumTransactionOutputs(entry.tx).toFixed(3)} units
+                    </div>
+                  </div>
+                  <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-[var(--crm-dim)]">
+                    <span>
+                      {entry.tx.inputs.length} inputs . {entry.tx.outputs.length}{' '}
+                      outputs
+                    </span>
+                    <span>{entry.tx.size} bytes</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ConsoleEmpty
+              title="mempool empty"
+              hint="Submitted transactions will queue here before being mined."
+            />
+          )}
+        </ConsolePanel>
+      </div>
     </div>
   );
 }

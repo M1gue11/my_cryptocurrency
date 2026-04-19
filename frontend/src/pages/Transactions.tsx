@@ -1,34 +1,66 @@
-import { useEffect, useState } from 'react';
-import { Card, Button } from '../components';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  ConsoleButton,
+  ConsoleEmpty,
+  ConsolePageHeader,
+  ConsolePanel,
+  ConsolePill,
+  ConsoleRow,
+  ConsoleStat,
+  ConsoleStatStrip,
+  shortHash,
+  sumTransactionOutputs,
+} from '../components';
 import { rpcClient } from '../services';
 import type { MempoolResponse, TransactionViewResponse } from '../types';
 
 export function Transactions() {
   const [mempool, setMempool] = useState<MempoolResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Search state
   const [searchId, setSearchId] = useState('');
   const [searchResult, setSearchResult] = useState<TransactionViewResponse | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  const fetchMempool = async () => {
+  const loadMempool = useCallback(async (background = false) => {
     try {
-      setLoading(true);
+      if (background) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
       const response = await rpcClient.nodeMempool();
       setMempool(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch mempool');
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : 'Failed to fetch mempool data',
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    void loadMempool();
+    const interval = setInterval(() => {
+      void loadMempool(true);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [loadMempool]);
+
+  const handleSearch = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!searchId.trim()) return;
 
     try {
@@ -37,8 +69,10 @@ export function Transactions() {
       setSearchResult(null);
       const result = await rpcClient.transactionView(searchId.trim());
       setSearchResult(result);
-    } catch (err) {
-      setSearchError(err instanceof Error ? err.message : 'Transaction not found');
+    } catch (nextError) {
+      setSearchError(
+        nextError instanceof Error ? nextError.message : 'Transaction not found',
+      );
     } finally {
       setSearching(false);
     }
@@ -50,215 +84,270 @@ export function Transactions() {
     setSearchError(null);
   };
 
-  useEffect(() => {
-    fetchMempool();
-    const interval = setInterval(fetchMempool, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
   const clearMempool = async () => {
     try {
+      setRefreshing(true);
       await rpcClient.nodeClearMempool();
-      fetchMempool();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear mempool');
+      await loadMempool(true);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : 'Failed to clear mempool',
+      );
+      setRefreshing(false);
     }
   };
 
+  const mempoolTotal = useMemo(
+    () =>
+      mempool?.transactions.reduce(
+        (total, entry) => total + sumTransactionOutputs(entry.tx),
+        0,
+      ) ?? 0,
+    [mempool],
+  );
+
   if (loading && !mempool) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-400">Loading transactions...</div>
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="crm-mono text-sm text-[var(--crm-dim)]">
+          Loading transaction workspace...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">Transactions</h2>
-        <div className="flex gap-2">
-          <Button onClick={fetchMempool} variant="secondary">
-            Refresh
-          </Button>
-          <Button onClick={clearMempool} variant="danger">
-            Clear Mempool
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <ConsolePageHeader
+        eyebrow="transaction_view . node_mempool"
+        title="Transactions"
+        actions={
+          <>
+            <ConsoleButton onClick={() => void loadMempool(true)} loading={refreshing}>
+              refresh
+            </ConsoleButton>
+            <ConsoleButton
+              tone="danger"
+              onClick={() => void clearMempool()}
+              disabled={(mempool?.count ?? 0) === 0}
+            >
+              clear mempool
+            </ConsoleButton>
+          </>
+        }
+      />
 
-      {error && (
-        <div className="bg-red-900/50 border border-red-500 rounded p-3 text-red-200">
+      {error ? (
+        <div className="rounded-sm border border-[var(--crm-warn)]/40 bg-[var(--crm-warn-bg)] px-4 py-3 text-sm text-[var(--crm-warn)]">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {/* Search */}
-      <Card title="Search Transaction">
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            type="text"
-            value={searchId}
-            onChange={(e) => setSearchId(e.target.value)}
-            className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
-            placeholder="Enter transaction ID (hex)"
-          />
-          <Button type="submit" loading={searching}>
-            Search
-          </Button>
-          {(searchResult || searchError) && (
-            <Button type="button" variant="secondary" onClick={clearSearch}>
-              Clear
-            </Button>
+      <ConsoleStatStrip columns={4}>
+        <ConsoleStat
+          label="pending tx"
+          value={mempool?.count ?? 0}
+          subtitle="currently in mempool"
+          tone={(mempool?.count ?? 0) > 0 ? 'warn' : 'neutral'}
+        />
+        <ConsoleStat
+          label="pending value"
+          value={mempoolTotal.toFixed(3)}
+          subtitle="output sum"
+          tone="accent"
+        />
+        <ConsoleStat
+          label="searched tx"
+          value={searchResult ? shortHash(searchResult.id, 10) : '-'}
+          subtitle={searchResult ? `${searchResult.size} bytes` : 'none selected'}
+        />
+        <ConsoleStat
+          label="type"
+          value={
+            searchResult
+              ? searchResult.is_coinbase
+                ? 'coinbase'
+                : 'transfer'
+              : '-'
+          }
+          subtitle={searchResult?.message || 'transaction metadata'}
+        />
+      </ConsoleStatStrip>
+
+      <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
+        <ConsolePanel title="lookup transaction" subtitle="transaction_view" icon="?">
+          <form className="space-y-4" onSubmit={handleSearch}>
+            <div>
+              <div className="crm-field-label">transaction id</div>
+              <input
+                className="crm-input"
+                value={searchId}
+                onChange={(event) => setSearchId(event.target.value)}
+                placeholder="Paste a full transaction id"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <ConsoleButton tone="primary" type="submit" loading={searching}>
+                search
+              </ConsoleButton>
+              {(searchResult || searchError) && (
+                <ConsoleButton onClick={clearSearch} type="button">
+                  clear
+                </ConsoleButton>
+              )}
+            </div>
+          </form>
+
+          {searchError ? (
+            <div className="mt-4 rounded-sm border border-[var(--crm-warn)]/40 bg-[var(--crm-warn-bg)] px-4 py-3 text-sm text-[var(--crm-warn)]">
+              {searchError}
+            </div>
+          ) : null}
+
+          {searchResult ? (
+            <div className="mt-5 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <ConsolePill tone={searchResult.is_coinbase ? 'accent' : 'neutral'}>
+                  {searchResult.is_coinbase ? 'coinbase' : 'transfer'}
+                </ConsolePill>
+                <ConsolePill>{searchResult.size} bytes</ConsolePill>
+              </div>
+              <ConsoleRow label="id" value={searchResult.id} />
+              <ConsoleRow label="date" value={searchResult.date} />
+              <ConsoleRow
+                label="message"
+                value={searchResult.message || '-'}
+                mono={false}
+              />
+              <ConsoleRow
+                label="total out"
+                value={`${sumTransactionOutputs(searchResult).toFixed(3)} units`}
+              />
+            </div>
+          ) : (
+            <div className="mt-5">
+              <ConsoleEmpty
+                title="no transaction loaded"
+                hint="Search by full id to inspect a confirmed or pending transaction."
+              />
+            </div>
           )}
-        </form>
+        </ConsolePanel>
 
-        {searchError && (
-          <p className="text-red-400 mt-3">{searchError}</p>
-        )}
+        <ConsolePanel title="transaction structure" subtitle="inputs + outputs" icon="[]">
+          {searchResult ? (
+            <div className="space-y-4">
+              <div>
+                <div className="crm-field-label">
+                  inputs ({searchResult.inputs.length})
+                </div>
+                {searchResult.inputs.length > 0 ? (
+                  <div className="space-y-2">
+                    {searchResult.inputs.map((input) => (
+                      <div
+                        key={`${input.prev_tx_id}-${input.output_index}`}
+                        className="rounded-sm border border-dashed border-[var(--crm-border)] px-4 py-3"
+                      >
+                        <div className="crm-mono text-sm">
+                          {shortHash(input.prev_tx_id, 14)}
+                        </div>
+                        <div className="mt-1 text-xs text-[var(--crm-dim)]">
+                          output index {input.output_index}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ConsoleEmpty
+                    title="no inputs"
+                    hint="This transaction is a coinbase reward."
+                  />
+                )}
+              </div>
 
-        {searchResult && (
-          <div className="mt-4">
-            <TransactionDetail tx={searchResult} />
-          </div>
-        )}
-      </Card>
+              <div>
+                <div className="crm-field-label">
+                  outputs ({searchResult.outputs.length})
+                </div>
+                <div className="space-y-2">
+                  {searchResult.outputs.map((output, index) => (
+                    <div
+                      key={`${output.address}-${index}`}
+                      className="rounded-sm border border-dashed border-[var(--crm-border)] px-4 py-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="crm-mono text-sm">
+                          {shortHash(output.address, 16)}
+                        </div>
+                        <div className="crm-mono text-sm text-[var(--crm-accent)]">
+                          {output.value}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <ConsoleEmpty
+              title="transaction detail unavailable"
+              hint="Search above or click an item in the mempool table to inspect its inputs and outputs."
+            />
+          )}
+        </ConsolePanel>
+      </div>
 
-      {/* Mempool */}
-      <Card title={`Mempool (${mempool?.count ?? 0} pending)`}>
-        {mempool && mempool.count > 0 ? (
-          <div className="space-y-3">
-            {mempool.transactions.map((entry, idx) => (
-              <div
-                key={idx}
-                className="p-4 bg-gray-700 rounded"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono text-sm text-gray-300 truncate max-w-md">
-                    {entry.tx.id}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
+      <ConsolePanel
+        title="mempool"
+        subtitle={`${mempool?.count ?? 0} pending`}
+        icon="tx"
+        padded={false}
+      >
+        {mempool && mempool.transactions.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="crm-table crm-table--interactive">
+              <thead>
+                <tr>
+                  <th>tx id</th>
+                  <th>inputs</th>
+                  <th>outputs</th>
+                  <th>message</th>
+                  <th className="text-right">value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mempool.transactions.map((entry) => (
+                  <tr
+                    key={entry.tx.id}
                     onClick={() => {
                       setSearchId(entry.tx.id);
                       setSearchResult(entry.tx);
                       setSearchError(null);
                     }}
                   >
-                    View
-                  </Button>
-                </div>
-                <div className="grid grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-400">Inputs:</span>{' '}
-                    <span className="text-white">{entry.tx.inputs.length}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Outputs:</span>{' '}
-                    <span className="text-white">{entry.tx.outputs.length}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Value:</span>{' '}
-                    <span className="text-green-400">
-                      {entry.tx.outputs.reduce((sum, o) => sum + o.value, 0)} units
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Size:</span>{' '}
-                    <span className="text-white">{entry.tx.size} bytes</span>
-                  </div>
-                </div>
-                {entry.tx.message && (
-                  <div className="mt-2 text-sm">
-                    <span className="text-gray-400">Message:</span>{' '}
-                    <span className="text-white">{entry.tx.message}</span>
-                  </div>
-                )}
-              </div>
-            ))}
+                    <td className="text-[var(--crm-accent)]">
+                      {shortHash(entry.tx.id, 14)}
+                    </td>
+                    <td>{entry.tx.inputs.length}</td>
+                    <td>{entry.tx.outputs.length}</td>
+                    <td className="text-[var(--crm-muted)]">
+                      {entry.tx.message || '-'}
+                    </td>
+                    <td className="text-right text-[var(--crm-accent)]">
+                      {sumTransactionOutputs(entry.tx).toFixed(3)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
-          <p className="text-gray-400 text-center py-8">No pending transactions in mempool</p>
+          <ConsoleEmpty
+            title="mempool empty"
+            hint="Transactions submitted from wallets will appear here before they are mined."
+          />
         )}
-      </Card>
-    </div>
-  );
-}
-
-function TransactionDetail({ tx }: { tx: TransactionViewResponse }) {
-  return (
-    <div className="bg-gray-700 rounded p-4 space-y-4">
-      <div>
-        <span className="text-gray-400 text-sm">Transaction ID</span>
-        <p className="font-mono text-sm text-white break-all">{tx.id}</p>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4 text-sm">
-        <div>
-          <span className="text-gray-400">Date:</span>{' '}
-          <span className="text-white">{tx.date}</span>
-        </div>
-        <div>
-          <span className="text-gray-400">Size:</span>{' '}
-          <span className="text-white">{tx.size} bytes</span>
-        </div>
-        <div>
-          <span className="text-gray-400">Type:</span>{' '}
-          <span className={tx.is_coinbase ? 'text-yellow-400' : 'text-white'}>
-            {tx.is_coinbase ? 'Coinbase' : 'Regular'}
-          </span>
-        </div>
-      </div>
-
-      {tx.message && (
-        <div>
-          <span className="text-gray-400 text-sm">Message:</span>
-          <p className="text-white">{tx.message}</p>
-        </div>
-      )}
-
-      {/* Inputs */}
-      <div>
-        <span className="text-gray-400 text-sm">Inputs ({tx.inputs.length})</span>
-        <div className="mt-2 space-y-2">
-          {tx.inputs.length > 0 ? (
-            tx.inputs.map((input, idx) => (
-              <div key={idx} className="bg-gray-800 p-2 rounded text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">From TX:</span>
-                  <span className="font-mono text-gray-300 truncate max-w-xs">
-                    {input.prev_tx_id}
-                  </span>
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-gray-400">Output Index:</span>
-                  <span className="text-white">{input.output_index}</span>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-gray-500 text-xs">No inputs (coinbase)</p>
-          )}
-        </div>
-      </div>
-
-      {/* Outputs */}
-      <div>
-        <span className="text-gray-400 text-sm">Outputs ({tx.outputs.length})</span>
-        <div className="mt-2 space-y-2">
-          {tx.outputs.map((output, idx) => (
-            <div key={idx} className="bg-gray-800 p-2 rounded text-xs flex justify-between items-center">
-              <span className="font-mono text-gray-300 truncate max-w-xs">
-                {output.address}
-              </span>
-              <span className="text-green-400 font-bold">
-                {output.value} units
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      </ConsolePanel>
     </div>
   );
 }
