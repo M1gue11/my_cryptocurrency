@@ -70,19 +70,32 @@ pub struct ConsensusRules {
     /// Initial mining target. Hashes must be lower than this value.
     pub initial_target: U256,
     pub max_block_size_kb: f32,
-    /// TODO: Implement block reward halving every N blocks
-    pub block_reward: i64,
+    pub initial_block_reward: i64,
+    pub block_reward_halving_interval: usize,
     /// LWMA window size: how many recent blocks to consider for difficulty adjustment
     pub lwma_n: usize,
     /// Target block time in seconds
     pub target_block_time_secs: u64,
 }
 
+impl ConsensusRules {
+    #[inline]
+    pub fn block_reward(&self, block_height: usize) -> i64 {
+        let halvings = block_height / self.block_reward_halving_interval;
+        if halvings >= i64::BITS as usize {
+            0
+        } else {
+            self.initial_block_reward >> halvings as u32
+        }
+    }
+}
+
 pub static CONSENSUS_RULES: Lazy<ConsensusRules> = Lazy::new(|| ConsensusRules {
     // 12 leading zero bits.
     initial_target: U256::MAX >> 12u32,
     max_block_size_kb: 1.0,
-    block_reward: 1 * COIN,
+    initial_block_reward: 1 * COIN,
+    block_reward_halving_interval: 100,
     lwma_n: 10,
     target_block_time_secs: 10,
 });
