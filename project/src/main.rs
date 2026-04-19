@@ -94,16 +94,25 @@ async fn run_daemon_http() {
         run_server(p2p_port, main_peers).await;
     });
 
-    utils::log_info(utils::LogCategory::Core, &format!(
-        "Daemon started (HTTP mode). P2P: {}, HTTP: {}",
-        p2p_port, http_port
-    ));
-    utils::log_info(utils::LogCategory::Core, &format!("Frontend can connect at http://localhost:{}/rpc", http_port));
+    utils::log_info(
+        utils::LogCategory::Core,
+        &format!(
+            "Daemon started (HTTP mode). P2P: {}, HTTP: {}",
+            p2p_port, http_port
+        ),
+    );
+    utils::log_info(
+        utils::LogCategory::Core,
+        &format!("Frontend can connect at http://localhost:{}/rpc", http_port),
+    );
 
     // HTTP server (blocking)
     let http_server = HttpServer::new(http_port);
     if let Err(e) = http_server.start().await {
-        utils::log_error(utils::LogCategory::RPC, &format!("HTTP Server error: {}", e));
+        utils::log_error(
+            utils::LogCategory::RPC,
+            &format!("HTTP Server error: {}", e),
+        );
     }
 }
 
@@ -122,11 +131,17 @@ async fn run_daemon_rpc() {
         run_server(p2p_port, main_peers).await;
     });
 
-    utils::log_info(utils::LogCategory::Core, &format!(
-        "Daemon started (RPC mode). P2P: {}, RPC: {}",
-        p2p_port, rpc_port
-    ));
-    utils::log_info(utils::LogCategory::Core, "Use 'caramuru attach' to connect CLI");
+    utils::log_info(
+        utils::LogCategory::Core,
+        &format!(
+            "Daemon started (RPC mode). P2P: {}, RPC: {}",
+            p2p_port, rpc_port
+        ),
+    );
+    utils::log_info(
+        utils::LogCategory::Core,
+        "Use 'caramuru attach' to connect CLI",
+    );
 
     // RPC server (blocking)
     let rpc_server = RpcServer::new(rpc_port).await;
