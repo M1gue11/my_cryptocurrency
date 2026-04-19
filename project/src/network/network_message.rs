@@ -37,4 +37,7 @@ pub enum NetworkMessage {
     },
 
     SendCommonBlock(Block),
+    NoCommonAncestor {
+        peer_height: u64,
+    },
 }

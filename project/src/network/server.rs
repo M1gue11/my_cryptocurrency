@@ -299,6 +299,21 @@ async fn handle_connection(
                                 node.handle_received_common_block(block, peer_addr).await;
                             },
 
+                            NetworkMessage::NoCommonAncestor { peer_height } => {
+                                PEER_MANAGER
+                                    .update_last_event(
+                                        peer_addr.unwrap(),
+                                        connection_id,
+                                        format!(
+                                            "Received NO_COMMON_ANCESTOR (peer height {})",
+                                            peer_height
+                                        ),
+                                    )
+                                    .await;
+                                let mut node = get_node_mut().await;
+                                node.handle_no_common_ancestor(peer_height, peer_addr).await;
+                            },
+
                             _ => utils::log_info(utils::LogCategory::P2P, &format!("Received: {:?}", message)),
                         }
 

@@ -78,3 +78,10 @@ pub fn send_common_block(block: &Block, target_peer: SocketAddr) {
         .sender
         .send((block_msg, Delivery::Direct { target_peer }));
 }
+
+pub fn notify_no_common_ancestor(target_peer: SocketAddr, peer_height: u64) {
+    let msg = NetworkMessage::NoCommonAncestor { peer_height };
+    let _ = BROADCAST_CHANNEL
+        .sender
+        .send((msg, Delivery::Direct { target_peer }));
+}

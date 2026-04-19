@@ -328,6 +328,17 @@ impl Node {
         network::ask_for_blocks(self.blockchain.get_last_block_hash(), peer_addr);
     }
 
+    fn reset_blockchain_for_full_sync(&mut self) -> Result<(), String> {
+        while !self.blockchain.is_empty() {
+            self.rollback_last_block()?;
+        }
+
+        self.clear_mempool();
+        self.fork_helper.clear_forks();
+        self.save_node();
+        Ok(())
+    }
+
     pub fn is_all_inputs_utxos(&self, tx: &Transaction) -> Result<(), String> {
         let repo = LedgerRepository::new();
         let inputs_ids = tx
@@ -806,6 +817,7 @@ impl Node {
             utils::LogCategory::P2P,
             &format!("No common ancestor found with peer {}", target_peer),
         );
+        network::notify_no_common_ancestor(target_peer, self.blockchain.height() as u64);
     }
 
     pub async fn handle_received_common_block(
@@ -852,6 +864,42 @@ impl Node {
             ),
         );
         network::ask_for_blocks(block_hash, peer_addr);
+    }
+
+    pub async fn handle_no_common_ancestor(
+        &mut self,
+        peer_height: u64,
+        peer_addr: Option<SocketAddr>,
+    ) {
+        let local_height = self.blockchain.height() as u64;
+        if peer_height <= local_height {
+            utils::log_warning(
+                utils::LogCategory::P2P,
+                &format!(
+                    "Peer {:?} reported no common ancestor, but its chain is not longer (peer={}, local={}).",
+                    peer_addr, peer_height, local_height
+                ),
+            );
+            return;
+        }
+
+        utils::log_warning(
+            utils::LogCategory::P2P,
+            &format!(
+                "Peer {:?} has no common ancestor with us and a longer chain (peer={}, local={}). Resetting local chain and requesting a full sync.",
+                peer_addr, peer_height, local_height
+            ),
+        );
+
+        if let Err(e) = self.reset_blockchain_for_full_sync() {
+            utils::log_error(
+                utils::LogCategory::Core,
+                &format!("Failed to reset local chain for full sync: {}", e),
+            );
+            return;
+        }
+
+        network::ask_for_blocks([0; 32], peer_addr);
     }
 }
 
