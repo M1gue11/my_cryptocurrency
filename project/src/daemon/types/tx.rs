@@ -6,7 +6,7 @@ pub struct TransactionViewParams {
     pub id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TxInputInfo {
     pub prev_tx_id: String,
     pub output_index: usize,
@@ -14,13 +14,13 @@ pub struct TxInputInfo {
     pub public_key: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TxOutputInfo {
     pub value: i64,
     pub address: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TransactionViewResponse {
     pub id: String,
     pub date: String,

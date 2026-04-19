@@ -1,10 +1,8 @@
 // Mining Handlers
 use crate::daemon::types::rpc::{INTERNAL_ERROR, INVALID_PARAMS};
 use crate::daemon::types::{KeepMiningParams, MineBlockResponse, RpcResponse};
-use crate::model::miner::{mine, submit_block};
+use crate::model::miner::{build_mined_block_response, mine, submit_block};
 use crate::model::{get_node, get_node_mut};
-use crate::security_utils::bytes_to_hex_string;
-use crate::utils::{format_difficulty, format_target_hex, transaction_model_to_view};
 
 pub async fn handle_mine_block(id: Option<u64>) -> RpcResponse {
     let mined_block = match mine().await {
@@ -21,21 +19,7 @@ pub async fn handle_mine_block(id: Option<u64>) -> RpcResponse {
         Err(e) => return RpcResponse::error(id, INTERNAL_ERROR, e),
     };
 
-    let transactions: Vec<_> = block
-        .transactions
-        .iter()
-        .map(|tx| transaction_model_to_view(tx))
-        .collect();
-    let response = MineBlockResponse {
-        success: true,
-        block_hash: Some(bytes_to_hex_string(&block.header_hash())),
-        transactions,
-        nonce: Some(block.header.nonce),
-        error: None,
-        target: Some(format_target_hex(block.header.target)),
-        next_target: Some(format_target_hex(next_target)),
-        next_difficulty: Some(format_difficulty(next_target)),
-    };
+    let response = build_mined_block_response(&block, next_target);
 
     RpcResponse::success(id, serde_json::to_value(response).unwrap())
 }
@@ -54,6 +38,9 @@ pub async fn handle_keep_mining(id: Option<u64>, params: serde_json::Value) -> R
 
     let mut node = get_node_mut().await;
     node.set_keep_mining_flag(params.keep_mining);
+    if params.keep_mining {
+        node.ensure_keep_mining_task();
+    }
 
     let response = serde_json::json!({
         "success": true,

@@ -3,13 +3,15 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::NaiveDateTime;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 
+use crate::daemon::types::MiningInfoResponse;
 use crate::db::repository::LedgerRepository;
 use crate::globals::{CONFIG, CONSENSUS_RULES};
 use crate::model::transaction::TxId;
@@ -30,7 +32,11 @@ pub struct Node {
     target: U256,
     fork_helper: utils::ForkHelper,
     mining_started_at: Option<NaiveDateTime>,
-    keep_mining: Arc<AtomicBool>,
+    keep_mining_enabled: Arc<AtomicBool>,
+    mining_cancel: Arc<AtomicBool>,
+    mining_task_running: bool,
+    background_task: Option<JoinHandle<()>>,
+    last_mined_block: Option<crate::daemon::types::MineBlockResponse>,
 }
 
 pub static NODE: Lazy<Arc<RwLock<Node>>> = Lazy::new(|| Arc::new(RwLock::new(Node::new())));
@@ -45,6 +51,7 @@ pub async fn get_node_mut() -> tokio::sync::RwLockWriteGuard<'static, Node> {
 
 pub async fn restart_node() {
     let mut node_guard = NODE.write().await;
+    node_guard.abort_background_task();
     *node_guard = Node::new();
 }
 
@@ -72,7 +79,11 @@ impl Node {
             target: CONSENSUS_RULES.initial_target,
             fork_helper: utils::ForkHelper::new(),
             mining_started_at: None,
-            keep_mining: Arc::new(AtomicBool::new(false)),
+            keep_mining_enabled: Arc::new(AtomicBool::new(false)),
+            mining_cancel: Arc::new(AtomicBool::new(false)),
+            mining_task_running: false,
+            background_task: None,
+            last_mined_block: None,
         }
     }
 
@@ -188,6 +199,7 @@ impl Node {
                 repo.apply_block(added_block.clone())
                     .map_err(|e| e.to_string())?;
                 self.invalidate_mempool();
+                self.notify_chain_tip_changed();
                 Ok(())
             }
         }
@@ -371,13 +383,89 @@ impl Node {
         Ok(())
     }
 
+    pub fn is_keep_mining_enabled(&self) -> bool {
+        self.keep_mining_enabled.load(Ordering::Relaxed)
+    }
+
+    pub fn is_mining_task_running(&self) -> bool {
+        self.mining_task_running
+    }
+
     pub fn set_keep_mining_flag(&mut self, value: bool) {
-        self.keep_mining
-            .store(value, std::sync::atomic::Ordering::Relaxed);
+        self.keep_mining_enabled.store(value, Ordering::Relaxed);
+        if !value {
+            self.cancel_current_mining_round();
+        }
         utils::log_info(
             utils::LogCategory::Core,
-            &format!("Keep mining flag set to: {:?}", self.keep_mining),
+            &format!("Keep mining flag set to: {}", value),
         );
+    }
+
+    pub fn ensure_keep_mining_task(&mut self) {
+        if !self.is_keep_mining_enabled() {
+            return;
+        }
+
+        if self
+            .background_task
+            .as_ref()
+            .is_some_and(|handle| !handle.is_finished())
+        {
+            self.mining_task_running = true;
+            return;
+        }
+
+        self.background_task = None;
+        self.mining_cancel.store(false, Ordering::Relaxed);
+        self.mining_task_running = true;
+
+        let keep_mining_enabled = Arc::clone(&self.keep_mining_enabled);
+        let mining_cancel = Arc::clone(&self.mining_cancel);
+        self.background_task = Some(tokio::spawn(async move {
+            crate::model::miner::run_keep_mining_loop(keep_mining_enabled, mining_cancel).await;
+        }));
+    }
+
+    pub fn abort_background_task(&mut self) {
+        self.keep_mining_enabled.store(false, Ordering::Relaxed);
+        self.cancel_current_mining_round();
+        self.mining_task_running = false;
+        self.flag_mining_end();
+        if let Some(handle) = self.background_task.take() {
+            handle.abort();
+        }
+    }
+
+    pub fn finish_background_task(&mut self) {
+        self.mining_task_running = false;
+        self.flag_mining_end();
+        self.background_task = None;
+    }
+
+    pub fn set_last_mined_block(
+        &mut self,
+        response: crate::daemon::types::MineBlockResponse,
+    ) {
+        self.last_mined_block = Some(response);
+    }
+
+    pub fn cancel_current_mining_round(&self) {
+        self.mining_cancel.store(true, Ordering::Relaxed);
+    }
+
+    pub fn reset_mining_cancel(&self) {
+        self.mining_cancel.store(false, Ordering::Relaxed);
+    }
+
+    pub fn mining_cancel_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.mining_cancel)
+    }
+
+    fn notify_chain_tip_changed(&self) {
+        if self.is_keep_mining_enabled() {
+            self.cancel_current_mining_round();
+        }
     }
 
     pub fn flag_mining_start(&mut self) {
@@ -388,11 +476,16 @@ impl Node {
         self.mining_started_at = None;
     }
 
-    pub fn get_mining_info(&self) -> Option<NaiveDateTime> {
-        self.mining_started_at
+    pub fn get_mining_info(&self) -> MiningInfoResponse {
+        MiningInfoResponse {
+            keep_mining_enabled: self.is_keep_mining_enabled(),
+            is_currently_mining: self.mining_started_at.is_some(),
+            started_at: self.mining_started_at,
+            last_mined_block: self.last_mined_block.clone(),
+        }
     }
 
-    pub fn prepare_mining(&mut self) -> (Vec<MempoolTx>, [u8; 32], U256, String) {
+    pub fn prepare_mining_snapshot(&mut self) -> (Vec<MempoolTx>, [u8; 32], U256, String) {
         let previous_hash = self.blockchain.get_last_block_hash();
         let target = self.blockchain.calculate_next_target();
         self.target = target;
@@ -402,13 +495,13 @@ impl Node {
         (mempool, previous_hash, target, receive_addr)
     }
 
-    pub fn submit_mined_block(&mut self, block: Block) -> Result<&Block, String> {
+    pub fn submit_mined_block(&mut self, block: Block) -> Result<Block, String> {
         self.flag_mining_end();
         match self.submit_block(block) {
             Ok(()) => {
                 let new_block = self.blockchain.chain.last().unwrap();
                 network::broadcast_new_block_hash(new_block.id(), None);
-                Ok(new_block)
+                Ok(new_block.clone())
             }
             Err(e) => Err(e),
         }

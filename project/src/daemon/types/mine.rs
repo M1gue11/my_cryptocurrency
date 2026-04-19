@@ -1,9 +1,10 @@
 // Mining RPC Types
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 use crate::daemon::types::TransactionViewResponse;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MineBlockResponse {
     pub success: bool,
     pub transactions: Vec<TransactionViewResponse>,
@@ -28,6 +29,15 @@ impl MineBlockResponse {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MiningInfoResponse {
+    pub keep_mining_enabled: bool,
+    pub is_currently_mining: bool,
+    pub started_at: Option<NaiveDateTime>,
+    pub last_mined_block: Option<MineBlockResponse>,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KeepMiningParams {
     pub keep_mining: bool,

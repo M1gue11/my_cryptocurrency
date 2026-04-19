@@ -11,10 +11,11 @@ use primitive_types::U256;
 use crate::model::get_node_mut;
 use crate::utils::log_info;
 use crate::{
+    daemon::types::MineBlockResponse,
     globals::{CONFIG, CONSENSUS_RULES},
     model::{Block, MempoolTx, Transaction, Wallet, transaction::TxId},
-    security_utils::hash_meets_target,
-    utils,
+    security_utils::{bytes_to_hex_string, hash_meets_target},
+    utils::{self, format_difficulty, format_target_hex, transaction_model_to_view},
 };
 
 pub struct Miner {
@@ -130,10 +131,15 @@ async fn mine_block_impl(
     previous_hash: [u8; 32],
     target: U256,
     receive_addr: String,
+    cancel: Arc<AtomicBool>,
 ) -> Result<Block, String> {
     let threads = CONFIG.mining_threads.max(1);
     let mut attempts = 0;
     loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err("Mining cancelled".to_string());
+        }
+
         if attempts >= CONFIG.max_mining_attempts {
             return Err(format!(
                 "Failed to mine block: exceeded maximum attempts ({})",
@@ -149,6 +155,7 @@ async fn mine_block_impl(
         for i in 0..threads {
             let mut block = block_template.clone();
             let found = Arc::clone(&found);
+            let cancel = Arc::clone(&cancel);
             let nonce_start = i as u32 * range_size;
             let nonce_end = if i + 1 == threads {
                 u32::MAX
@@ -168,6 +175,9 @@ async fn mine_block_impl(
                 let log_interval = 500_000u32;
                 let mut last_log_nonce = nonce_start;
                 loop {
+                    if cancel.load(Ordering::Relaxed) {
+                        return None;
+                    }
                     if found.load(Ordering::Relaxed) {
                         return None;
                     }
@@ -222,19 +232,107 @@ async fn mine_block_impl(
 }
 
 pub async fn mine() -> Result<Block, String> {
-    let (mempool, previous_hash, target, receive_addr) = {
+    let (mempool, previous_hash, target, receive_addr, cancel) = {
         let mut node = get_node_mut().await;
-        node.prepare_mining()
+        if node.is_keep_mining_enabled() || node.is_mining_task_running() {
+            return Err(
+                "Auto-mining is active. Disable keep mining before mining manually.".to_string(),
+            );
+        }
+        let cancel = node.mining_cancel_flag();
+        node.reset_mining_cancel();
+        let (mempool, previous_hash, target, receive_addr) = node.prepare_mining_snapshot();
+        (mempool, previous_hash, target, receive_addr, cancel)
     };
-    mine_block_impl(mempool, previous_hash, target, receive_addr).await
+    mine_block_impl(mempool, previous_hash, target, receive_addr, cancel).await
 }
 
 pub async fn submit_block(mined_block: Block) -> Result<(Block, U256), String> {
     let mut node = get_node_mut().await;
 
-    let block = node.submit_mined_block(mined_block)?.clone();
+    let block = node.submit_mined_block(mined_block)?;
     let next_target = node.blockchain.calculate_next_target();
+    let mined_block_response = build_mined_block_response(&block, next_target);
+    node.set_last_mined_block(mined_block_response);
     node.save_node();
 
     Ok((block, next_target))
+}
+
+pub fn build_mined_block_response(block: &Block, next_target: U256) -> MineBlockResponse {
+    let transactions = block
+        .transactions
+        .iter()
+        .map(transaction_model_to_view)
+        .collect();
+
+    MineBlockResponse {
+        success: true,
+        block_hash: Some(bytes_to_hex_string(&block.header_hash())),
+        transactions,
+        nonce: Some(block.header.nonce),
+        error: None,
+        target: Some(format_target_hex(block.header.target)),
+        next_target: Some(format_target_hex(next_target)),
+        next_difficulty: Some(format_difficulty(next_target)),
+    }
+}
+
+pub async fn run_keep_mining_loop(keep_mining_enabled: Arc<AtomicBool>, cancel: Arc<AtomicBool>) {
+    loop {
+        if !keep_mining_enabled.load(Ordering::Relaxed) {
+            break;
+        }
+
+        let (mempool, previous_hash, target, receive_addr) = {
+            let mut node = get_node_mut().await;
+            if !node.is_keep_mining_enabled() {
+                break;
+            }
+            node.reset_mining_cancel();
+            node.prepare_mining_snapshot()
+        };
+
+        let mined_block = mine_block_impl(
+            mempool,
+            previous_hash,
+            target,
+            receive_addr,
+            Arc::clone(&cancel),
+        )
+        .await;
+
+        let block = match mined_block {
+            Ok(block) => block,
+            Err(e) => {
+                utils::log_warning(
+                    utils::LogCategory::Core,
+                    &format!("Keep mining round failed: {}", e),
+                );
+                continue;
+            }
+        };
+
+        match submit_block(block).await {
+            Ok((submitted_block, _)) => {
+                log_info(
+                    utils::LogCategory::Core,
+                    &format!(
+                        "Keep mining mined block {} successfully.",
+                        bytes_to_hex_string(&submitted_block.id())
+                    ),
+                );
+            }
+            Err(e) => {
+                utils::log_warning(
+                    utils::LogCategory::Core,
+                    &format!("Keep mining submit failed, retrying with fresh work: {}", e),
+                );
+            }
+        }
+    }
+
+    let mut node = get_node_mut().await;
+    node.finish_background_task();
+    utils::log_info(utils::LogCategory::Core, "Keep mining loop stopped.");
 }
