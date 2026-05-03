@@ -73,15 +73,11 @@ pub async fn run_server(port: u16, peers: Vec<String>) {
         &format!("Known peers: {:?}", peers),
     );
 
-    // 1. Try to connect to known peers (seeds)
     for peer_addr in peers {
-        let peer_addr_clone = peer_addr.clone();
-        tokio::spawn(async move {
-            connect_to_peer(peer_addr_clone).await;
-        });
+        let _ = connect_to_new_peer(peer_addr).await;
     }
 
-    // 2. Loop to accept new connections
+    // Loop to accept new connections
     loop {
         match listener.accept().await {
             Ok((socket, addr)) => {
@@ -106,30 +102,26 @@ pub async fn run_server(port: u16, peers: Vec<String>) {
     }
 }
 
-async fn connect_to_peer(address: String) {
+pub async fn connect_to_new_peer(address: String) -> Result<(), String> {
     utils::log_info(
         utils::LogCategory::P2P,
         &format!("Trying to connect to peer: {}", address),
     );
-    match TcpStream::connect(&address).await {
-        Ok(stream) => {
-            utils::log_info(
+    let stream = TcpStream::connect(&address)
+        .await
+        .map_err(|e| format!("Failed to connect to {}: {}", address, e))?;
+
+    let addr = address.clone();
+    tokio::spawn(async move {
+        if let Err(e) = handle_connection(stream, PeerDirection::Outbound).await {
+            utils::log_warning(
                 utils::LogCategory::P2P,
-                &format!("Connected to {}", address),
+                &format!("Connection lost with {}: {}", address, e),
             );
-            // Initiate handshake actively
-            if let Err(e) = handle_connection(stream, PeerDirection::Outbound).await {
-                utils::log_warning(
-                    utils::LogCategory::P2P,
-                    &format!("Connection lost with {}: {}", address, e),
-                );
-            }
         }
-        Err(e) => utils::log_warning(
-            utils::LogCategory::P2P,
-            &format!("Failed to connect to {}: {}", address, e),
-        ),
-    }
+    });
+    utils::log_info(utils::LogCategory::P2P, &format!("Connected to {}", addr));
+    Ok(())
 }
 
 async fn handle_connection(

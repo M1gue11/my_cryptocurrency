@@ -32,3 +32,14 @@ pub struct NodeInitResponse {
 pub struct SimpleSuccessResponse {
     pub success: bool,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NewPeerConnectionParams {
+    pub address: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NewPeerConnectionResponse {
+    pub success: bool,
+    pub fail_message: Option<String>,
+}

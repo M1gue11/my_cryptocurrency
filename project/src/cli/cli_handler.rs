@@ -116,10 +116,12 @@ fn print_help() {
     println!("  exit, quit, q              - Exit the program");
 
     println!("\n★  Node:");
-    println!("  node init                       - Reinitialize the node");
-    println!("  node mempool                    - Display transactions in the mempool");
-    println!("  node clear-mempool              - Clear all transactions in the mempool");
-    println!("  node status                     - Show current node status");
+    println!("  node init                           - Reinitialize the node");
+    println!("  node mempool                        - Display transactions in the mempool");
+    println!("  node clear-mempool                  - Clear all transactions in the mempool");
+    println!("  node status                         - Show current node status");
+    println!("  node connect --address <address>    ");
+    println!("      - Connect to a new node. You must provide the IP adrres of the node.");
 
     println!("\n⛏  Mining:");
     println!("  mine block                 - Mine a new block with pending transactions");
@@ -187,6 +189,15 @@ fn parse_command(input: &str) -> Result<Commands, String> {
                 "mempool" => Ok(Commands::Node(NodeCommands::Mempool)),
                 "clear-mempool" => Ok(Commands::Node(NodeCommands::ClearMempool)),
                 "status" => Ok(Commands::Node(NodeCommands::Status)),
+                "connect" => {
+                    let address = match parse_flag_value(&parts, "--address") {
+                        Ok(addr) => addr,
+                        _ => {
+                            return Err(format!("Address must be provided."));
+                        }
+                    };
+                    Ok(Commands::Node(NodeCommands::Connect { address }))
+                }
                 _ => Err(format!("Unknown node command: {}", parts[1])),
             }
         }
@@ -544,6 +555,17 @@ async fn handle_node(command: NodeCommands, client: &RpcClient) {
             println!("  Peers Connected: {}", status_response.peers_connected);
             println!("  Current Block Height: {}", status_response.block_height);
             println!("  Current Block Hash: {}", status_response.top_block_hash);
+        }
+        NodeCommands::Connect { address } => {
+            let foo = match client.new_peer_connection(&address).await {
+                Ok(response) => response,
+                Err(e) => {
+                    println!("Unable to connect to perr {}: {}", address, e);
+                    return;
+                }
+            };
+
+            println!("DEBUG: {:?}", foo);
         }
     }
 }

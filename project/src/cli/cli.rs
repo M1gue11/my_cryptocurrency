@@ -43,6 +43,11 @@ pub enum NodeCommands {
     ClearMempool,
 
     Status,
+
+    Connect {
+        #[arg(short, long)]
+        address: String,
+    },
 }
 
 #[derive(Subcommand)]

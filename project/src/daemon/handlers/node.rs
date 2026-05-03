@@ -1,6 +1,10 @@
 // Node Handlers
-use crate::daemon::types::{MempoolEntry, MempoolResponse, NodeStatusResponse, RpcResponse};
+use crate::daemon::types::{
+    INVALID_PARAMS, MempoolEntry, MempoolResponse, NewPeerConnectionParams,
+    NewPeerConnectionResponse, NodeStatusResponse, RpcResponse,
+};
 use crate::model::{get_node, get_node_mut, node::restart_node};
+use crate::network::server::connect_to_new_peer;
 use crate::security_utils::bytes_to_hex_string;
 use crate::utils::transaction_model_to_view;
 
@@ -55,4 +59,20 @@ pub async fn handle_node_clear_mempool(id: Option<u64>) -> RpcResponse {
     node.save_node();
 
     RpcResponse::success(id, serde_json::json!({ "success": true }))
+}
+
+pub async fn handle_node_connect(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
+    let params: NewPeerConnectionParams = match serde_json::from_value(params) {
+        Ok(v) => v,
+        Err(e) => return RpcResponse::error(id, INVALID_PARAMS, format!("Invalid params: {}", e)),
+    };
+    let fail_message = match connect_to_new_peer(params.address).await {
+        Ok(_) => None,
+        Err(e) => Some(e),
+    };
+    let response = NewPeerConnectionResponse {
+        success: fail_message.is_none(),
+        fail_message: fail_message,
+    };
+    RpcResponse::success(id, serde_json::json!(response))
 }

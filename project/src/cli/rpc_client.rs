@@ -3,11 +3,11 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
 use crate::daemon::types::{
-    ChainShowResponse, ChainStatusResponse, MempoolResponse, MineBlockResponse, NodeInitResponse,
-    NodeStatusResponse, PeerDisconnectResponse, PeersListResponse, RpcRequest, RpcResponse,
-    SimpleSuccessResponse, TransactionViewResponse, UtxosResponse, WalletAccessParams,
-    WalletAddressResponse, WalletBalanceResponse, WalletGenerateKeysResponse, WalletNewResponse,
-    WalletSendResponse,
+    ChainShowResponse, ChainStatusResponse, MempoolResponse, MineBlockResponse,
+    NewPeerConnectionResponse, NodeInitResponse, NodeStatusResponse, PeerDisconnectResponse,
+    PeersListResponse, RpcRequest, RpcResponse, SimpleSuccessResponse, TransactionViewResponse,
+    UtxosResponse, WalletAccessParams, WalletAddressResponse, WalletBalanceResponse,
+    WalletGenerateKeysResponse, WalletNewResponse, WalletSendResponse,
 };
 use crate::utils::LogEntry;
 
@@ -36,7 +36,7 @@ impl RpcClient {
     }
 
     /// Makes a generic RPC call
-    pub async fn call<T: serde::de::DeserializeOwned>(
+    async fn call<T: serde::de::DeserializeOwned>(
         &self,
         method: &str,
         params: serde_json::Value,
@@ -101,6 +101,14 @@ impl RpcClient {
 
     pub async fn node_save(&self) -> Result<SimpleSuccessResponse, String> {
         self.call("node_save", serde_json::json!({})).await
+    }
+
+    pub async fn new_peer_connection(
+        &self,
+        address: &str,
+    ) -> Result<NewPeerConnectionResponse, String> {
+        self.call("node_connect", serde_json::json!({ "address": address }))
+            .await
     }
 
     // ========================================================================
