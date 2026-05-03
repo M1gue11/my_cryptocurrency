@@ -1,8 +1,9 @@
+use crate::globals::CONFIG;
 use crate::model::{get_node, get_node_mut};
-use crate::network::NetworkMessage;
 use crate::network::peer_manager::{
     PEER_MANAGER, PeerDirection, PeerHandshakeState, get_peer_count,
 };
+use crate::network::{NetworkMessage, ask_for_connected_peers, send_known_peers};
 use crate::security_utils::bytes_to_hex_string;
 use crate::utils;
 use once_cell::sync::Lazy;
@@ -103,6 +104,14 @@ pub async fn run_server(port: u16, peers: Vec<String>) {
 }
 
 pub async fn connect_to_new_peer(address: String) -> Result<(), String> {
+    if address == CONFIG.p2p_advertised_addr {
+        return Err(format!("Refusing to connect to self: {}", address));
+    }
+
+    if PEER_MANAGER.knows_advertised_addr(&address).await {
+        return Err(format!("Already connected to {}", address));
+    }
+
     utils::log_info(
         utils::LogCategory::P2P,
         &format!("Trying to connect to peer: {}", address),
@@ -124,10 +133,21 @@ pub async fn connect_to_new_peer(address: String) -> Result<(), String> {
     Ok(())
 }
 
+fn spawn_connect_to_new_peer(address: String) {
+    tokio::spawn(async move {
+        if let Err(e) = connect_to_new_peer(address).await {
+            utils::log_warning(
+                utils::LogCategory::P2P,
+                &format!("Failed to connect to discovered peer: {}", e),
+            );
+        }
+    });
+}
+
 async fn handle_connection(
     mut stream: TcpStream,
     direction: PeerDirection,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let peer_addr = stream.peer_addr().ok();
 
     let (connection_id, mut disconnect_rx) = match peer_addr {
@@ -206,6 +226,13 @@ async fn handle_connection(
                         match message {
                             NetworkMessage::Version(ver) => {
                                 PEER_MANAGER
+                                    .set_advertised_addr(
+                                        peer_addr.unwrap(),
+                                        connection_id,
+                                        ver.advertised_addr.clone(),
+                                    )
+                                    .await;
+                                PEER_MANAGER
                                     .set_handshake_state(
                                         peer_addr.unwrap(),
                                         connection_id,
@@ -232,6 +259,7 @@ async fn handle_connection(
                                     )
                                     .await;
                                 utils::log_info(utils::LogCategory::P2P, "Received VERACK. Handshake complete! Ready to synchronize.");
+                                ask_for_connected_peers(peer_addr.unwrap());
                             },
 
                             NetworkMessage::Inv { items } => {
@@ -341,6 +369,25 @@ async fn handle_connection(
                                     .await;
                                 let mut node = get_node_mut().await;
                                 node.handle_no_common_ancestor(peer_height, peer_addr).await;
+                            },
+
+                            NetworkMessage::GetConnectedPeers => {
+                                let known_peers = PEER_MANAGER.list_peers().await;
+                                send_known_peers(peer_addr.unwrap(), known_peers);
+                            },
+
+                            NetworkMessage::KnownPeers(peers) => {
+                                for p in peers {
+                                    if p == CONFIG.p2p_advertised_addr {
+                                        continue;
+                                    }
+
+                                    if PEER_MANAGER.knows_advertised_addr(&p).await {
+                                        continue;
+                                    }
+
+                                    spawn_connect_to_new_peer(p);
+                                }
                             },
 
                             _ => utils::log_info(utils::LogCategory::P2P, &format!("Received: {:?}", message)),

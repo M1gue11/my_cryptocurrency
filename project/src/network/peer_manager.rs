@@ -59,6 +59,7 @@ impl PeerHandshakeState {
 #[derive(Debug, Clone)]
 pub struct PeerSnapshot {
     pub addr: SocketAddr,
+    pub advertised_addr: Option<String>,
     pub direction: PeerDirection,
     pub connection_state: PeerConnectionState,
     pub handshake_state: PeerHandshakeState,
@@ -105,6 +106,7 @@ impl PeerManager {
             connection_id,
             info: PeerSnapshot {
                 addr,
+                advertised_addr: None,
                 direction,
                 connection_state: PeerConnectionState::Connected,
                 handshake_state: PeerHandshakeState::Connecting,
@@ -139,6 +141,29 @@ impl PeerManager {
             peer.info.last_event_at = Some(get_current_timestamp());
             peer.info.last_event = Some(last_event.into());
         }
+    }
+
+    pub async fn set_advertised_addr(
+        &self,
+        addr: SocketAddr,
+        connection_id: u64,
+        advertised_addr: String,
+    ) {
+        let mut peers = self.peers.write().await;
+        if let Some(peer) = peers.get_mut(&addr) {
+            if peer.connection_id != connection_id {
+                return;
+            }
+            peer.info.advertised_addr = Some(advertised_addr);
+        }
+    }
+
+    pub async fn knows_advertised_addr(&self, advertised_addr: &str) -> bool {
+        let peers = self.peers.read().await;
+        peers.values().any(|peer| {
+            peer.info.addr.to_string() == advertised_addr
+                || peer.info.advertised_addr.as_deref() == Some(advertised_addr)
+        })
     }
 
     pub async fn update_last_event(

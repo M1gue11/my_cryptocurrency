@@ -40,4 +40,7 @@ pub enum NetworkMessage {
     NoCommonAncestor {
         peer_height: u64,
     },
+
+    GetConnectedPeers,
+    KnownPeers(Vec<String>),
 }

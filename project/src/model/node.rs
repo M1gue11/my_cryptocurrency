@@ -533,6 +533,7 @@ impl Node {
             version: 1,
             height: self.blockchain.height() as u64,
             top_hash: self.blockchain.get_last_block_hash(),
+            advertised_addr: crate::globals::CONFIG.p2p_advertised_addr.clone(),
         }
     }
 
@@ -909,6 +910,7 @@ pub struct NodeVersion {
     pub version: u32,
     pub height: u64,
     pub top_hash: [u8; 32],
+    pub advertised_addr: String,
 }
 
 pub struct NodeState {

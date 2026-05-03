@@ -7,6 +7,7 @@ use crate::daemon::types::TransactionViewResponse;
 pub struct NodeStatusResponse {
     pub version: String,
     pub peers_connected: usize,
+    pub advertised_addr: String,
     pub block_height: usize,
     pub top_block_hash: String,
 }

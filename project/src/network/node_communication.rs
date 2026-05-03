@@ -1,6 +1,7 @@
 use crate::model::{Block, Transaction};
 use crate::network::NetworkMessage;
 use crate::network::network_message::InventoryType;
+use crate::network::peer_manager::PeerSnapshot;
 use crate::network::server::{BROADCAST_CHANNEL, Delivery};
 use std::net::SocketAddr;
 
@@ -84,4 +85,29 @@ pub fn notify_no_common_ancestor(target_peer: SocketAddr, peer_height: u64) {
     let _ = BROADCAST_CHANNEL
         .sender
         .send((msg, Delivery::Direct { target_peer }));
+}
+
+pub fn ask_for_connected_peers(target_peer: SocketAddr) {
+    let msg = NetworkMessage::GetConnectedPeers;
+    let _ = BROADCAST_CHANNEL.sender.send((
+        msg,
+        Delivery::Direct {
+            target_peer: target_peer,
+        },
+    ));
+}
+
+pub fn send_known_peers(target_peer: SocketAddr, peers: Vec<PeerSnapshot>) {
+    let peers_addresses = peers
+        .iter()
+        .filter(|p| p.addr != target_peer)
+        .filter_map(|p| p.advertised_addr.clone())
+        .collect();
+    let msg = NetworkMessage::KnownPeers(peers_addresses);
+    let _ = BROADCAST_CHANNEL.sender.send((
+        msg,
+        Delivery::Direct {
+            target_peer: target_peer,
+        },
+    ));
 }

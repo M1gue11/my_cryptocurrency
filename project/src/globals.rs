@@ -10,6 +10,7 @@ pub struct Settings {
     pub miner_wallet_password: String,
     pub max_mining_attempts: u32,
     pub p2p_port: u16,
+    pub p2p_advertised_addr: String,
     pub peers: Vec<String>,
     pub rpc_port: u16,
     pub http_port: u16,
@@ -21,6 +22,10 @@ pub struct Settings {
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
     dotenv::dotenv().ok();
+    let p2p_port = env::var("P2P_PORT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(6000);
 
     Settings {
         persisted_chain_path: env::var("PERSISTED_CHAIN_PATH")
@@ -34,10 +39,9 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(3),
-        p2p_port: env::var("P2P_PORT")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(6000),
+        p2p_port,
+        p2p_advertised_addr: env::var("P2P_ADVERTISED_ADDR")
+            .unwrap_or_else(|_| format!("127.0.0.1:{}", p2p_port)),
         peers: env::var("PEERS")
             .unwrap_or_else(|_| "".to_string())
             .split(',')

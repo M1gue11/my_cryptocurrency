@@ -14,6 +14,7 @@ pub async fn handle_node_status(id: Option<u64>) -> RpcResponse {
     let response = NodeStatusResponse {
         version: state.version.version.to_string(),
         peers_connected: state.peers_connected,
+        advertised_addr: state.version.advertised_addr,
         block_height: state.version.height as usize,
         top_block_hash: bytes_to_hex_string(&state.version.top_hash),
     };

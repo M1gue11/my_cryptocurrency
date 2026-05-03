@@ -553,6 +553,7 @@ async fn handle_node(command: NodeCommands, client: &RpcClient) {
             println!("\n=== Node Status ===");
             println!("  Version: {}", status_response.version);
             println!("  Peers Connected: {}", status_response.peers_connected);
+            println!("  Advertised Address: {}", status_response.advertised_addr);
             println!("  Current Block Height: {}", status_response.block_height);
             println!("  Current Block Hash: {}", status_response.top_block_hash);
         }

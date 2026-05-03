@@ -11,6 +11,7 @@ services:
       - MINER_WALLET_PASSWORD=miner123
       - MAX_MINING_ATTEMPTS=1000000
       - P2P_PORT=6000
+      - P2P_ADVERTISED_ADDR=root-node:6000
     volumes:
       - ./.docker-data/root-node:/data
       - ./keys:/keys
@@ -31,6 +32,7 @@ services:
       - MINER_WALLET_PASSWORD=miner123
       - MAX_MINING_ATTEMPTS=1000000
       - P2P_PORT=6000
+      - P2P_ADVERTISED_ADDR=node-1:6000
       - PEERS=root-node:6000
     volumes:
       - ./.docker-data/node1:/data
@@ -52,6 +54,7 @@ services:
       - MINER_WALLET_PASSWORD=miner123
       - MAX_MINING_ATTEMPTS=1000000
       - P2P_PORT=6000
+      - P2P_ADVERTISED_ADDR=node-2:6000
       - PEERS=root-node:6000
     volumes:
       - ./.docker-data/node2:/data
