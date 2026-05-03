@@ -1,11 +1,7 @@
 // HTTP server for frontend communication
 use crate::daemon::rpc_server::process_request;
 use crate::utils;
-use axum::{
-    Router,
-    routing::post,
-    http::StatusCode,
-};
+use axum::{Router, http::StatusCode, routing::post};
 use tower_http::cors::{Any, CorsLayer};
 
 pub struct HttpServer {
@@ -23,14 +19,15 @@ impl HttpServer {
             .allow_methods(Any)
             .allow_headers(Any);
 
-        let app = Router::new()
-            .route("/rpc", post(handle_rpc))
-            .layer(cors);
+        let app = Router::new().route("/rpc", post(handle_rpc)).layer(cors);
 
         let addr = format!("127.0.0.1:{}", self.port);
         let listener = tokio::net::TcpListener::bind(&addr).await?;
 
-        utils::log_info(utils::LogCategory::RPC, &format!("HTTP Server listening on {}", addr));
+        utils::log_info(
+            utils::LogCategory::RPC,
+            &format!("HTTP Server listening on {}", addr),
+        );
 
         axum::serve(listener, app).await?;
 
@@ -48,6 +45,9 @@ async fn handle_rpc(body: String) -> (StatusCode, String) {
 
     match serde_json::to_string(&response) {
         Ok(json) => (StatusCode::OK, json),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Serialization error: {}", e)),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Serialization error: {}", e),
+        ),
     }
 }

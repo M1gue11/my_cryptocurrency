@@ -18,3 +18,8 @@ export interface MempoolResponse {
   count: number;
   transactions: MempoolEntry[];
 }
+
+export interface NewPeerConnectionResponse {
+  success: boolean;
+  fail_message: string | null;
+}

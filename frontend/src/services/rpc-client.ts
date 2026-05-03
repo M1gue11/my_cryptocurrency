@@ -5,6 +5,7 @@ import type {
   RpcRequest,
   RpcResponse,
   NodeStatusResponse,
+  NewPeerConnectionResponse,
   PeersListResponse,
   PeerDisconnectResponse,
   MempoolResponse,
@@ -106,6 +107,10 @@ export class RpcClient {
 
   async nodeSave(): Promise<{ success: boolean }> {
     return this.call("node_save");
+  }
+
+  async nodeConnect(address: string): Promise<NewPeerConnectionResponse> {
+    return this.call<NewPeerConnectionResponse>("node_connect", { address });
   }
 
   // ==========================================================================
