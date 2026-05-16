@@ -70,6 +70,10 @@ impl HDKey {
         HDKey::get_address_impl(&self.get_public_key())
     }
 
+    pub fn get_address_from_public_key(public_key: &VerifyingKey) -> String {
+        HDKey::get_address_impl(public_key)
+    }
+
     pub fn sign(&self, message: &[u8]) -> Signature {
         sign_hash(&mut SigningKey::from_bytes(&self.private_key), message)
     }

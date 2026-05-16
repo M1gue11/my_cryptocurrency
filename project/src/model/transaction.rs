@@ -1,6 +1,7 @@
 use crate::{
+    db::repository::LedgerRepository,
     globals::CONSENSUS_RULES,
-    model::{TxInput, TxOutput, UTXO},
+    model::{HDKey, TxInput, TxOutput, UTXO},
     security_utils::{
         bytes_to_hex_string, load_public_key_from_hex, load_signature_from_hex, sha256,
         verify_signature,
@@ -8,6 +9,7 @@ use crate::{
     utils::{format_date, get_current_timestamp},
 };
 use chrono::NaiveDateTime;
+use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 pub type TxId = [u8; 32];
@@ -51,23 +53,86 @@ impl Transaction {
         }
     }
 
-    pub fn validate(&self) -> Result<(), ed25519_dalek::ed25519::Error> {
-        let partial_tx = Transaction {
+    pub fn validate(&self) -> Result<(), String> {
+        let partial_tx_bytes = self.partial_tx_bytes();
+        let repo = LedgerRepository::new();
+        for input in &self.inputs {
+            Self::validate_input(input, &partial_tx_bytes, &repo)?;
+        }
+        Ok(())
+    }
+
+    fn partial_tx_bytes(&self) -> Vec<u8> {
+        Transaction {
             inputs: self.inputs.iter().map(|i| i.get_partial()).collect(),
             outputs: self.outputs.clone(),
             date: self.date,
             message: self.message.clone(),
-        };
-        let partial_tx_bytes = partial_tx.as_bytes();
-        for input in &self.inputs {
-            let pubkey = load_public_key_from_hex(&input.public_key);
-            let sig = load_signature_from_hex(&input.signature);
-            match verify_signature(&pubkey, &partial_tx_bytes, sig) {
-                Ok(_) => {}
-                Err(e) => return Err(e),
-            }
+        }
+        .as_bytes()
+    }
+
+    fn validate_input(
+        input: &TxInput,
+        partial_tx_bytes: &[u8],
+        repo: &LedgerRepository,
+    ) -> Result<(), String> {
+        let referenced_output = Self::resolve_referenced_output(input, repo)?;
+        let pubkey = load_public_key_from_hex(&input.public_key);
+
+        Self::check_ownership(&pubkey, &referenced_output.address, &input.prev_tx_id)?;
+        Self::check_signature(input, &pubkey, partial_tx_bytes)?;
+        Ok(())
+    }
+
+    fn resolve_referenced_output(
+        input: &TxInput,
+        repo: &LedgerRepository,
+    ) -> Result<TxOutput, String> {
+        let tx = repo
+            .get_transaction(&input.prev_tx_id)
+            .map_err(|e| format!("Failed to fetch transaction: {}", e))?
+            .ok_or_else(|| {
+                format!(
+                    "Unable to find transaction for input: {}",
+                    bytes_to_hex_string(&input.prev_tx_id)
+                )
+            })?;
+
+        tx.outputs
+            .into_iter()
+            .nth(input.output_index)
+            .ok_or_else(|| {
+                format!(
+                    "Output index {} out of bounds for transaction {}",
+                    input.output_index,
+                    bytes_to_hex_string(&input.prev_tx_id)
+                )
+            })
+    }
+
+    fn check_ownership(
+        pubkey: &VerifyingKey,
+        output_address: &str,
+        prev_tx_id: &TxId,
+    ) -> Result<(), String> {
+        if HDKey::get_address_from_public_key(pubkey) != output_address {
+            return Err(format!(
+                "Input public key does not match output address for input: {}",
+                bytes_to_hex_string(prev_tx_id)
+            ));
         }
         Ok(())
+    }
+
+    fn check_signature(
+        input: &TxInput,
+        pubkey: &VerifyingKey,
+        partial_tx_bytes: &[u8],
+    ) -> Result<(), String> {
+        let sig = load_signature_from_hex(&input.signature);
+        verify_signature(pubkey, partial_tx_bytes, sig)
+            .map_err(|e| format!("Invalid signature: {}", e))
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
