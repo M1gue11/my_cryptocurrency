@@ -126,13 +126,14 @@ impl Block {
             return Err("Invalid Merkle root".to_string());
         }
 
-        let mut unique_utxos_map = HashSet::new();
+        let mut spent_utxos = HashSet::new();
         for tx in &self.transactions {
             if let Err(e) = tx.validate() {
                 return Err(e.to_string());
             }
             for input in &tx.inputs {
-                if unique_utxos_map.contains(&input.prev_tx_id) {
+                let utxo_key = (input.prev_tx_id, input.output_index);
+                if spent_utxos.contains(&utxo_key) {
                     return Err(format!(
                         "Double spending detected in block for UTXO: tx_id: {}, output_index: {}",
                         bytes_to_hex_string(&input.prev_tx_id),
@@ -140,7 +141,7 @@ impl Block {
                     ));
                 }
 
-                unique_utxos_map.insert(input.prev_tx_id);
+                spent_utxos.insert(utxo_key);
             }
         }
         Ok(())
