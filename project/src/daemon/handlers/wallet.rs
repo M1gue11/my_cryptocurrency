@@ -170,6 +170,7 @@ pub async fn handle_wallet_send(id: Option<u64>, params: serde_json::Value) -> R
             match node.receive_transaction(mempool_tx) {
                 Ok(_) => {
                     node.persist_mempool();
+                    crate::network::broadcast_new_tx_hash(tx_id, None);
                     let response = WalletSendResponse {
                         success: true,
                         tx_id: Some(bytes_to_hex_string(&tx_id)),

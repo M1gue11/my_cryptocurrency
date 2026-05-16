@@ -389,7 +389,6 @@ impl Node {
         if let Err(e) = self.is_all_inputs_utxos(&tx) {
             return Err(e);
         }
-        network::broadcast_new_tx_hash(tx.id(), None);
         self.mempool.push(mem_txs);
         Ok(())
     }
