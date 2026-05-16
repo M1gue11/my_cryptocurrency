@@ -35,6 +35,14 @@ impl Blockchain {
         }
     }
 
+    /// this is used as a network identity in the version handshake.
+    pub fn get_genesis_hash(&self) -> [u8; 32] {
+        self.chain
+            .first()
+            .map(|b| b.header_hash())
+            .unwrap_or([0; 32])
+    }
+
     pub fn is_empty(&self) -> bool {
         self.chain.is_empty()
     }

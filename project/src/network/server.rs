@@ -241,12 +241,35 @@ async fn handle_connection(
                                     )
                                     .await;
                                 utils::log_info(utils::LogCategory::P2P, &format!(
-                                    "Received VERSION: v={} height={} hash={}",
-                                    ver.version, ver.height, bytes_to_hex_string(&ver.top_hash)
+                                    "Received VERSION: v={} height={} hash={} genesis={}",
+                                    ver.version,
+                                    ver.height,
+                                    bytes_to_hex_string(&ver.top_hash),
+                                    bytes_to_hex_string(&ver.genesis_hash)
                                 ));
-                                get_node().await.handle_version_message(ver, peer_addr).await;
-                                let ack = serde_json::to_string(&NetworkMessage::VerAck)?;
-                                writer.write_all(format!("{}\n", ack).as_bytes()).await?;
+                                match get_node().await.handle_version_message(ver, peer_addr).await {
+                                    Ok(()) => {
+                                        let ack = serde_json::to_string(&NetworkMessage::VerAck)?;
+                                        writer.write_all(format!("{}\n", ack).as_bytes()).await?;
+                                    }
+                                    Err(reason) => {
+                                        utils::log_warning(
+                                            utils::LogCategory::P2P,
+                                            &format!(
+                                                "Rejecting peer {:?} during handshake: {}",
+                                                peer_addr, reason
+                                            ),
+                                        );
+                                        PEER_MANAGER
+                                            .mark_disconnecting(
+                                                peer_addr.unwrap(),
+                                                connection_id,
+                                                &reason,
+                                            )
+                                            .await;
+                                        break;
+                                    }
+                                }
                             },
 
                             NetworkMessage::VerAck => {

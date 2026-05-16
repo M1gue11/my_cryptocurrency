@@ -532,6 +532,7 @@ impl Node {
             version: 1,
             height: self.blockchain.height() as u64,
             top_hash: self.blockchain.get_last_block_hash(),
+            genesis_hash: self.blockchain.get_genesis_hash(),
             advertised_addr: crate::globals::CONFIG.p2p_advertised_addr.clone(),
         }
     }
@@ -764,8 +765,29 @@ impl Node {
         }
     }
 
-    pub async fn handle_version_message(&self, peer_v: NodeVersion, peer_addr: Option<SocketAddr>) {
+    pub async fn handle_version_message(
+        &self,
+        peer_v: NodeVersion,
+        peer_addr: Option<SocketAddr>,
+    ) -> Result<(), String> {
         let node_v = self.get_node_version_info();
+
+        // Reject peers from a different network. We only enforce this when both
+        // sides already have a genesis block; if either side is still empty
+        // (`[0; 32]`), we let the handshake proceed so the empty node can
+        // bootstrap from the populated one.
+        let empty_hash = [0u8; 32];
+        if node_v.genesis_hash != empty_hash
+            && peer_v.genesis_hash != empty_hash
+            && node_v.genesis_hash != peer_v.genesis_hash
+        {
+            return Err(format!(
+                "Network mismatch: local genesis {} != peer genesis {}",
+                bytes_to_hex_string(&node_v.genesis_hash),
+                bytes_to_hex_string(&peer_v.genesis_hash)
+            ));
+        }
+
         let peer = match peer_addr {
             Some(addr) => addr,
             None => {
@@ -773,7 +795,7 @@ impl Node {
                     utils::LogCategory::P2P,
                     "Peer address is None, cannot log version info.",
                 );
-                return;
+                return Ok(());
             }
         };
         if node_v.height == peer_v.height {
@@ -795,6 +817,7 @@ impl Node {
             );
             network::find_common_ancestor(self.blockchain.build_block_sequence(), peer);
         }
+        Ok(())
     }
 
     pub async fn handle_find_common_ancestor_request(
@@ -910,6 +933,8 @@ pub struct NodeVersion {
     pub version: u32,
     pub height: u64,
     pub top_hash: [u8; 32],
+    #[serde(default)]
+    pub genesis_hash: [u8; 32],
     pub advertised_addr: String,
 }
 
