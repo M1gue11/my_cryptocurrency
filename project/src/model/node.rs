@@ -553,7 +553,7 @@ impl Node {
     pub async fn handle_inventory(
         &self,
         items: Vec<(InventoryType, [u8; 32])>,
-        _exclude_peer: Option<SocketAddr>,
+        announcing_peer: Option<SocketAddr>,
     ) {
         for (inv_type, item_id) in items {
             match inv_type {
@@ -564,17 +564,18 @@ impl Node {
                     utils::log_info(
                         utils::LogCategory::P2P,
                         &format!(
-                            "Requesting block with ID: {}",
-                            bytes_to_hex_string(&item_id)
+                            "Requesting block {} from peer {:?}",
+                            bytes_to_hex_string(&item_id),
+                            announcing_peer
                         ),
                     );
-                    network::ask_for_block(item_id);
+                    network::ask_for_block(item_id, announcing_peer);
                 }
                 InventoryType::Tx => {
                     if self.get_mempool_tx_by_id(item_id).is_some() {
                         continue;
                     }
-                    network::ask_for_tx(item_id);
+                    network::ask_for_tx(item_id, announcing_peer);
                 }
             }
         }

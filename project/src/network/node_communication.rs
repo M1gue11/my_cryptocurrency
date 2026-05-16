@@ -37,24 +37,28 @@ pub fn send_tx_to(tx: &Transaction, target_peer: SocketAddr) {
         .send((tx_msg, Delivery::Direct { target_peer }));
 }
 
-pub fn ask_for_block(block_hash: [u8; 32]) {
+pub fn ask_for_block(block_hash: [u8; 32], target_peer: Option<SocketAddr>) {
     let get_data_msg = NetworkMessage::GetData {
         item_type: InventoryType::Block,
         item_id: block_hash,
     };
-    let _ = BROADCAST_CHANNEL
-        .sender
-        .send((get_data_msg, Delivery::Broadcast { exclude_peer: None }));
+    let delivery = match target_peer {
+        Some(peer) => Delivery::Direct { target_peer: peer },
+        None => Delivery::Broadcast { exclude_peer: None },
+    };
+    let _ = BROADCAST_CHANNEL.sender.send((get_data_msg, delivery));
 }
 
-pub fn ask_for_tx(tx_hash: [u8; 32]) {
+pub fn ask_for_tx(tx_hash: [u8; 32], target_peer: Option<SocketAddr>) {
     let get_data_msg = NetworkMessage::GetData {
         item_type: InventoryType::Tx,
         item_id: tx_hash,
     };
-    let _ = BROADCAST_CHANNEL
-        .sender
-        .send((get_data_msg, Delivery::Broadcast { exclude_peer: None }));
+    let delivery = match target_peer {
+        Some(peer) => Delivery::Direct { target_peer: peer },
+        None => Delivery::Broadcast { exclude_peer: None },
+    };
+    let _ = BROADCAST_CHANNEL.sender.send((get_data_msg, delivery));
 }
 
 pub fn ask_for_blocks(last_known_hash: [u8; 32], target_peer: Option<SocketAddr>) {
