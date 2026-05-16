@@ -97,13 +97,16 @@ impl Block {
         merkle_tree.root()
     }
 
-    /** Staticaly validate the block without external dependencies
+    /** Validate the block.
      * Checks:
      * - Block has at least one transaction
+     * - Block size is within limits
      * - Proof of work is valid
      * - Merkle root is valid
-     * - All transactions are valid
+     * - First transaction is coinbase, and it is the only coinbase
+     * - All transactions are valid (ownership, signatures, inputs >= outputs)
      * - No double spending within the block
+     * - Coinbase output does not exceed `block_reward + total_fees`
      */
     pub fn validate(&self) -> Result<(), String> {
         if self.transactions.is_empty() {
@@ -126,10 +129,16 @@ impl Block {
             return Err("Invalid Merkle root".to_string());
         }
 
+        self.validate_coinbase_uniqueness()?;
+
         let mut spent_utxos = HashSet::new();
+        let mut total_fees: i64 = 0;
         for tx in &self.transactions {
-            if let Err(e) = tx.validate() {
-                return Err(e.to_string());
+            let fee = tx.validate()?;
+            if !tx.is_coinbase() {
+                total_fees = total_fees
+                    .checked_add(fee)
+                    .ok_or_else(|| "Total fees overflow".to_string())?;
             }
             for input in &tx.inputs {
                 let utxo_key = (input.prev_tx_id, input.output_index);
@@ -143,6 +152,41 @@ impl Block {
 
                 spent_utxos.insert(utxo_key);
             }
+        }
+
+        self.validate_coinbase_reward(total_fees)?;
+        Ok(())
+    }
+
+    fn validate_coinbase_uniqueness(&self) -> Result<(), String> {
+        if !self.transactions[0].is_coinbase() {
+            return Err("First transaction must be the coinbase".to_string());
+        }
+        for tx in self.transactions.iter().skip(1) {
+            if tx.is_coinbase() {
+                return Err("Block contains more than one coinbase transaction".to_string());
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_coinbase_reward(&self, total_fees: i64) -> Result<(), String> {
+        let coinbase = &self.transactions[0];
+        let mut coinbase_output_sum: i64 = 0;
+        for output in &coinbase.outputs {
+            coinbase_output_sum = coinbase_output_sum
+                .checked_add(output.value)
+                .ok_or_else(|| "Coinbase output sum overflow".to_string())?;
+        }
+        let max_reward = CONSENSUS_RULES
+            .block_reward
+            .checked_add(total_fees)
+            .ok_or_else(|| "Max reward overflow".to_string())?;
+        if coinbase_output_sum > max_reward {
+            return Err(format!(
+                "Coinbase reward {} exceeds allowed {} (block_reward {} + fees {})",
+                coinbase_output_sum, max_reward, CONSENSUS_RULES.block_reward, total_fees
+            ));
         }
         Ok(())
     }

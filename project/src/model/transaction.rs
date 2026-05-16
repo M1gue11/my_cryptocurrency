@@ -53,13 +53,45 @@ impl Transaction {
         }
     }
 
-    pub fn validate(&self) -> Result<(), String> {
+    /// Validates the transaction and returns its fee (`sum_inputs - sum_outputs`).
+    /// Coinbase transactions return `0` - their reward is bounded by block-level rules.
+    pub fn validate(&self) -> Result<i64, String> {
+        let output_sum = self.checked_output_sum()?;
+
+        if self.is_coinbase() {
+            return Ok(0);
+        }
+
         let partial_tx_bytes = self.partial_tx_bytes();
         let repo = LedgerRepository::new();
+        let mut input_sum: i64 = 0;
         for input in &self.inputs {
-            Self::validate_input(input, &partial_tx_bytes, &repo)?;
+            let input_value = Self::validate_input(input, &partial_tx_bytes, &repo)?;
+            input_sum = input_sum
+                .checked_add(input_value)
+                .ok_or_else(|| "Input sum overflow".to_string())?;
         }
-        Ok(())
+
+        if input_sum < output_sum {
+            return Err(format!(
+                "Transaction outputs ({}) exceed inputs ({})",
+                output_sum, input_sum
+            ));
+        }
+        Ok(input_sum - output_sum)
+    }
+
+    fn checked_output_sum(&self) -> Result<i64, String> {
+        let mut sum: i64 = 0;
+        for output in &self.outputs {
+            if output.value < 0 {
+                return Err(format!("Negative output value: {}", output.value));
+            }
+            sum = sum
+                .checked_add(output.value)
+                .ok_or_else(|| "Output sum overflow".to_string())?;
+        }
+        Ok(sum)
     }
 
     fn partial_tx_bytes(&self) -> Vec<u8> {
@@ -76,13 +108,13 @@ impl Transaction {
         input: &TxInput,
         partial_tx_bytes: &[u8],
         repo: &LedgerRepository,
-    ) -> Result<(), String> {
+    ) -> Result<i64, String> {
         let referenced_output = Self::resolve_referenced_output(input, repo)?;
         let pubkey = load_public_key_from_hex(&input.public_key);
 
         Self::check_ownership(&pubkey, &referenced_output.address, &input.prev_tx_id)?;
         Self::check_signature(input, &pubkey, partial_tx_bytes)?;
-        Ok(())
+        Ok(referenced_output.value)
     }
 
     fn resolve_referenced_output(
