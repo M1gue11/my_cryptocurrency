@@ -110,7 +110,13 @@ impl Transaction {
         repo: &LedgerRepository,
     ) -> Result<i64, String> {
         let referenced_output = Self::resolve_referenced_output(input, repo)?;
-        let pubkey = load_public_key_from_hex(&input.public_key);
+        let pubkey = load_public_key_from_hex(&input.public_key).map_err(|e| {
+            format!(
+                "Invalid public key on input {}: {}",
+                bytes_to_hex_string(&input.prev_tx_id),
+                e
+            )
+        })?;
 
         Self::check_ownership(&pubkey, &referenced_output.address, &input.prev_tx_id)?;
         Self::check_signature(input, &pubkey, partial_tx_bytes)?;
@@ -162,7 +168,13 @@ impl Transaction {
         pubkey: &VerifyingKey,
         partial_tx_bytes: &[u8],
     ) -> Result<(), String> {
-        let sig = load_signature_from_hex(&input.signature);
+        let sig = load_signature_from_hex(&input.signature).map_err(|e| {
+            format!(
+                "Invalid signature on input {}: {}",
+                bytes_to_hex_string(&input.prev_tx_id),
+                e
+            )
+        })?;
         verify_signature(pubkey, partial_tx_bytes, sig)
             .map_err(|e| format!("Invalid signature: {}", e))
     }

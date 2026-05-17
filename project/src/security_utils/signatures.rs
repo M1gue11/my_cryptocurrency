@@ -24,14 +24,18 @@ pub fn verify_signature(
     public_key.verify(&hash, &signature)
 }
 
-pub fn load_signature_from_hex(hex: &str) -> Signature {
-    let bytes = hex::decode(hex).expect("Failed to decode hex");
-    let arr: [u8; 64] = bytes.try_into().expect("Signature must be 64 bytes");
-    Signature::from_bytes(&arr)
+pub fn load_signature_from_hex(hex: &str) -> Result<Signature, String> {
+    let bytes = hex::decode(hex).map_err(|e| format!("Invalid signature hex: {}", e))?;
+    let arr: [u8; 64] = bytes
+        .try_into()
+        .map_err(|v: Vec<u8>| format!("Signature must be 64 bytes, got {}", v.len()))?;
+    Ok(Signature::from_bytes(&arr))
 }
 
-pub fn load_public_key_from_hex(hex: &String) -> VerifyingKey {
-    let bytes = hex::decode(hex).expect("Failed to decode hex");
-    let arr: [u8; 32] = bytes.try_into().expect("Public key must be 32 bytes");
-    VerifyingKey::from_bytes(&arr).expect("Failed to create public key from bytes")
+pub fn load_public_key_from_hex(hex: &str) -> Result<VerifyingKey, String> {
+    let bytes = hex::decode(hex).map_err(|e| format!("Invalid public key hex: {}", e))?;
+    let arr: [u8; 32] = bytes
+        .try_into()
+        .map_err(|v: Vec<u8>| format!("Public key must be 32 bytes, got {}", v.len()))?;
+    VerifyingKey::from_bytes(&arr).map_err(|e| format!("Invalid public key bytes: {}", e))
 }
