@@ -62,7 +62,7 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
         pbkdf2_iterations: env::var("PBKDF2_ITERATIONS")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(1),
+            .unwrap_or(600_000),
         log_file_path: env::var("LOG_FILE_PATH")
             .unwrap_or_else(|_| "saved_files/node.log".to_string()),
         log_mode: env::var("LOG_MODE").unwrap_or_else(|_| "full".to_string()),
