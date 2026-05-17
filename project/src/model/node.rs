@@ -496,14 +496,16 @@ impl Node {
         }
     }
 
-    pub fn prepare_mining_snapshot(&mut self) -> (Vec<MempoolTx>, [u8; 32], U256, String) {
+    pub fn prepare_mining_snapshot(
+        &mut self,
+    ) -> Result<(Vec<MempoolTx>, [u8; 32], U256, String), String> {
+        let receive_addr = self.miner.ensure_wallet()?.get_receive_addr();
         let previous_hash = self.blockchain.get_last_block_hash();
         let target = self.blockchain.calculate_next_target();
         self.target = target;
         let mempool = self.mempool.clone();
-        let receive_addr = self.miner.wallet.get_receive_addr();
         self.flag_mining_start();
-        (mempool, previous_hash, target, receive_addr)
+        Ok((mempool, previous_hash, target, receive_addr))
     }
 
     pub fn submit_mined_block(&mut self, block: Block) -> Result<Block, String> {

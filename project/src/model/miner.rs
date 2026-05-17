@@ -19,28 +19,53 @@ use crate::{
 };
 
 pub struct Miner {
-    pub wallet: Wallet,
+    pub wallet: Option<Wallet>,
 }
 
 impl Miner {
     pub fn new() -> Self {
-        let wallet = match Wallet::from_keystore_file(
+        Miner {
+            wallet: Self::try_load_wallet(),
+        }
+    }
+
+    /// Try to load the miner keystore from disk. Logs and returns `None` on
+    /// failure so the node can keep running and the wallet can be created
+    /// later via RPC.
+    fn try_load_wallet() -> Option<Wallet> {
+        match Wallet::from_keystore_file(
             &CONFIG.miner_wallet_seed_path,
             &CONFIG.miner_wallet_password,
         ) {
-            Ok(w) => w,
+            Ok(w) => Some(w),
             Err(e) => {
-                utils::log_error(
+                utils::log_warning(
                     utils::LogCategory::Core,
                     &format!(
-                        "Failed to load miner wallet! Path: {} - Error: {}",
-                        CONFIG.miner_wallet_seed_path, e
+                        "Miner wallet not loaded yet (Path: {} - Error: {}). \
+                         The node will keep running; create the wallet via \
+                         'wallet new --path {}' to enable mining.",
+                        CONFIG.miner_wallet_seed_path, e, CONFIG.miner_wallet_seed_path
                     ),
                 );
-                std::process::exit(1);
+                None
             }
-        };
-        Miner { wallet }
+        }
+    }
+
+    /// Return the loaded wallet, attempting a lazy reload from disk if it is
+    /// not yet available. Used by mining flows so the operator can create the
+    /// keystore after node start without restarting the process.
+    pub fn ensure_wallet(&mut self) -> Result<&mut Wallet, String> {
+        if self.wallet.is_none() {
+            self.wallet = Self::try_load_wallet();
+        }
+        self.wallet.as_mut().ok_or_else(|| {
+            format!(
+                "Miner wallet not available at '{}'. Create it via 'wallet new --path {}' and try again.",
+                CONFIG.miner_wallet_seed_path, CONFIG.miner_wallet_seed_path
+            )
+        })
     }
 }
 
@@ -248,7 +273,7 @@ pub async fn mine() -> Result<Block, String> {
         }
         let cancel = node.mining_cancel_flag();
         node.reset_mining_cancel();
-        let (mempool, previous_hash, target, receive_addr) = node.prepare_mining_snapshot();
+        let (mempool, previous_hash, target, receive_addr) = node.prepare_mining_snapshot()?;
         (mempool, previous_hash, target, receive_addr, cancel)
     };
     mine_block_impl(mempool, previous_hash, target, receive_addr, cancel).await
@@ -297,7 +322,20 @@ pub async fn run_keep_mining_loop(keep_mining_enabled: Arc<AtomicBool>, cancel: 
                 break;
             }
             node.reset_mining_cancel();
-            node.prepare_mining_snapshot()
+            match node.prepare_mining_snapshot() {
+                Ok(snapshot) => snapshot,
+                Err(e) => {
+                    utils::log_warning(
+                        utils::LogCategory::Core,
+                        &format!(
+                            "Keep mining cannot start a new round: {}. Disabling keep mining.",
+                            e
+                        ),
+                    );
+                    node.set_keep_mining_flag(false);
+                    break;
+                }
+            }
         };
 
         let mined_block = mine_block_impl(
