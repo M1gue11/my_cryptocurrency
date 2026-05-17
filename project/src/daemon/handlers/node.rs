@@ -17,6 +17,7 @@ pub async fn handle_node_status(id: Option<u64>) -> RpcResponse {
         advertised_addr: state.version.advertised_addr,
         block_height: state.version.height as usize,
         top_block_hash: bytes_to_hex_string(&state.version.top_hash),
+        genesis_hash: bytes_to_hex_string(&state.version.genesis_hash),
     };
 
     RpcResponse::success(id, serde_json::to_value(response).unwrap())

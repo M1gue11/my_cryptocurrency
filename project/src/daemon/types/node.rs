@@ -10,6 +10,7 @@ pub struct NodeStatusResponse {
     pub advertised_addr: String,
     pub block_height: usize,
     pub top_block_hash: String,
+    pub genesis_hash: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

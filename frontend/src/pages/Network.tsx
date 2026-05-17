@@ -244,6 +244,10 @@ export function Network() {
             label="tip height"
             value={nodeStatus ? `#${nodeStatus.block_height}` : "-"}
           />
+          <ConsoleRow
+            label="genesis hash"
+            value={nodeStatus?.genesis_hash ?? "-"}
+          />
         </ConsolePanel>
 
         <ConsolePanel title="connect peer" subtitle="node_connect" icon="+">

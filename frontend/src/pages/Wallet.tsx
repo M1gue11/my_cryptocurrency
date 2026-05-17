@@ -314,7 +314,7 @@ export function Wallet() {
               onPasswordChange={setPassword}
               onCancel={closeForms}
               onSubmit={handleCreateWallet}
-              keyPathHint="Where the keystore JSON should be written"
+              keyPathHint="Filename inside the sandboxed keys/ directory (e.g. my_wallet.json or keys/my_wallet.json). Absolute paths and '..' are rejected."
             />
           ) : null}
           {showImportForm ? (
@@ -332,7 +332,7 @@ export function Wallet() {
               onPasswordChange={setPassword}
               onCancel={closeForms}
               onSubmit={handleImportWallet}
-              keyPathHint="Path to an existing keystore JSON file"
+              keyPathHint="Existing keystore filename inside the sandboxed keys/ directory (e.g. my_wallet.json or keys/my_wallet.json). Absolute paths and '..' are rejected."
             />
           ) : null}
         </div>

@@ -8,6 +8,9 @@ export interface NodeStatusResponse {
   peers_connected: number;
   block_height: number;
   top_block_hash: string;
+  /** Hash of the local genesis block; identifies the network. Empty (or all-zero)
+   *  when the chain is empty. */
+  genesis_hash: string;
 }
 
 export interface MempoolEntry {
