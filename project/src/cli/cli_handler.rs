@@ -134,7 +134,15 @@ fn print_help() {
     println!("    - Limit is optional, default is 10");
 
     println!("\n💰 Wallet:");
-    println!("  wallet new --password <password> --path <keystore_path> [--name <name>]");
+    println!(
+        "  Keystore paths are sandboxed to the directory set by WALLET_KEYS_DIR (default: 'keys')."
+    );
+    println!(
+        "  Pass the keystore as a filename ('my_wallet.json') or as 'keys/my_wallet.json'."
+    );
+    println!("  Absolute paths and '..' are rejected.");
+
+    println!("\n  wallet new --password <password> --path <keystore_path> [--name <name>]");
     println!("    - Create a new wallet. If name is provided, wallet is stored in session.");
 
     println!("\n  wallet import --password <password> --path <keystore_path> [--name <name>]");

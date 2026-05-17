@@ -18,6 +18,9 @@ pub struct Settings {
     pub log_file_path: String,
     pub log_mode: String,
     pub mining_threads: usize,
+    /// Root directory for wallet keystores accepted from RPC requests.
+    /// All user-supplied wallet paths are resolved inside this directory.
+    pub wallet_keys_dir: String,
 }
 
 pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
@@ -67,6 +70,7 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(1),
+        wallet_keys_dir: env::var("WALLET_KEYS_DIR").unwrap_or_else(|_| "keys".to_string()),
     }
 });
 

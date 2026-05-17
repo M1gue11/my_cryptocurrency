@@ -10,6 +10,18 @@ use crate::model::wallet::DerivationType;
 use crate::model::{TxOutput, Wallet, get_node_mut};
 use crate::security_utils::Keystore;
 use crate::security_utils::bytes_to_hex_string;
+use crate::security_utils::resolve_keystore_path;
+
+fn sandboxed_path(raw: &str, id: Option<u64>) -> Result<String, RpcResponse> {
+    match resolve_keystore_path(raw) {
+        Ok(p) => Ok(p.to_string_lossy().into_owned()),
+        Err(e) => Err(RpcResponse::error(
+            id,
+            INVALID_PARAMS,
+            format!("Rejected wallet path: {}", e),
+        )),
+    }
+}
 
 pub async fn handle_import_wallet(id: Option<u64>, params: serde_json::Value) -> RpcResponse {
     let params: WalletImportParams = match serde_json::from_value(params) {
@@ -21,9 +33,13 @@ pub async fn handle_import_wallet(id: Option<u64>, params: serde_json::Value) ->
 
     let is_imported_wallet = true;
 
+    let safe_path = match sandboxed_path(&params.path, id) {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+
     // Check if keystore file exists
-    let keystore_exists = std::path::Path::new(&params.path).exists();
-    if !keystore_exists {
+    if !std::path::Path::new(&safe_path).exists() {
         return RpcResponse::error(
             id,
             INVALID_PARAMS,
@@ -31,7 +47,7 @@ pub async fn handle_import_wallet(id: Option<u64>, params: serde_json::Value) ->
         );
     }
 
-    let mut wallet = match Wallet::from_keystore_file(&params.path, &params.password) {
+    let mut wallet = match Wallet::from_keystore_file(&safe_path, &params.password) {
         Ok(w) => w,
         Err(e) => {
             return RpcResponse::error(id, INVALID_PARAMS, format!("Failed to load wallet: {}", e));
@@ -55,8 +71,13 @@ pub async fn handle_new_wallet(id: Option<u64>, params: serde_json::Value) -> Rp
         }
     };
 
+    let safe_path = match sandboxed_path(&params.path, id) {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+
     // This is SUPER important to avoid overwriting existing wallets
-    if std::path::Path::new(&params.path).exists() {
+    if std::path::Path::new(&safe_path).exists() {
         return RpcResponse::error(
             id,
             INVALID_PARAMS,
@@ -66,7 +87,7 @@ pub async fn handle_new_wallet(id: Option<u64>, params: serde_json::Value) -> Rp
         );
     }
 
-    let mut wallet = match Keystore::new_seed(&params.password, &params.path) {
+    let mut wallet = match Keystore::new_seed(&params.password, &safe_path) {
         Ok(seed) => Wallet::from_seed(seed),
         Err(create_err) => {
             return RpcResponse::error(
@@ -92,7 +113,12 @@ pub async fn handle_wallet_address(id: Option<u64>, params: serde_json::Value) -
         }
     };
 
-    let mut wallet = match Wallet::from_keystore_file(&params.key_path, &params.password) {
+    let safe_path = match sandboxed_path(&params.key_path, id) {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+
+    let mut wallet = match Wallet::from_keystore_file(&safe_path, &params.password) {
         Ok(w) => w,
         Err(_) => {
             return RpcResponse::error(id, INVALID_PARAMS, "Wallet not found".to_string());
@@ -113,7 +139,12 @@ pub async fn handle_wallet_balance(id: Option<u64>, params: serde_json::Value) -
         }
     };
 
-    let wallet = match Wallet::from_keystore_file(&params.key_path, &params.password) {
+    let safe_path = match sandboxed_path(&params.key_path, id) {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+
+    let wallet = match Wallet::from_keystore_file(&safe_path, &params.password) {
         Ok(w) => w,
         Err(_) => {
             return RpcResponse::error(id, INVALID_PARAMS, "Wallet not found".to_string());
@@ -150,8 +181,12 @@ pub async fn handle_wallet_send(id: Option<u64>, params: serde_json::Value) -> R
         }
     };
 
-    let mut wallet = match Wallet::from_keystore_file(&params.from.key_path, &params.from.password)
-    {
+    let safe_path = match sandboxed_path(&params.from.key_path, id) {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+
+    let mut wallet = match Wallet::from_keystore_file(&safe_path, &params.from.password) {
         Ok(w) => w,
         Err(_) => {
             return RpcResponse::error(id, INVALID_PARAMS, "Wallet not found".to_string());
@@ -224,8 +259,12 @@ pub async fn handle_wallet_generate_keys(
         }
     };
 
-    let wallet = match Wallet::from_keystore_file(&params.wallet.key_path, &params.wallet.password)
-    {
+    let safe_path = match sandboxed_path(&params.wallet.key_path, id) {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+
+    let wallet = match Wallet::from_keystore_file(&safe_path, &params.wallet.password) {
         Ok(w) => w,
         Err(_) => {
             return RpcResponse::error(id, INVALID_PARAMS, "Wallet not found".to_string());
