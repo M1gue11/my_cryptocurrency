@@ -15,13 +15,14 @@ Uso tipico:
 
 Sem dependencias externas: usa apenas a biblioteca padrao.
 """
+
 import argparse
 import json
 import random
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
 # Nos: nome logico -> URL HTTP/RPC publicada no host pelo compose.
@@ -38,6 +39,7 @@ NODES = {
 # Por isso enviamos o nome relativo "miner_wallet.json"; o sandbox o resolve
 # para /data/keys/miner_wallet.json, que e exatamente onde o minerador
 # (MINER_WALLET_SEED_PATH no compose) procura a carteira.
+# A senha deve bater com MINER_WALLET_PASSWORD no docker-compose.sim.yml.
 MINER_KEY_PATH = "miner_wallet.json"
 MINER_PASSWORD = "miner123"
 
@@ -190,7 +192,9 @@ def action_send(rng, addresses):
     res, err = rpc(NODES[src], "wallet_send", params)
     ok = bool(res and res.get("success"))
     detail = (res or {}).get("error") if not ok else (res or {}).get("tx_id", "")
-    log(f"  acao=send {src}->{dst} amt={amount} -> {'ok' if ok else 'falha'}: {str(detail)[:40]}")
+    log(
+        f"  acao=send {src}->{dst} amt={amount} -> {'ok' if ok else 'falha'}: {str(detail)[:40]}"
+    )
     return {"action": "send", "src": src, "dst": dst, "amount": amount, "ok": ok}
 
 
@@ -221,16 +225,26 @@ def pick_action(rng):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Orquestrador da simulacao distribuida do Caramuru")
+    ap = argparse.ArgumentParser(
+        description="Orquestrador da simulacao distribuida do Caramuru"
+    )
     ap.add_argument("--rounds", type=int, default=30, help="numero de rodadas de acao")
-    ap.add_argument("--seed", type=int, default=42, help="seed fixa para reprodutibilidade")
+    ap.add_argument(
+        "--seed", type=int, default=42, help="seed fixa para reprodutibilidade"
+    )
     ap.add_argument("--delay", type=float, default=1.5, help="pausa (s) entre rodadas")
-    ap.add_argument("--settle", type=float, default=8.0, help="espera final (s) para convergencia")
-    ap.add_argument("--out", default="sim/results.json", help="arquivo de saida das metricas")
+    ap.add_argument(
+        "--settle", type=float, default=8.0, help="espera final (s) para convergencia"
+    )
+    ap.add_argument(
+        "--out", default="sim/results.json", help="arquivo de saida das metricas"
+    )
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
-    log(f"=== Simulacao distribuida Caramuru | seed={args.seed} rounds={args.rounds} ===")
+    log(
+        f"=== Simulacao distribuida Caramuru | seed={args.seed} rounds={args.rounds} ==="
+    )
 
     if not wait_until_up():
         log("ERRO: nem todos os nos ficaram prontos. Abortando.")
