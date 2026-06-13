@@ -35,7 +35,7 @@ services:
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
       - MINER_WALLET_SEED_PATH=/data/keys/miner_wallet.json
-      - MINER_WALLET_PASSWORD=miner123
+      - MINER_WALLET_PASSWORD=miner_node1_pw
       - MAX_MINING_ATTEMPTS=2000000
       - MINING_THREADS=2
       - PBKDF2_ITERATIONS=1
@@ -65,7 +65,7 @@ services:
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
       - MINER_WALLET_SEED_PATH=/data/keys/miner_wallet.json
-      - MINER_WALLET_PASSWORD=miner123
+      - MINER_WALLET_PASSWORD=miner_node2_pw
       - MAX_MINING_ATTEMPTS=2000000
       - MINING_THREADS=2
       - PBKDF2_ITERATIONS=1
@@ -96,7 +96,7 @@ services:
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
       - MINER_WALLET_SEED_PATH=/data/keys/miner_wallet.json
-      - MINER_WALLET_PASSWORD=miner123
+      - MINER_WALLET_PASSWORD=miner_node3_pw
       - MAX_MINING_ATTEMPTS=2000000
       - MINING_THREADS=2
       - PBKDF2_ITERATIONS=1
@@ -127,7 +127,7 @@ services:
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
       - MINER_WALLET_SEED_PATH=/data/keys/miner_wallet.json
-      - MINER_WALLET_PASSWORD=miner123
+      - MINER_WALLET_PASSWORD=miner_node4_pw
       - MAX_MINING_ATTEMPTS=2000000
       - MINING_THREADS=2
       - PBKDF2_ITERATIONS=1
