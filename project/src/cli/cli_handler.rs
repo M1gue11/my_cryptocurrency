@@ -137,9 +137,7 @@ fn print_help() {
     println!(
         "  Keystore paths are sandboxed to the directory set by WALLET_KEYS_DIR (default: 'keys')."
     );
-    println!(
-        "  Pass the keystore as a filename ('my_wallet.json') or as 'keys/my_wallet.json'."
-    );
+    println!("  Pass the keystore as a filename ('my_wallet.json') or as 'keys/my_wallet.json'.");
     println!("  Absolute paths and '..' are rejected.");
 
     println!("\n  wallet new --password <password> --path <keystore_path> [--name <name>]");

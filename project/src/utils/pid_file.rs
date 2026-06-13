@@ -1,8 +1,8 @@
+use super::logger::{LogCategory, log_error, log_info};
 use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::PathBuf;
 use std::process;
-use super::logger::{log_info, log_error, LogCategory};
 
 /// Manages a PID file to prevent multiple daemon instances
 pub struct PidFile {
@@ -17,7 +17,10 @@ impl PidFile {
         match Self::create(path) {
             Ok(pid_file) => pid_file,
             Err(e) => {
-                log_error(LogCategory::Core, &format!("Error creating PID file: {}", e));
+                log_error(
+                    LogCategory::Core,
+                    &format!("Error creating PID file: {}", e),
+                );
                 process::exit(1);
             }
         }
@@ -29,7 +32,10 @@ impl PidFile {
             if let Ok(contents) = fs::read_to_string(&path) {
                 if let Ok(pid) = contents.trim().parse::<u32>() {
                     if Self::is_process_running(pid) {
-                        log_info(LogCategory::Core, &format!("Found existing daemon (PID: {}). Stopping it...", pid));
+                        log_info(
+                            LogCategory::Core,
+                            &format!("Found existing daemon (PID: {}). Stopping it...", pid),
+                        );
                         Self::kill_process(pid)?;
                         // Wait a bit for the process to die and ports to be freed
                         std::thread::sleep(std::time::Duration::from_secs(4));

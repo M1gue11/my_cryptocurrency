@@ -110,24 +110,32 @@ impl ForkHelper {
                 Some(hash) => hash,
                 None => continue,
             };
-            let forked_block_height = match node.blockchain.find_block_height_by_hash(*fork_start) {
-                Some(height) => height,
-                None => {
-                    log_warning(
-                        LogCategory::Core,
-                        &format!(
-                            "Could not find forked block height for hash: {}",
-                            bytes_to_hex_string(fork_start)
-                        ),
-                    );
-                    continue;
-                }
+            let fork_size = if *fork_start == [0; 32] {
+                // [0; 32] is the virtual root used by the protocol to request
+                // blocks from genesis. It is not stored as a real block, so a
+                // root fork's chain size is the sequence without the sentinel.
+                fork.blocks_sequence.len().saturating_sub(1)
+            } else {
+                let forked_block_height =
+                    match node.blockchain.find_block_height_by_hash(*fork_start) {
+                        Some(height) => height,
+                        None => {
+                            log_warning(
+                                LogCategory::Core,
+                                &format!(
+                                    "Could not find forked block height for hash: {}",
+                                    bytes_to_hex_string(fork_start)
+                                ),
+                            );
+                            continue;
+                        }
+                    };
+                log_info(
+                    LogCategory::Core,
+                    &format!("Forked block height: {}", forked_block_height),
+                );
+                fork.blocks_sequence.len() + forked_block_height
             };
-            log_info(
-                LogCategory::Core,
-                &format!("Forked block height: {}", forked_block_height),
-            );
-            let fork_size = fork.blocks_sequence.len() + forked_block_height;
             log_info(
                 LogCategory::Core,
                 &format!(
@@ -153,5 +161,76 @@ impl ForkHelper {
 
     pub fn clear_forks(&mut self) {
         self.forks.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDate;
+    use primitive_types::U256;
+
+    use super::{Fork, ForkHelper};
+    use crate::{
+        db::db::init_db,
+        model::{Block, block::BlockHeader, node::Node},
+    };
+
+    fn test_block(prev_block_hash: [u8; 32], nonce: u32) -> Block {
+        let timestamp = NaiveDate::from_ymd_opt(2026, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, nonce)
+            .unwrap();
+
+        Block {
+            header: BlockHeader {
+                prev_block_hash,
+                merkle_root: [nonce as u8; 32],
+                nonce,
+                timestamp,
+                target: U256::MAX,
+            },
+            transactions: Vec::new(),
+        }
+    }
+
+    fn test_node_with_chain(chain: Vec<Block>) -> Node {
+        init_db();
+        let mut node = Node::new();
+        node.blockchain.chain = chain;
+        node
+    }
+
+    #[test]
+    fn evaluates_root_fork_using_virtual_root_height() {
+        let local_genesis = test_block([0; 32], 1);
+        let node = test_node_with_chain(vec![local_genesis]);
+
+        let fork_genesis = test_block([0; 32], 2);
+        let fork_second = test_block(fork_genesis.id(), 3);
+        let helper = ForkHelper {
+            forks: vec![Fork::new(vec![
+                [0; 32],
+                fork_genesis.id(),
+                fork_second.id(),
+            ])],
+        };
+
+        let best_fork = helper.evaluate_forks(&node).expect("root fork should win");
+
+        assert_eq!(best_fork.get_fork_start(), Some(&[0; 32]));
+    }
+
+    #[test]
+    fn ignores_root_fork_when_not_longer_than_local_chain() {
+        let local_genesis = test_block([0; 32], 1);
+        let local_second = test_block(local_genesis.id(), 2);
+        let node = test_node_with_chain(vec![local_genesis, local_second]);
+
+        let fork_genesis = test_block([0; 32], 3);
+        let helper = ForkHelper {
+            forks: vec![Fork::new(vec![[0; 32], fork_genesis.id()])],
+        };
+
+        assert!(helper.evaluate_forks(&node).is_none());
     }
 }
