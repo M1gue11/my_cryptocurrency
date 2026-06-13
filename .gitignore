@@ -4,8 +4,8 @@ target/
 keys/
 .docker-data/
 .sim-data/
-sim/results.json
 sim/__pycache__/
+sim/figs/
 .env
 .claude
 caramuru.pid
