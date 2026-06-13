@@ -21,7 +21,7 @@ impl HttpServer {
 
         let app = Router::new().route("/rpc", post(handle_rpc)).layer(cors);
 
-        let addr = format!("127.0.0.1:{}", self.port);
+        let addr = format!("{}:{}", crate::globals::CONFIG.bind_addr, self.port);
         let listener = tokio::net::TcpListener::bind(&addr).await?;
 
         utils::log_info(

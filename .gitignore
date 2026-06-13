@@ -3,6 +3,9 @@ saved_files/
 target/
 keys/
 .docker-data/
+.sim-data/
+sim/results.json
+sim/__pycache__/
 .env
 .claude
 caramuru.pid

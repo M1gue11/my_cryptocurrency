@@ -18,6 +18,11 @@ pub struct Settings {
     pub log_file_path: String,
     pub log_mode: String,
     pub mining_threads: usize,
+    /// Address the RPC and HTTP servers bind to. Defaults to 127.0.0.1
+    /// (loopback only). Set to 0.0.0.0 to expose the daemon inside a
+    /// container so an external orchestrator can reach it (used by the
+    /// distributed simulation experiment).
+    pub bind_addr: String,
     /// Root directory for wallet keystores accepted from RPC requests.
     /// All user-supplied wallet paths are resolved inside this directory.
     pub wallet_keys_dir: String,
@@ -70,6 +75,7 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(1),
+        bind_addr: env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string()),
         wallet_keys_dir: env::var("WALLET_KEYS_DIR").unwrap_or_else(|_| "keys".to_string()),
     }
 });

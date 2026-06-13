@@ -1,0 +1,139 @@
+# Ambiente de simulação distribuída do Caramuru — Nível 3 (4 nós)
+#
+# Sobe 4 nós em modo daemon HTTP, cada um com BIND_ADDR=0.0.0.0 para que o
+# orquestrador externo (sim/orchestrator.py) consiga falar JSON-RPC via HTTP.
+#
+# Topologia P2P (malha parcial em anel + ponte):
+#   node1  <- raiz / bootstrap
+#   node2  -> conecta em node1
+#   node3  -> conecta em node1, node2
+#   node4  -> conecta em node2, node3
+#
+# Portas publicadas no host:
+#   HTTP:  7101..7104  (orquestração / RPC)
+#   P2P:   6101..6104  (inspeção externa opcional; a malha usa a rede interna)
+#
+# Uso:
+#   docker compose -f docker-compose.sim.yml up --build -d
+#   python3 sim/orchestrator.py --rounds 30 --seed 42
+#   docker compose -f docker-compose.sim.yml down -v
+
+services:
+  node1:
+    build: .
+    hostname: node1
+    command: ["daemon", "http"]
+    ports:
+      - "7101:7001"
+      - "6101:6000"
+    environment:
+      - BIND_ADDR=0.0.0.0
+      - HTTP_PORT=7001
+      - P2P_PORT=6000
+      - P2P_ADVERTISED_ADDR=node1:6000
+      - PERSISTED_CHAIN_PATH=/data
+      - DB_PATH=/data/blockchain.db
+      - WALLET_KEYS_DIR=/data/keys
+      - MINER_WALLET_SEED_PATH=/data/keys/miner_wallet.json
+      - MINER_WALLET_PASSWORD=miner123
+      - MAX_MINING_ATTEMPTS=2000000
+      - MINING_THREADS=2
+      - PBKDF2_ITERATIONS=1
+      - LOG_FILE_PATH=/data/node.log
+      - LOG_MODE=full
+    volumes:
+      - ./.sim-data/node1:/data
+    tty: true
+    stdin_open: true
+
+  node2:
+    build: .
+    hostname: node2
+    command: ["daemon", "http"]
+    depends_on:
+      - node1
+    ports:
+      - "7102:7001"
+      - "6102:6000"
+    environment:
+      - BIND_ADDR=0.0.0.0
+      - HTTP_PORT=7001
+      - P2P_PORT=6000
+      - P2P_ADVERTISED_ADDR=node2:6000
+      - PEERS=node1:6000
+      - PERSISTED_CHAIN_PATH=/data
+      - DB_PATH=/data/blockchain.db
+      - WALLET_KEYS_DIR=/data/keys
+      - MINER_WALLET_SEED_PATH=/data/keys/miner_wallet.json
+      - MINER_WALLET_PASSWORD=miner123
+      - MAX_MINING_ATTEMPTS=2000000
+      - MINING_THREADS=2
+      - PBKDF2_ITERATIONS=1
+      - LOG_FILE_PATH=/data/node.log
+      - LOG_MODE=full
+    volumes:
+      - ./.sim-data/node2:/data
+    tty: true
+    stdin_open: true
+
+  node3:
+    build: .
+    hostname: node3
+    command: ["daemon", "http"]
+    depends_on:
+      - node1
+      - node2
+    ports:
+      - "7103:7001"
+      - "6103:6000"
+    environment:
+      - BIND_ADDR=0.0.0.0
+      - HTTP_PORT=7001
+      - P2P_PORT=6000
+      - P2P_ADVERTISED_ADDR=node3:6000
+      - PEERS=node1:6000,node2:6000
+      - PERSISTED_CHAIN_PATH=/data
+      - DB_PATH=/data/blockchain.db
+      - WALLET_KEYS_DIR=/data/keys
+      - MINER_WALLET_SEED_PATH=/data/keys/miner_wallet.json
+      - MINER_WALLET_PASSWORD=miner123
+      - MAX_MINING_ATTEMPTS=2000000
+      - MINING_THREADS=2
+      - PBKDF2_ITERATIONS=1
+      - LOG_FILE_PATH=/data/node.log
+      - LOG_MODE=full
+    volumes:
+      - ./.sim-data/node3:/data
+    tty: true
+    stdin_open: true
+
+  node4:
+    build: .
+    hostname: node4
+    command: ["daemon", "http"]
+    depends_on:
+      - node2
+      - node3
+    ports:
+      - "7104:7001"
+      - "6104:6000"
+    environment:
+      - BIND_ADDR=0.0.0.0
+      - HTTP_PORT=7001
+      - P2P_PORT=6000
+      - P2P_ADVERTISED_ADDR=node4:6000
+      - PEERS=node2:6000,node3:6000
+      - PERSISTED_CHAIN_PATH=/data
+      - DB_PATH=/data/blockchain.db
+      - WALLET_KEYS_DIR=/data/keys
+      - MINER_WALLET_SEED_PATH=/data/keys/miner_wallet.json
+      - MINER_WALLET_PASSWORD=miner123
+      - MAX_MINING_ATTEMPTS=2000000
+      - MINING_THREADS=2
+      - PBKDF2_ITERATIONS=1
+      - LOG_FILE_PATH=/data/node.log
+      - LOG_MODE=full
+    volumes:
+      - ./.sim-data/node4:/data
+    tty: true
+    stdin_open: true

@@ -36,7 +36,7 @@ impl RpcServer {
 
     /// Inicia o servidor RPC
     pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let addr = format!("127.0.0.1:{}", self.port);
+        let addr = format!("{}:{}", crate::globals::CONFIG.bind_addr, self.port);
         let listener = TcpListener::bind(&addr).await?;
 
         utils::log_info(
