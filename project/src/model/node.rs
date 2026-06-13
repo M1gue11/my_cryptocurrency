@@ -313,18 +313,29 @@ impl Node {
                 fork.blocks_sequence.len()
             ),
         );
-        let _ = match self.rollback_to_block(fork.get_fork_start().unwrap()) {
-            Ok(rb) => rb,
-            Err(e) => {
+        let fork_start = *fork.get_fork_start().unwrap();
+        if fork_start == [0; 32] {
+            if let Err(e) = self.reset_blockchain_for_full_sync() {
                 utils::log_error(
                     utils::LogCategory::Core,
-                    &format!("Failed to rollback to fork start: {}", e),
+                    &format!("Failed to reset local chain for root fork: {}", e),
                 );
                 return;
             }
-        };
-        // Clear all forks after a successful rebase -- old tracking data is invalid
-        self.fork_helper.clear_forks();
+        } else {
+            let _ = match self.rollback_to_block(&fork_start) {
+                Ok(rb) => rb,
+                Err(e) => {
+                    utils::log_error(
+                        utils::LogCategory::Core,
+                        &format!("Failed to rollback to fork start: {}", e),
+                    );
+                    return;
+                }
+            };
+            // Clear all forks after a successful rebase -- old tracking data is invalid
+            self.fork_helper.clear_forks();
+        }
         network::ask_for_blocks(self.blockchain.get_last_block_hash(), peer_addr);
     }
 
