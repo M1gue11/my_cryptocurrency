@@ -19,7 +19,7 @@ pub struct Wallet {
 
 const GAP_LIMIT: u32 = 20;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum DerivationType {
     Receive = 0,
     Change = 1,
@@ -153,13 +153,16 @@ impl Wallet {
 
     /// Checks if the wallet owns the given address using the gap limit strategy.
     /// # Returns
-    /// * `Some(u32)` - The derivation index if the wallet owns this address
+    /// * `Some((DerivationType, u32))` - The derivation type and index if the wallet owns this address
     /// * `None` - If the address is not owned by this wallet
-    pub fn owns_address(&self, address: &str) -> Option<u32> {
-        let keys = self.generate_all_used_keys();
-        keys.iter()
-            .position(|k| k.get_address() == address)
-            .map(|i| i as u32)
+    pub fn owns_address(&self, address: &str) -> Option<(DerivationType, u32)> {
+        for d_type in [DerivationType::Receive, DerivationType::Change] {
+            let keys = self.generate_used_keys_for_type(d_type);
+            if let Some(index) = keys.iter().position(|k| k.get_address() == address) {
+                return Some((d_type, index as u32));
+            }
+        }
+        None
     }
 
     /// Lists all keys derived from addresses that have been used in the blockchain.
@@ -188,9 +191,8 @@ impl Wallet {
     }
 
     pub fn get_change_addr(&mut self) -> String {
-        let mut path = BASE_PATH.to_vec();
-        path[2] = 1; // change
-        path.push(self.curr_rcv_idx);
+        let mut path = self.get_base_path(&DerivationType::Change);
+        path.push(self.curr_chg_idx);
         let child_hdkey = self.derive_path(&path);
         self.curr_chg_idx += 1;
         child_hdkey.get_address()
@@ -300,8 +302,8 @@ impl Wallet {
         );
         let tx_bytes = &mem_tx.tx.as_bytes();
         for (i, (_, addr, _)) in inputs.into_iter().enumerate() {
-            if let Some(derivation_index) = self.owns_address(&addr) {
-                let mut path = BASE_PATH.to_vec();
+            if let Some((derivation_type, derivation_index)) = self.owns_address(&addr) {
+                let mut path = self.get_base_path(&derivation_type);
                 path.push(derivation_index);
                 let child_hdkey = self.derive_path(&path);
                 let sig = child_hdkey.sign(tx_bytes);
