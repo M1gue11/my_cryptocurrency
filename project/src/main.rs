@@ -1,23 +1,11 @@
-mod cli;
-mod daemon;
-mod db;
-mod globals;
-mod model;
-mod network;
-mod security_utils;
-mod utils;
-
-#[cfg(test)]
-mod tests;
-
-use crate::cli::{RpcClient, run_cli};
-use crate::daemon::http_server::HttpServer;
-use crate::daemon::rpc_server::RpcServer;
-use crate::db::db::init_db;
-use crate::globals::CONFIG;
-use crate::network::server::run_server;
-use crate::utils::PidFile;
 use clap::{Parser, Subcommand};
+use project::cli::{RpcClient, run_cli};
+use project::daemon::http_server::HttpServer;
+use project::daemon::rpc_server::RpcServer;
+use project::db::db::init_db;
+use project::globals::CONFIG;
+use project::network::server::run_server;
+use project::utils::{self, PidFile};
 
 #[derive(Parser)]
 #[command(name = "caramuru")]

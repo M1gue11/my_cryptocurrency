@@ -23,6 +23,7 @@ pub struct Settings {
     /// container so an external orchestrator can reach it (used by the
     /// distributed simulation experiment).
     pub bind_addr: String,
+    pub max_fork_blocks: usize,
     /// Root directory for wallet keystores accepted from RPC requests.
     /// All user-supplied wallet paths are resolved inside this directory.
     pub wallet_keys_dir: String,
@@ -76,6 +77,10 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .and_then(|v| v.parse().ok())
             .unwrap_or(1),
         bind_addr: env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string()),
+        max_fork_blocks: env::var("MAX_FORK_BLOCKS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1000),
         wallet_keys_dir: env::var("WALLET_KEYS_DIR").unwrap_or_else(|_| "keys".to_string()),
     }
 });

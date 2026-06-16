@@ -94,61 +94,140 @@ fn get_legit_txs<'a>(mempool: &'a Vec<MempoolTx>) -> Vec<&'a MempoolTx> {
     selected_txs
 }
 
+fn sorted_legit_txs_by_fee_rate(mempool: &Vec<MempoolTx>) -> Vec<&MempoolTx> {
+    let mut txs = get_legit_txs(mempool);
+    txs.sort_by(|a, b| {
+        let fee_rate_a = a.calculate_fee_per_byte();
+        let fee_rate_b = b.calculate_fee_per_byte();
+        fee_rate_b
+            .partial_cmp(&fee_rate_a)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    txs
+}
+
+fn configured_max_block_size_bytes() -> usize {
+    (CONSENSUS_RULES.max_block_size_kb * 1000.0) as usize
+}
+
+fn build_transactions_with_coinbase(
+    selected_txs: &[Transaction],
+    receive_addr: &str,
+    total_fees: i64,
+) -> Vec<Transaction> {
+    let mut block_txs = selected_txs.to_vec();
+    block_txs.insert(
+        0,
+        Transaction::new_coinbase(receive_addr.to_string(), total_fees),
+    );
+    block_txs
+}
+
+fn build_block_from_transactions(
+    previous_hash: [u8; 32],
+    target: U256,
+    transactions: Vec<Transaction>,
+) -> Block {
+    let mut block = Block::new(previous_hash, target);
+    block.transactions = transactions;
+    block.evaluate_merkle_root();
+    block
+}
+
+fn build_candidate_block(
+    selected_txs: &[Transaction],
+    candidate_tx: &Transaction,
+    candidate_total_fees: i64,
+    previous_hash: [u8; 32],
+    target: U256,
+    receive_addr: &str,
+) -> Block {
+    let mut candidate_txs = selected_txs.to_vec();
+    candidate_txs.push(candidate_tx.clone());
+    let block_txs =
+        build_transactions_with_coinbase(&candidate_txs, receive_addr, candidate_total_fees);
+    build_block_from_transactions(previous_hash, target, block_txs)
+}
+
+fn candidate_fits_block_size(candidate_block: &Block, max_block_size_bytes: usize) -> bool {
+    candidate_block.size() <= max_block_size_bytes
+}
+
+fn select_transactions_for_block(
+    txs: Vec<&MempoolTx>,
+    previous_hash: [u8; 32],
+    target: U256,
+    receive_addr: &str,
+    max_block_size_bytes: usize,
+) -> (Vec<Transaction>, i64) {
+    let mut selected_txs = Vec::new();
+    let mut total_fees: i64 = 0;
+
+    for mtx in txs {
+        let candidate_total_fees = match total_fees.checked_add(mtx.calculate_fee()) {
+            Some(fees) => fees,
+            None => {
+                utils::log_warning(
+                    utils::LogCategory::Core,
+                    "Skipping transaction because total fees would overflow.",
+                );
+                continue;
+            }
+        };
+
+        let candidate_block = build_candidate_block(
+            &selected_txs,
+            &mtx.tx,
+            candidate_total_fees,
+            previous_hash,
+            target,
+            receive_addr,
+        );
+
+        if !candidate_fits_block_size(&candidate_block, max_block_size_bytes) {
+            continue;
+        }
+
+        selected_txs.push(mtx.tx.clone());
+        total_fees = candidate_total_fees;
+    }
+
+    (selected_txs, total_fees)
+}
+
 fn build_block(
     mempool: &Vec<MempoolTx>,
     previous_hash: [u8; 32],
     target: U256,
     receive_addr: &str,
 ) -> Block {
-    let mut txs = get_legit_txs(mempool);
-    // Sort transactions descending by fee_rate
-    txs.sort_by(|a, b| {
-        let fee_rate_a: f64 = a.calculate_fee_per_byte();
-        let fee_rate_b: f64 = b.calculate_fee_per_byte();
-        fee_rate_b.partial_cmp(&fee_rate_a).unwrap()
-    });
-    let estimated_coinbase_tx_size = Transaction::new_coinbase(receive_addr.to_string(), 0)
-        .as_bytes()
-        .len();
-    let max_block_size_bytes =
-        (CONSENSUS_RULES.max_block_size_kb * 1000.0) as usize - estimated_coinbase_tx_size;
-    let mut cutoff_index = 0;
-    let mut curr_block_size_bytes = 0;
-    for (i, mtx) in txs.iter().enumerate() {
-        let tx_size = mtx.tx.as_bytes().len();
-        if curr_block_size_bytes + tx_size > max_block_size_bytes {
-            break;
-        }
-        curr_block_size_bytes += tx_size;
-        cutoff_index = i;
-    }
+    let txs = sorted_legit_txs_by_fee_rate(mempool);
+    let max_block_size_bytes = configured_max_block_size_bytes();
+    let (selected_txs, total_fees) = select_transactions_for_block(
+        txs,
+        previous_hash,
+        target,
+        receive_addr,
+        max_block_size_bytes,
+    );
+    let block_txs = build_transactions_with_coinbase(&selected_txs, receive_addr, total_fees);
+    let block = build_block_from_transactions(previous_hash, target, block_txs);
     utils::log_info(
         utils::LogCategory::Core,
         &format!(
             "Current block size (bytes): {} / {}",
-            curr_block_size_bytes, max_block_size_bytes
+            block.size(),
+            max_block_size_bytes
         ),
     );
     utils::log_info(
         utils::LogCategory::Core,
-        &format!("Cutoff index: {}", cutoff_index),
+        &format!(
+            "Transactions selected for block: {}",
+            block.transactions.len()
+        ),
     );
-    txs.truncate(cutoff_index + 1);
-
-    utils::log_info(
-        utils::LogCategory::Core,
-        &format!("Transactions selected for block: {}", txs.len()),
-    );
-
-    let total_fees: i64 = txs.iter().map(|mtx| mtx.calculate_fee()).sum();
-    let mut block_txs: Vec<Transaction> = txs.iter().map(|mtx| mtx.tx.clone()).collect();
-    let reward_tx = Transaction::new_coinbase(receive_addr.to_string(), total_fees);
-    block_txs.insert(0, reward_tx);
-
-    let mut new_block = Block::new(previous_hash, target);
-    new_block.transactions = block_txs;
-    new_block.evaluate_merkle_root();
-    new_block
+    block
 }
 
 async fn mine_block_impl(
