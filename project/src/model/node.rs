@@ -205,6 +205,84 @@ impl Node {
         }
     }
 
+    fn handle_fork_update(&mut self, update: utils::ForkUpdate, peer_addr: Option<SocketAddr>) {
+        match &update.status {
+            utils::ForkUpdateStatus::Stored => {
+                utils::log_info(utils::LogCategory::Core, "Stored block in fork tree.");
+            }
+            utils::ForkUpdateStatus::DuplicateMainChain => {
+                utils::log_info(
+                    utils::LogCategory::P2P,
+                    "Received fork block that already exists in the main chain.",
+                );
+                return;
+            }
+            utils::ForkUpdateStatus::DuplicateForkTree => {
+                utils::log_info(
+                    utils::LogCategory::P2P,
+                    "Received fork block that is already stored in the fork tree.",
+                );
+                return;
+            }
+            utils::ForkUpdateStatus::Invalid(reason) => {
+                utils::log_warning(
+                    utils::LogCategory::Core,
+                    &format!("Received invalid fork block: {}", reason),
+                );
+                return;
+            }
+        }
+
+        for missing_hash in update.missing_parents {
+            utils::log_info(
+                utils::LogCategory::P2P,
+                &format!(
+                    "Requesting missing parent block {} from peer {:?}",
+                    bytes_to_hex_string(&missing_hash),
+                    peer_addr
+                ),
+            );
+            network::ask_for_block(missing_hash, peer_addr);
+        }
+
+        self.apply_connectable_blocks(update.connectable_blocks, peer_addr);
+
+        if let Some(candidate) = update.best_reorg {
+            self.rebase_chain_to_candidate(candidate, peer_addr);
+        }
+    }
+
+    fn apply_connectable_blocks(&mut self, blocks: Vec<Block>, peer_addr: Option<SocketAddr>) {
+        for block in blocks {
+            let block_hash = block.id();
+            match self.submit_block(block) {
+                Ok(()) => {
+                    utils::log_info(
+                        utils::LogCategory::Core,
+                        &format!(
+                            "Connected fork-tree block {} to the main chain.",
+                            bytes_to_hex_string(&block_hash)
+                        ),
+                    );
+                    network::broadcast_new_block_hash(block_hash, peer_addr);
+                    self.blockchain.persist_chain(None);
+                }
+                Err(e) => {
+                    utils::log_warning(
+                        utils::LogCategory::Core,
+                        &format!(
+                            "Could not connect fork-tree block {}. Pruning its subtree: {}",
+                            bytes_to_hex_string(&block_hash),
+                            e
+                        ),
+                    );
+                    self.fork_helper.prune_subtree(block_hash);
+                    break;
+                }
+            }
+        }
+    }
+
     /// Rollback the last block from the blockchain
     /// Returns the rolled back block and its transactions for potential re-addition to mempool
     pub fn rollback_last_block(&mut self) -> Result<(Block, Vec<Transaction>), String> {
@@ -304,17 +382,22 @@ impl Node {
         Ok(rolled_back_blocks)
     }
 
-    pub fn rebase_chain_to_fork(&mut self, fork: utils::Fork, peer_addr: Option<SocketAddr>) {
+    pub fn rebase_chain_to_candidate(
+        &mut self,
+        candidate: utils::ReorgCandidate,
+        peer_addr: Option<SocketAddr>,
+    ) {
         utils::log_info(
             utils::LogCategory::Core,
             &format!(
-                "Starting rebase to fork with starting block {} and length {}",
-                bytes_to_hex_string(fork.get_fork_start().unwrap()),
-                fork.blocks_sequence.len()
+                "Starting rebase to fork-tree candidate from ancestor {} with {} blocks and resulting height {}",
+                bytes_to_hex_string(&candidate.ancestor_hash),
+                candidate.blocks.len(),
+                candidate.candidate_height
             ),
         );
-        let fork_start = *fork.get_fork_start().unwrap();
-        if fork_start == [0; 32] {
+
+        if candidate.ancestor_hash == [0; 32] {
             if let Err(e) = self.reset_blockchain_for_full_sync() {
                 utils::log_error(
                     utils::LogCategory::Core,
@@ -323,19 +406,46 @@ impl Node {
                 return;
             }
         } else {
-            let _ = match self.rollback_to_block(&fork_start) {
+            let _ = match self.rollback_to_block(&candidate.ancestor_hash) {
                 Ok(rb) => rb,
                 Err(e) => {
                     utils::log_error(
                         utils::LogCategory::Core,
-                        &format!("Failed to rollback to fork start: {}", e),
+                        &format!("Failed to rollback to fork ancestor: {}", e),
                     );
                     return;
                 }
             };
-            // Clear all forks after a successful rebase -- old tracking data is invalid
-            self.fork_helper.clear_forks();
         }
+
+        let mut applied_blocks = Vec::new();
+        for block in candidate.blocks {
+            let block_hash = block.id();
+            match self.submit_block(block.clone()) {
+                Ok(()) => {
+                    applied_blocks.push(block);
+                    network::broadcast_new_block_hash(block_hash, peer_addr);
+                }
+                Err(e) => {
+                    utils::log_error(
+                        utils::LogCategory::Core,
+                        &format!(
+                            "Failed to apply fork-tree block {} during rebase. Pruning subtree: {}",
+                            bytes_to_hex_string(&block_hash),
+                            e
+                        ),
+                    );
+                    self.fork_helper.prune_subtree(block_hash);
+                    return;
+                }
+            }
+        }
+
+        self.fork_helper.remove_applied_blocks(&applied_blocks);
+        let connectable_blocks = self
+            .fork_helper
+            .take_connectable_blocks(self.blockchain.get_last_block_hash());
+        self.apply_connectable_blocks(connectable_blocks, peer_addr);
         network::ask_for_blocks(self.blockchain.get_last_block_hash(), peer_addr);
     }
 
@@ -571,7 +681,9 @@ impl Node {
         for (inv_type, item_id) in items {
             match inv_type {
                 InventoryType::Block => {
-                    if self.blockchain.find_block_by_hash(item_id).is_some() {
+                    if self.blockchain.find_block_by_hash(item_id).is_some()
+                        || self.fork_helper.contains_block(&item_id)
+                    {
                         continue;
                     }
                     utils::log_info(
@@ -660,42 +772,53 @@ impl Node {
     }
 
     pub async fn handle_received_block(&mut self, block: Block, exclude_peer: Option<SocketAddr>) {
-        if self.blockchain.find_block_by_hash(block.id()).is_some() {
+        let block_hash = block.id();
+        let prev_hash = block.header.prev_block_hash;
+
+        if self.blockchain.find_block_by_hash(block_hash).is_some() {
             utils::log_info(
                 utils::LogCategory::P2P,
                 &format!(
                     "Block already exists in the blockchain: {}. peer_addr: {:?}",
-                    bytes_to_hex_string(&block.id()),
+                    bytes_to_hex_string(&block_hash),
                     exclude_peer
                 ),
             );
             return;
         }
 
-        if !self.blockchain.is_empty()
-            && self.fork_helper.verify_fork(
-                self.blockchain
-                    .get_last_block()
-                    .expect("Blockchain is empty"),
-                &block,
-            )
+        if self.fork_helper.contains_block(&block_hash)
+            && prev_hash != self.blockchain.get_last_block_hash()
         {
             utils::log_info(
                 utils::LogCategory::P2P,
                 &format!(
-                    "Received block {} from peer {:?} that creates or extends a fork.",
-                    bytes_to_hex_string(&block.id()),
+                    "Block already exists in fork tree: {}. peer_addr: {:?}",
+                    bytes_to_hex_string(&block_hash),
                     exclude_peer
                 ),
             );
-            let new_bigger_branch = self.fork_helper.evaluate_forks(&self);
-            if let Some(fork) = new_bigger_branch {
-                self.rebase_chain_to_fork(fork, exclude_peer);
-            }
             return;
         }
 
-        let block_hash = block.id();
+        let extends_main_chain = prev_hash == self.blockchain.get_last_block_hash();
+        if !self.blockchain.is_empty() && !extends_main_chain {
+            utils::log_info(
+                utils::LogCategory::P2P,
+                &format!(
+                    "Received block {} from peer {:?} that creates or extends a fork/orphan subtree.",
+                    bytes_to_hex_string(&block_hash),
+                    exclude_peer
+                ),
+            );
+
+            let update = self
+                .fork_helper
+                .observe_block(&self.blockchain, block, exclude_peer);
+            self.handle_fork_update(update, exclude_peer);
+            return;
+        }
+
         match self.submit_block(block) {
             Ok(()) => {
                 utils::log_info(
@@ -706,6 +829,10 @@ impl Node {
                     ),
                 );
                 network::broadcast_new_block_hash(block_hash, exclude_peer);
+                let connectable_blocks = self
+                    .fork_helper
+                    .take_connectable_blocks(self.blockchain.get_last_block_hash());
+                self.apply_connectable_blocks(connectable_blocks, exclude_peer);
                 // TODO: optimize persistence
                 self.blockchain.persist_chain(None);
             }
@@ -891,12 +1018,10 @@ impl Node {
             }
         }
 
-        // Register this as a fork starting point and request diverging blocks
-        self.fork_helper.register_fork_start(block_hash);
         utils::log_info(
             utils::LogCategory::P2P,
             &format!(
-                "Received common block {} from peer {:?}. Fork registered, requesting blocks.",
+                "Received common block {} from peer {:?}. Requesting diverging blocks.",
                 bytes_to_hex_string(&block_hash),
                 peer_addr
             ),

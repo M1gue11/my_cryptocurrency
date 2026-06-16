@@ -98,6 +98,7 @@ cp .env.example .env
 PERSISTED_CHAIN_PATH=saved_files/              # Where to save blockchain JSON
 DB_PATH=saved_files/bd/caramuru_main_db.db    # SQLite database path
 MAX_MINING_ATTEMPTS=3                          # Mining attempts before giving up
+MAX_FORK_BLOCKS=1000                            # Max blocks kept in fork/orphan tree
 
 # Wallet Configuration
 MINER_WALLET_SEED_PATH=keys/miner_wallet.json # Miner wallet keystore

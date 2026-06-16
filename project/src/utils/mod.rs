@@ -4,7 +4,7 @@ pub mod logger;
 pub mod merkle_tree;
 pub mod pid_file;
 
-pub use fork_helper::{Fork, ForkHelper};
+pub use fork_helper::{ForkHelper, ForkUpdate, ForkUpdateStatus, ReorgCandidate};
 pub use helper_functions::*;
 pub use logger::{
     LogCategory, LogEntry, LogLevel, get_logs, init_logger, log_error, log_info, log_warning,

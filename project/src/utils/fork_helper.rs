@@ -1,236 +1,435 @@
+use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
+
 use chrono::NaiveDateTime;
 
 use super::logger::{LogCategory, log_info, log_warning};
+use crate::globals::CONFIG;
 use crate::{
-    model::{Block, block::BlockID, node::Node},
+    model::{Block, Blockchain, block::BlockID},
     security_utils::bytes_to_hex_string,
     utils::get_current_timestamp,
 };
 
-#[derive(Clone)]
-pub struct Fork {
-    pub blocks_sequence: Vec<BlockID>,
-    pub timestamp: NaiveDateTime,
+#[derive(Debug, Clone)]
+pub enum ForkUpdateStatus {
+    Stored,
+    DuplicateMainChain,
+    DuplicateForkTree,
+    Invalid(String),
 }
 
-impl std::fmt::Debug for Fork {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let blocks: Vec<String> = self
-            .blocks_sequence
-            .iter()
-            .map(|id| bytes_to_hex_string(id)[..12].to_string())
-            .collect();
-        write!(
-            f,
-            "Fork(len={}, start={}, blocks=[{}], created={})",
-            self.blocks_sequence.len(),
-            blocks.first().unwrap_or(&"empty".to_string()),
-            blocks.join(" -> "),
-            self.timestamp.format("%H:%M:%S")
-        )
-    }
+#[derive(Debug, Clone)]
+pub struct ReorgCandidate {
+    pub ancestor_hash: BlockID,
+    pub blocks: Vec<Block>,
+    pub candidate_height: usize,
 }
 
-impl Fork {
-    pub fn new(blocks_sequence: Vec<BlockID>) -> Self {
+#[derive(Debug, Clone)]
+pub struct ForkUpdate {
+    pub status: ForkUpdateStatus,
+    pub missing_parents: Vec<BlockID>,
+    pub connectable_blocks: Vec<Block>,
+    pub best_reorg: Option<ReorgCandidate>,
+}
+
+impl ForkUpdate {
+    fn empty(status: ForkUpdateStatus) -> Self {
         Self {
-            blocks_sequence,
-            timestamp: get_current_timestamp(),
+            status,
+            missing_parents: Vec::new(),
+            connectable_blocks: Vec::new(),
+            best_reorg: None,
         }
     }
+}
 
-    pub fn get_fork_start(&self) -> Option<&BlockID> {
-        self.blocks_sequence.first()
-    }
+#[derive(Clone)]
+pub struct ForkNode {
+    pub block: Block,
+    pub parent: BlockID,
+    pub children: HashSet<BlockID>,
+    pub first_seen_at: NaiveDateTime,
+    pub source_peer: Option<SocketAddr>,
+}
 
-    pub fn append_block(&mut self, block_hash: BlockID) {
-        if !self.blocks_sequence.contains(&block_hash) {
-            self.blocks_sequence.push(block_hash);
-        }
-    }
-
-    pub fn is_block_in_branch(&self, block_hash: &BlockID) -> bool {
-        self.blocks_sequence.contains(block_hash)
+impl std::fmt::Debug for ForkNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ForkNode")
+            .field("block", &bytes_to_hex_string(&self.block.id()))
+            .field("parent", &bytes_to_hex_string(&self.parent))
+            .field("children", &self.children.len())
+            .field("first_seen_at", &self.first_seen_at)
+            .field("source_peer", &self.source_peer)
+            .finish()
     }
 }
 
 pub struct ForkHelper {
-    pub forks: Vec<Fork>,
+    nodes: HashMap<BlockID, ForkNode>,
+    children_by_parent: HashMap<BlockID, HashSet<BlockID>>,
+    max_blocks: usize,
 }
 
 impl ForkHelper {
     pub fn new() -> Self {
-        Self { forks: Vec::new() }
+        Self::with_capacity_limit(CONFIG.max_fork_blocks)
     }
 
-    pub fn create_or_update_fork(&mut self, _last_block: &Block, new_block: &Block) {
-        for fork in &mut self.forks {
-            if fork.is_block_in_branch(&new_block.header.prev_block_hash) {
-                fork.append_block(new_block.id());
-                return;
-            }
+    pub fn with_capacity_limit(max_blocks: usize) -> Self {
+        Self {
+            nodes: HashMap::with_capacity(max_blocks),
+            children_by_parent: HashMap::with_capacity(max_blocks),
+            max_blocks,
         }
-        // Always create a meaningful fork: [branching_point, new_block]
-        let block_sequence = vec![new_block.header.prev_block_hash, new_block.id()];
-        let new_fork = Fork::new(block_sequence);
-        self.forks.push(new_fork);
     }
 
-    /// Returns true if a new fork was created or updated, false if the new block simply extends the main chain
-    pub fn verify_fork(&mut self, last_block: &Block, new_block: &Block) -> bool {
-        if new_block.header.prev_block_hash == last_block.id() {
-            return false;
+    pub fn observe_block(
+        &mut self,
+        blockchain: &Blockchain,
+        block: Block,
+        source_peer: Option<SocketAddr>,
+    ) -> ForkUpdate {
+        let block_hash = block.id();
+
+        if blockchain.find_block_by_hash(block_hash).is_some() {
+            return ForkUpdate::empty(ForkUpdateStatus::DuplicateMainChain);
         }
-        self.create_or_update_fork(last_block, new_block);
-        true
+
+        if self.nodes.contains_key(&block_hash) {
+            return ForkUpdate::empty(ForkUpdateStatus::DuplicateForkTree);
+        }
+
+        if let Err(e) = block.validate() {
+            return ForkUpdate::empty(ForkUpdateStatus::Invalid(e));
+        }
+
+        self.insert_node(block, source_peer);
+
+        let missing_parents = self.find_missing_parents(blockchain);
+        let connectable_blocks = self.take_connectable_blocks(blockchain.get_last_block_hash());
+        let best_reorg = self.find_best_reorg_candidate(blockchain);
+
+        self.prune_to_capacity();
+
+        ForkUpdate {
+            status: ForkUpdateStatus::Stored,
+            missing_parents,
+            connectable_blocks,
+            best_reorg,
+        }
     }
 
-    /// Register a fork starting from a known block hash (e.g., a common ancestor).
-    /// Used when we know a fork exists but don't yet have the fork's blocks.
-    pub fn register_fork_start(&mut self, block_hash: BlockID) {
-        if self
-            .forks
-            .iter()
-            .any(|f| f.get_fork_start() == Some(&block_hash))
-        {
-            return;
-        }
-        self.forks.push(Fork::new(vec![block_hash]));
-    }
-
-    /// Finds the longest fork that is strictly longer than the main chain.
-    /// Returns the best (longest) qualifying fork for potential rebase.
-    pub fn evaluate_forks(&self, node: &Node) -> Option<Fork> {
-        let mut best_fork: Option<Fork> = None;
-        let mut best_fork_size: usize = node.blockchain.height();
-
-        for fork in &self.forks {
-            log_info(LogCategory::Core, &format!("Evaluating fork: {:?}", fork));
-            let fork_start = match fork.get_fork_start() {
-                Some(hash) => hash,
-                None => continue,
-            };
-            let fork_size = if *fork_start == [0; 32] {
-                // [0; 32] is the virtual root used by the protocol to request
-                // blocks from genesis. It is not stored as a real block, so a
-                // root fork's chain size is the sequence without the sentinel.
-                fork.blocks_sequence.len().saturating_sub(1)
-            } else {
-                let forked_block_height =
-                    match node.blockchain.find_block_height_by_hash(*fork_start) {
-                        Some(height) => height,
-                        None => {
-                            log_warning(
-                                LogCategory::Core,
-                                &format!(
-                                    "Could not find forked block height for hash: {}",
-                                    bytes_to_hex_string(fork_start)
-                                ),
-                            );
-                            continue;
-                        }
-                    };
-                log_info(
-                    LogCategory::Core,
-                    &format!("Forked block height: {}", forked_block_height),
-                );
-                fork.blocks_sequence.len() + forked_block_height
-            };
-            log_info(
-                LogCategory::Core,
-                &format!(
-                    "Calculated fork size: {} - BC height: {}",
-                    fork_size,
-                    node.blockchain.height()
-                ),
-            );
-            if fork_size > best_fork_size {
-                log_info(
-                    LogCategory::Core,
-                    &format!(
-                        "Found a fork with size {} that is larger than current best {}",
-                        fork_size, best_fork_size
-                    ),
-                );
-                best_fork = Some(fork.clone());
-                best_fork_size = fork_size;
-            }
-        }
-        best_fork
+    pub fn contains_block(&self, block_hash: &BlockID) -> bool {
+        self.nodes.contains_key(block_hash)
     }
 
     pub fn clear_forks(&mut self) {
-        self.forks.clear();
+        self.nodes.clear();
+        self.children_by_parent.clear();
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use chrono::NaiveDate;
-    use primitive_types::U256;
+    pub fn find_best_reorg_candidate(&self, blockchain: &Blockchain) -> Option<ReorgCandidate> {
+        let mut best: Option<ReorgCandidate> = None;
 
-    use super::{Fork, ForkHelper};
-    use crate::{
-        db::db::init_db,
-        model::{Block, block::BlockHeader, node::Node},
-    };
+        for leaf_hash in self.leaf_hashes() {
+            let Some(candidate) = self.build_candidate_from_leaf(blockchain, leaf_hash) else {
+                continue;
+            };
 
-    fn test_block(prev_block_hash: [u8; 32], nonce: u32) -> Block {
-        let timestamp = NaiveDate::from_ymd_opt(2026, 1, 1)
-            .unwrap()
-            .and_hms_opt(0, 0, nonce)
-            .unwrap();
+            log_info(
+                LogCategory::Core,
+                &format!(
+                    "Evaluating fork-tree candidate ending at {} with height {} - BC height: {}",
+                    bytes_to_hex_string(&leaf_hash),
+                    candidate.candidate_height,
+                    blockchain.height()
+                ),
+            );
 
-        Block {
-            header: BlockHeader {
-                prev_block_hash,
-                merkle_root: [nonce as u8; 32],
-                nonce,
-                timestamp,
-                target: U256::MAX,
-            },
-            transactions: Vec::new(),
+            if candidate.candidate_height <= blockchain.height() {
+                continue;
+            }
+
+            match &best {
+                Some(current_best)
+                    if current_best.candidate_height > candidate.candidate_height => {}
+                Some(current_best)
+                    if current_best.candidate_height == candidate.candidate_height =>
+                {
+                    let current_leaf = current_best.blocks.last().map(|b| b.id());
+                    let candidate_leaf = candidate.blocks.last().map(|b| b.id());
+
+                    if candidate_leaf < current_leaf {
+                        best = Some(candidate);
+                    }
+                }
+                _ => best = Some(candidate),
+            }
+        }
+
+        best
+    }
+
+    pub fn find_missing_parents(&self, blockchain: &Blockchain) -> Vec<BlockID> {
+        let mut missing = Vec::new();
+        let mut seen = HashSet::new();
+
+        for node in self.nodes.values() {
+            let parent = node.parent;
+
+            if parent == [0; 32] {
+                continue;
+            }
+
+            let parent_in_main_chain = blockchain.find_block_by_hash(parent).is_some();
+            let parent_in_fork_tree = self.nodes.contains_key(&parent);
+
+            if !parent_in_main_chain && !parent_in_fork_tree && seen.insert(parent) {
+                missing.push(parent);
+            }
+        }
+
+        missing
+    }
+
+    pub fn take_connectable_blocks(&mut self, mut parent_hash: BlockID) -> Vec<Block> {
+        let mut blocks = Vec::new();
+
+        loop {
+            let children = self
+                .children_by_parent
+                .get(&parent_hash)
+                .cloned()
+                .unwrap_or_default();
+
+            if children.len() != 1 {
+                break;
+            }
+
+            let child_hash = *children.iter().next().unwrap();
+            let Some(block) = self.remove_node_only(child_hash) else {
+                break;
+            };
+
+            parent_hash = child_hash;
+            blocks.push(block);
+        }
+
+        blocks
+    }
+
+    pub fn prune_subtree(&mut self, root_hash: BlockID) {
+        let mut stack = vec![root_hash];
+
+        while let Some(hash) = stack.pop() {
+            let indexed_children = self.children_by_parent.remove(&hash).unwrap_or_default();
+
+            if let Some(node) = self.nodes.remove(&hash) {
+                for child in &node.children {
+                    stack.push(*child);
+                }
+                self.detach_from_parent_index(node.parent, hash);
+            }
+
+            for child in indexed_children {
+                stack.push(child);
+            }
         }
     }
 
-    fn test_node_with_chain(chain: Vec<Block>) -> Node {
-        init_db();
-        let mut node = Node::new();
-        node.blockchain.chain = chain;
-        node
+    pub fn remove_applied_blocks(&mut self, blocks: &[Block]) {
+        let hashes: HashSet<BlockID> = blocks.iter().map(|block| block.id()).collect();
+
+        for hash in &hashes {
+            self.nodes.remove(hash);
+        }
+
+        self.rebuild_children_index();
     }
 
-    #[test]
-    fn evaluates_root_fork_using_virtual_root_height() {
-        let local_genesis = test_block([0; 32], 1);
-        let node = test_node_with_chain(vec![local_genesis]);
+    fn insert_node(&mut self, block: Block, source_peer: Option<SocketAddr>) {
+        let block_hash = block.id();
+        let parent_hash = block.header.prev_block_hash;
+        let existing_children = self
+            .children_by_parent
+            .remove(&block_hash)
+            .unwrap_or_default();
 
-        let fork_genesis = test_block([0; 32], 2);
-        let fork_second = test_block(fork_genesis.id(), 3);
-        let helper = ForkHelper {
-            forks: vec![Fork::new(vec![
-                [0; 32],
-                fork_genesis.id(),
-                fork_second.id(),
-            ])],
+        let node = ForkNode {
+            block,
+            parent: parent_hash,
+            children: existing_children.clone(),
+            first_seen_at: get_current_timestamp(),
+            source_peer,
         };
 
-        let best_fork = helper.evaluate_forks(&node).expect("root fork should win");
+        self.nodes.insert(block_hash, node);
 
-        assert_eq!(best_fork.get_fork_start(), Some(&[0; 32]));
+        self.children_by_parent
+            .entry(parent_hash)
+            .or_default()
+            .insert(block_hash);
+
+        if let Some(parent_node) = self.nodes.get_mut(&parent_hash) {
+            parent_node.children.insert(block_hash);
+        }
+
+        for child_hash in existing_children {
+            if let Some(child_node) = self.nodes.get_mut(&child_hash) {
+                child_node.parent = block_hash;
+            }
+        }
     }
 
-    #[test]
-    fn ignores_root_fork_when_not_longer_than_local_chain() {
-        let local_genesis = test_block([0; 32], 1);
-        let local_second = test_block(local_genesis.id(), 2);
-        let node = test_node_with_chain(vec![local_genesis, local_second]);
+    fn leaf_hashes(&self) -> Vec<BlockID> {
+        self.nodes
+            .iter()
+            .filter_map(|(hash, node)| {
+                if node.children.is_empty() {
+                    Some(*hash)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 
-        let fork_genesis = test_block([0; 32], 3);
-        let helper = ForkHelper {
-            forks: vec![Fork::new(vec![[0; 32], fork_genesis.id()])],
-        };
+    fn build_candidate_from_leaf(
+        &self,
+        blockchain: &Blockchain,
+        leaf_hash: BlockID,
+    ) -> Option<ReorgCandidate> {
+        let mut blocks_reversed = Vec::new();
+        let mut current_hash = leaf_hash;
+        let mut visited = HashSet::new();
 
-        assert!(helper.evaluate_forks(&node).is_none());
+        loop {
+            if !visited.insert(current_hash) {
+                log_warning(
+                    LogCategory::Core,
+                    &format!(
+                        "Detected cycle while evaluating fork tree at {}",
+                        bytes_to_hex_string(&current_hash)
+                    ),
+                );
+                return None;
+            }
+
+            let node = self.nodes.get(&current_hash)?;
+            blocks_reversed.push(node.block.clone());
+
+            let parent_hash = node.parent;
+
+            if parent_hash == [0; 32] {
+                blocks_reversed.reverse();
+
+                return Some(ReorgCandidate {
+                    ancestor_hash: [0; 32],
+                    candidate_height: blocks_reversed.len(),
+                    blocks: blocks_reversed,
+                });
+            }
+
+            if let Some(ancestor_height) = blockchain.find_block_height_by_hash(parent_hash) {
+                blocks_reversed.reverse();
+
+                return Some(ReorgCandidate {
+                    ancestor_hash: parent_hash,
+                    candidate_height: ancestor_height + 1 + blocks_reversed.len(),
+                    blocks: blocks_reversed,
+                });
+            }
+
+            if !self.nodes.contains_key(&parent_hash) {
+                return None;
+            }
+
+            current_hash = parent_hash;
+        }
+    }
+
+    fn remove_node_only(&mut self, hash: BlockID) -> Option<Block> {
+        let node = self.nodes.remove(&hash)?;
+
+        self.detach_from_parent_index(node.parent, hash);
+        self.children_by_parent.remove(&hash);
+
+        for child in &node.children {
+            if let Some(child_node) = self.nodes.get_mut(child) {
+                child_node.parent = hash;
+            }
+            self.children_by_parent
+                .entry(hash)
+                .or_default()
+                .insert(*child);
+        }
+
+        Some(node.block)
+    }
+
+    fn detach_from_parent_index(&mut self, parent_hash: BlockID, child_hash: BlockID) {
+        if let Some(siblings) = self.children_by_parent.get_mut(&parent_hash) {
+            siblings.remove(&child_hash);
+            if siblings.is_empty() {
+                self.children_by_parent.remove(&parent_hash);
+            }
+        }
+
+        if let Some(parent_node) = self.nodes.get_mut(&parent_hash) {
+            parent_node.children.remove(&child_hash);
+        }
+    }
+
+    fn rebuild_children_index(&mut self) {
+        self.children_by_parent.clear();
+
+        for node in self.nodes.values_mut() {
+            node.children.clear();
+        }
+
+        let edges: Vec<(BlockID, BlockID)> = self
+            .nodes
+            .iter()
+            .map(|(hash, node)| (node.parent, *hash))
+            .collect();
+
+        for (parent_hash, child_hash) in edges {
+            self.children_by_parent
+                .entry(parent_hash)
+                .or_default()
+                .insert(child_hash);
+
+            if let Some(parent_node) = self.nodes.get_mut(&parent_hash) {
+                parent_node.children.insert(child_hash);
+            }
+        }
+    }
+
+    fn prune_to_capacity(&mut self) {
+        while self.nodes.len() > self.max_blocks {
+            let Some(oldest_hash) = self.oldest_node_hash() else {
+                break;
+            };
+
+            log_warning(
+                LogCategory::Core,
+                &format!(
+                    "Fork tree capacity exceeded ({} > {}). Pruning oldest subtree at {}",
+                    self.nodes.len(),
+                    self.max_blocks,
+                    bytes_to_hex_string(&oldest_hash)
+                ),
+            );
+            self.prune_subtree(oldest_hash);
+        }
+    }
+
+    fn oldest_node_hash(&self) -> Option<BlockID> {
+        self.nodes
+            .iter()
+            .min_by_key(|(_, node)| node.first_seen_at)
+            .map(|(hash, _)| *hash)
     }
 }
