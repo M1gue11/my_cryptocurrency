@@ -1,19 +1,3 @@
-#!/usr/bin/env python3
-"""
-Gera figuras do experimento distribuido do Caramuru a partir de um results.json.
-
-Uso:
-    python3 sim/plot_results.py --input sim/results.json --outdir sim/figs
-
-Figuras geradas (PNG, prontas para o relatorio):
-  1. altura_por_no.png        -> altura da cadeia por no ao longo das rodadas (convergencia)
-  2. blocos_por_no.png        -> blocos minerados aceitos por no (autoria)
-  3. tempo_entre_blocos.png   -> segundos por bloco ao longo da cadeia
-  4. transacoes.png           -> submetidas vs aceitas vs falhas (por no)
-  5. saldos_finais.png        -> saldo final da carteira mineradora por no
-
-Sem dependencia alem de matplotlib.
-"""
 import argparse
 import json
 import os
@@ -39,16 +23,32 @@ def fig_altura(d, outdir):
     for i, n in enumerate(nodes):
         ys = [h["snapshot"]["nodes"].get(n, {}).get("height") for h in hist]
         ys_off = [(y + offsets[i] if y is not None else None) for y in ys]
-        ax.plot(rounds, ys_off, marker=markers[i], markersize=4,
-                linestyle=styles[i], linewidth=1.4, alpha=0.85, label=n)
+        ax.plot(
+            rounds,
+            ys_off,
+            marker=markers[i],
+            markersize=4,
+            linestyle=styles[i],
+            linewidth=1.4,
+            alpha=0.85,
+            label=n,
+        )
     # marca rodadas divergentes
     div = d["summary"].get("convergence", {}).get("divergent_rounds", [])
     for j, r in enumerate(div):
-        ax.axvline(r, color="red", linestyle="--", alpha=0.35, linewidth=1,
-                   label="rodada divergente" if j == 0 else None)
+        ax.axvline(
+            r,
+            color="red",
+            linestyle="--",
+            alpha=0.35,
+            linewidth=1,
+            label="rodada divergente" if j == 0 else None,
+        )
     ax.set_xlabel("Rodada")
     ax.set_ylabel("Altura da cadeia")
-    ax.set_title("Convergência de altura por nó\n(offset vertical leve, apenas visual, para revelar as 4 séries sobrepostas)")
+    ax.set_title(
+        "Convergência de altura por nó\n(offset vertical leve, apenas visual, para revelar as 4 séries sobrepostas)"
+    )
     ax.legend(loc="lower right", fontsize=8)
     ax.grid(True, alpha=0.3)
     _save(fig, outdir, "altura_por_no.png")
@@ -143,8 +143,10 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
     d = load(args.input)
-    print(f"Gerando figuras a partir de {args.input} (seed={d['summary'].get('seed')}, "
-          f"rounds={d['summary'].get('rounds')}):")
+    print(
+        f"Gerando figuras a partir de {args.input} (seed={d['summary'].get('seed')}, "
+        f"rounds={d['summary'].get('rounds')}):"
+    )
     fig_altura(d, args.outdir)
     fig_blocos(d, args.outdir)
     fig_block_time(d, args.outdir)

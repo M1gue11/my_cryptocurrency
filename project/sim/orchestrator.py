@@ -1,25 +1,3 @@
-#!/usr/bin/env python3
-"""
-Orquestrador do experimento distribuido do Caramuru - Nivel 3 (4 nos).
-
-Fala JSON-RPC 2.0 via HTTP (POST /rpc) com cada no exposto pelo
-docker-compose.sim.yml. Executa uma sequencia de acoes pseudoaleatorias
-controladas por SEED FIXA, para que o plano do experimento seja reproduzivel,
-e coleta metricas de altura/top-hash/peers ao longo do tempo para avaliar
-sincronizacao, propagacao e convergencia entre os nos.
-
-Em cada rodada, cada no executa uma acao independente em paralelo. A seed fixa
-torna deterministico o plano de acoes, mas a execucao paralela pode produzir
-interleavings diferentes entre execucoes.
-
-Uso tipico:
-    docker compose -f docker-compose.sim.yml up --build -d
-    python3 sim/orchestrator.py --rounds 30 --seed 42
-    docker compose -f docker-compose.sim.yml down -v
-
-Sem dependencias externas: usa apenas a biblioteca padrao.
-"""
-
 import argparse
 import json
 import os
