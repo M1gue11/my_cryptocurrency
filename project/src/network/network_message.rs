@@ -26,6 +26,7 @@ pub enum NetworkMessage {
     },
 
     Block(Block),
+    Blocks(Vec<Block>),
     Tx(Transaction),
 
     GetBlocks {

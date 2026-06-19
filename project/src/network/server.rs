@@ -322,6 +322,18 @@ async fn handle_connection(
                                 node.handle_received_block(block, peer_addr).await;
                             },
 
+                            NetworkMessage::Blocks(blocks) => {
+                                PEER_MANAGER
+                                    .update_last_event(
+                                        peer_addr.unwrap(),
+                                        connection_id,
+                                        format!("Received BLOCKS batch ({} blocks)", blocks.len()),
+                                    )
+                                    .await;
+                                let mut node = get_node_mut().await;
+                                node.handle_received_blocks(blocks, peer_addr).await;
+                            },
+
                             NetworkMessage::Tx(tx) => {
                                 PEER_MANAGER
                                     .update_last_event(

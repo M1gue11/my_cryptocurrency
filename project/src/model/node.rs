@@ -25,6 +25,8 @@ use primitive_types::U256;
 
 const MEMPOOL_FILE: &str = "mempool.json";
 
+const IBD_BATCH_SIZE: usize = 50;
+
 pub struct Node {
     pub miner: Miner,
     pub blockchain: Blockchain,
@@ -843,6 +845,22 @@ impl Node {
         }
     }
 
+    /// window of blocks received during a bulk sync, in order.
+    pub async fn handle_received_blocks(
+        &mut self,
+        blocks: Vec<Block>,
+        peer_addr: Option<SocketAddr>,
+    ) {
+        let batch_len = blocks.len();
+        for block in blocks {
+            self.handle_received_block(block, peer_addr).await;
+        }
+
+        if batch_len >= IBD_BATCH_SIZE {
+            network::ask_for_blocks(self.blockchain.get_last_block_hash(), peer_addr);
+        }
+    }
+
     pub async fn handle_received_transaction(
         &mut self,
         tx: Transaction,
@@ -893,15 +911,17 @@ impl Node {
         }
         for block in &self.blockchain.chain {
             if found {
-                blocks_to_send.push(block);
+                blocks_to_send.push(block.clone());
+                if blocks_to_send.len() >= IBD_BATCH_SIZE {
+                    break;
+                }
             } else if block.header_hash() == last_known_hash {
                 found = true;
             }
         }
 
-        // TODO: improve this
-        for block in blocks_to_send {
-            network::send_block_to(&block, target_peer);
+        if !blocks_to_send.is_empty() {
+            network::send_blocks_to(blocks_to_send, target_peer);
         }
     }
 

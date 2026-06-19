@@ -30,6 +30,13 @@ pub fn send_block_to(block: &Block, target_peer: SocketAddr) {
         .send((block_msg, Delivery::Direct { target_peer }));
 }
 
+pub fn send_blocks_to(blocks: Vec<Block>, target_peer: SocketAddr) {
+    let blocks_msg = NetworkMessage::Blocks(blocks);
+    let _ = BROADCAST_CHANNEL
+        .sender
+        .send((blocks_msg, Delivery::Direct { target_peer }));
+}
+
 pub fn send_tx_to(tx: &Transaction, target_peer: SocketAddr) {
     let tx_msg = NetworkMessage::Tx(tx.clone());
     let _ = BROADCAST_CHANNEL
