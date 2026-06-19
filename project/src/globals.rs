@@ -12,6 +12,7 @@ pub struct Settings {
     pub p2p_port: u16,
     pub p2p_advertised_addr: String,
     pub peers: Vec<String>,
+    pub max_peer_connections: Option<usize>,
     pub rpc_port: u16,
     pub http_port: u16,
     pub pbkdf2_iterations: u32,
@@ -57,6 +58,11 @@ pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
             .collect(),
+        max_peer_connections: env::var("MAX_PEER_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v > 0)
+            .or(Some(8)),
         rpc_port: env::var("RPC_PORT")
             .ok()
             .and_then(|v| v.parse().ok())

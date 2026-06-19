@@ -10,7 +10,10 @@ async fn registers_and_lists_peer_with_initial_state() {
     let manager = PeerManager::new();
     let addr: SocketAddr = "127.0.0.1:6000".parse().unwrap();
 
-    let (_connection_id, _rx) = manager.register_peer(addr, PeerDirection::Inbound).await;
+    let (_connection_id, _rx) = manager
+        .register_peer(addr, PeerDirection::Inbound, None)
+        .await
+        .unwrap();
 
     let peers = manager.list_peers().await;
     assert_eq!(peers.len(), 1);
@@ -31,7 +34,10 @@ async fn updates_handshake_state_for_active_peer() {
     let manager = PeerManager::new();
     let addr: SocketAddr = "127.0.0.1:6001".parse().unwrap();
 
-    let (connection_id, _rx) = manager.register_peer(addr, PeerDirection::Outbound).await;
+    let (connection_id, _rx) = manager
+        .register_peer(addr, PeerDirection::Outbound, None)
+        .await
+        .unwrap();
     manager
         .set_handshake_state(
             addr,
@@ -62,7 +68,10 @@ async fn disconnect_peer_signals_and_marks_state() {
     let manager = PeerManager::new();
     let addr: SocketAddr = "127.0.0.1:6002".parse().unwrap();
 
-    let (_connection_id, mut rx) = manager.register_peer(addr, PeerDirection::Inbound).await;
+    let (_connection_id, mut rx) = manager
+        .register_peer(addr, PeerDirection::Inbound, None)
+        .await
+        .unwrap();
 
     let result = manager.disconnect_peer(addr).await;
     assert_eq!(result, DisconnectPeerResult::Signaled);
@@ -85,9 +94,14 @@ async fn remove_peer_ignores_stale_connection_id() {
     let manager = PeerManager::new();
     let addr: SocketAddr = "127.0.0.1:6003".parse().unwrap();
 
-    let (connection_id, _rx) = manager.register_peer(addr, PeerDirection::Inbound).await;
-    let (replacement_id, _replacement_rx) =
-        manager.register_peer(addr, PeerDirection::Outbound).await;
+    let (connection_id, _rx) = manager
+        .register_peer(addr, PeerDirection::Inbound, None)
+        .await
+        .unwrap();
+    let (replacement_id, _replacement_rx) = manager
+        .register_peer(addr, PeerDirection::Outbound, None)
+        .await
+        .unwrap();
 
     manager.remove_peer(addr, connection_id).await;
     let peers = manager.list_peers().await;

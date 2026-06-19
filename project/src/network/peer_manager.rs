@@ -93,7 +93,19 @@ impl PeerManager {
         &self,
         addr: SocketAddr,
         direction: PeerDirection,
-    ) -> (u64, watch::Receiver<bool>) {
+        max_peer_connections: Option<usize>,
+    ) -> Result<(u64, watch::Receiver<bool>), String> {
+        let mut peers = self.peers.write().await;
+        if let Some(max_peer_connections) = max_peer_connections {
+            if !peers.contains_key(&addr) && peers.len() >= max_peer_connections {
+                return Err(format!(
+                    "Max peer connections reached ({}/{})",
+                    peers.len(),
+                    max_peer_connections
+                ));
+            }
+        }
+
         let connection_id = self.next_connection_id.fetch_add(1, Ordering::Relaxed);
         let now = get_current_timestamp();
         let (disconnect_tx, disconnect_rx) = watch::channel(false);
@@ -117,12 +129,11 @@ impl PeerManager {
             disconnect_tx,
         };
 
-        let mut peers = self.peers.write().await;
         if let Some(previous) = peers.insert(addr, entry) {
             let _ = previous.disconnect_tx.send(true);
         }
 
-        (connection_id, disconnect_rx)
+        Ok((connection_id, disconnect_rx))
     }
 
     pub async fn set_handshake_state(

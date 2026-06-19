@@ -112,6 +112,16 @@ pub async fn connect_to_new_peer(address: String) -> Result<(), String> {
         return Err(format!("Already connected to {}", address));
     }
 
+    if let Some(max_peer_connections) = CONFIG.max_peer_connections {
+        let peer_count = get_peer_count().await;
+        if peer_count >= max_peer_connections {
+            return Err(format!(
+                "Max peer connections reached ({}/{})",
+                peer_count, max_peer_connections
+            ));
+        }
+    }
+
     utils::log_info(
         utils::LogCategory::P2P,
         &format!("Trying to connect to peer: {}", address),
@@ -152,7 +162,21 @@ async fn handle_connection(
 
     let (connection_id, mut disconnect_rx) = match peer_addr {
         Some(addr) => {
-            let registration = PEER_MANAGER.register_peer(addr, direction).await;
+            let registration = match PEER_MANAGER
+                .register_peer(addr, direction, CONFIG.max_peer_connections)
+                .await
+            {
+                Ok(registration) => registration,
+                Err(reason) => {
+                    utils::log_warning(
+                        utils::LogCategory::P2P,
+                        &format!("Rejecting peer {}: {}", addr, reason),
+                    );
+                    return Err(
+                        std::io::Error::new(std::io::ErrorKind::ConnectionRefused, reason).into(),
+                    );
+                }
+            };
             utils::log_info(
                 utils::LogCategory::P2P,
                 &format!(

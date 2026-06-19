@@ -3,11 +3,15 @@
 # Sobe 4 nós em modo daemon HTTP, cada um com BIND_ADDR=0.0.0.0 para que o
 # orquestrador externo (sim/orchestrator.py) consiga falar JSON-RPC via HTTP.
 #
-# Topologia P2P (malha parcial em anel + ponte):
-#   node1  <- raiz / bootstrap
+# Topologia P2P (anel com limite de 2 conexões por nó):
+#   node1  <- bootstrap; aceita node2 e node4
 #   node2  -> conecta em node1
-#   node3  -> conecta em node1, node2
-#   node4  -> conecta em node2, node3
+#   node3  -> conecta em node2
+#   node4  -> conecta em node3 e node1
+#
+# MAX_PEER_CONNECTIONS=2 impede que a descoberta de peers transforme a rede
+# em uma malha completa, preservando cenários de propagação parcial para testes
+# de forks.
 #
 # Portas publicadas no host:
 #   HTTP:  7101..7104  (orquestração / RPC)
@@ -31,6 +35,7 @@ services:
       - HTTP_PORT=7001
       - P2P_PORT=6000
       - P2P_ADVERTISED_ADDR=node1:6000
+      - MAX_PEER_CONNECTIONS=2
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
@@ -61,6 +66,7 @@ services:
       - P2P_PORT=6000
       - P2P_ADVERTISED_ADDR=node2:6000
       - PEERS=node1:6000
+      - MAX_PEER_CONNECTIONS=2
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
@@ -91,7 +97,8 @@ services:
       - HTTP_PORT=7001
       - P2P_PORT=6000
       - P2P_ADVERTISED_ADDR=node3:6000
-      - PEERS=node1:6000,node2:6000
+      - PEERS=node2:6000
+      - MAX_PEER_CONNECTIONS=2
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
@@ -122,7 +129,8 @@ services:
       - HTTP_PORT=7001
       - P2P_PORT=6000
       - P2P_ADVERTISED_ADDR=node4:6000
-      - PEERS=node2:6000,node3:6000
+      - PEERS=node3:6000,node1:6000
+      - MAX_PEER_CONNECTIONS=2
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
