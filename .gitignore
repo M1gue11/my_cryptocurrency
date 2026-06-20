@@ -10,3 +10,4 @@ sim/figs/
 .claude
 caramuru.pid
 *.pid
+__pycache__/

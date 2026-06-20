@@ -9,7 +9,7 @@
 #   node3  -> conecta em node2
 #   node4  -> conecta em node3 e node1
 #
-# MAX_PEER_CONNECTIONS=2 impede que a descoberta de peers transforme a rede
+# MAX_PEER_CONNECTIONS=3 impede que a descoberta de peers transforme a rede
 # em uma malha completa, preservando cenários de propagação parcial para testes
 # de forks.
 #
@@ -35,7 +35,7 @@ services:
       - HTTP_PORT=7001
       - P2P_PORT=6000
       - P2P_ADVERTISED_ADDR=node1:6000
-      - MAX_PEER_CONNECTIONS=2
+      - MAX_PEER_CONNECTIONS=3
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
@@ -66,7 +66,7 @@ services:
       - P2P_PORT=6000
       - P2P_ADVERTISED_ADDR=node2:6000
       - PEERS=node1:6000
-      - MAX_PEER_CONNECTIONS=2
+      - MAX_PEER_CONNECTIONS=3
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
@@ -98,7 +98,7 @@ services:
       - P2P_PORT=6000
       - P2P_ADVERTISED_ADDR=node3:6000
       - PEERS=node2:6000
-      - MAX_PEER_CONNECTIONS=2
+      - MAX_PEER_CONNECTIONS=3
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys
@@ -130,7 +130,7 @@ services:
       - P2P_PORT=6000
       - P2P_ADVERTISED_ADDR=node4:6000
       - PEERS=node3:6000,node1:6000
-      - MAX_PEER_CONNECTIONS=2
+      - MAX_PEER_CONNECTIONS=3
       - PERSISTED_CHAIN_PATH=/data
       - DB_PATH=/data/blockchain.db
       - WALLET_KEYS_DIR=/data/keys

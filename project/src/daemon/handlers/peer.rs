@@ -13,6 +13,7 @@ pub async fn handle_peers_list(id: Option<u64>) -> RpcResponse {
         .into_iter()
         .map(|peer| PeerInfo {
             addr: peer.addr.to_string(),
+            advertised_addr: peer.advertised_addr,
             direction: peer.direction.as_str().to_string(),
             connection_state: peer.connection_state.as_str().to_string(),
             handshake_state: peer.handshake_state.as_str().to_string(),

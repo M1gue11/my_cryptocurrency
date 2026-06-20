@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PeerInfo {
     pub addr: String,
+    pub advertised_addr: Option<String>,
     pub direction: String,
     pub connection_state: String,
     pub handshake_state: String,

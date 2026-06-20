@@ -3,32 +3,21 @@ import json
 import os
 import random
 import sys
-import threading
 import time
-import urllib.error
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-# Nos: nome logico -> URL HTTP/RPC publicada no host pelo compose.
-NODES = {
-    "node1": "http://127.0.0.1:7101/rpc",
-    "node2": "http://127.0.0.1:7102/rpc",
-    "node3": "http://127.0.0.1:7103/rpc",
-    "node4": "http://127.0.0.1:7104/rpc",
-}
-
-# Caminho da carteira de minerador.
-# IMPORTANTE: as chamadas RPC de wallet passam por um sandbox que enraiza o
-# path em WALLET_KEYS_DIR (/data/keys no compose) e REJEITA paths absolutos.
-# Por isso enviamos o nome relativo "miner_wallet.json"; o sandbox o resolve
-# para /data/keys/miner_wallet.json, que e exatamente onde o minerador
-# (MINER_WALLET_SEED_PATH no compose) procura a carteira.
-# A senha deve bater com MINER_WALLET_PASSWORD no docker-compose.sim.yml.
-MINER_KEY_PATH = "miner_wallet.json"
-MINER_PASSWORD = "miner123"
+from sim_common import (
+    MINER_KEY_PATH,
+    MINER_PASSWORD,
+    NODE_RPC_URLS,
+    RpcClient,
+    ensure_miner_wallet,
+    iso_now,
+    log,
+)
 
 DEFAULT_FEE = 10000
 SEND_UNIT = 100000
@@ -38,29 +27,6 @@ ACTIONS = [
     ("send", 0.30),
     ("query", 0.15),
 ]
-
-_rpc_id = 0
-_rpc_id_lock = threading.Lock()
-
-
-def next_rpc_id():
-    """Gera IDs JSON-RPC unicos mesmo com chamadas paralelas."""
-    global _rpc_id
-    with _rpc_id_lock:
-        _rpc_id += 1
-        return _rpc_id
-
-
-def ts():
-    return datetime.now(timezone.utc).strftime("%H:%M:%S")
-
-
-def log(msg):
-    print(f"[{ts()}] {msg}", flush=True)
-
-
-def iso_now():
-    return datetime.now(timezone.utc).isoformat()
 
 
 def categorize_error(error):
@@ -106,33 +72,6 @@ class ActionPlan:
     seed: int = 0
 
 
-class RpcClient:
-    def __init__(self, url: str):
-        self.url = url
-
-    def call(
-        self, method: str, params=None, timeout: int = 15
-    ) -> Tuple[object, Optional[str]]:
-        """Faz uma chamada JSON-RPC 2.0 e devolve (result, error)."""
-        payload = {"jsonrpc": "2.0", "id": next_rpc_id(), "method": method}
-        if params is not None:
-            payload["params"] = params
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            self.url, data=data, headers={"Content-Type": "application/json"}
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.URLError as e:
-            return None, f"transport: {e}"
-        except json.JSONDecodeError as e:
-            return None, f"decode: {e}"
-        if isinstance(body, dict) and body.get("error"):
-            return None, body["error"]
-        return (body.get("result") if isinstance(body, dict) else body), None
-
-
 class NodeAgent:
     def __init__(self, name: str, url: str, wallet_path: str, wallet_password: str):
         self.name = name
@@ -146,26 +85,15 @@ class NodeAgent:
 
     def ensure_wallet(self) -> bool:
         """Cria a carteira do minerador ou importa uma ja existente."""
-        res, err = self.rpc.call(
-            "wallet_new",
-            {"password": self.wallet_password, "path": self.wallet_path},
+        address, _error = ensure_miner_wallet(
+            self.rpc,
+            self.name,
+            wallet_path=self.wallet_path,
+            wallet_password=self.wallet_password,
         )
-        if res and res.get("address"):
-            self.address = res["address"]
-            log(f"  {self.name}: carteira criada {self.address[:16]}...")
+        if address:
+            self.address = address
             return True
-
-        # Ja existe -> importa para recuperar o endereco.
-        res2, err2 = self.rpc.call(
-            "wallet_import",
-            {"password": self.wallet_password, "path": self.wallet_path},
-        )
-        if res2 and res2.get("address"):
-            self.address = res2["address"]
-            log(f"  {self.name}: carteira ja existia {self.address[:16]}...")
-            return True
-
-        log(f"  {self.name}: FALHA ao criar/importar carteira: {err or err2}")
         return False
 
     def balance(self) -> Tuple[Optional[int], Optional[str]]:
@@ -766,7 +694,7 @@ def main():
     args = parse_args()
     nodes = [
         NodeAgent(name, url, MINER_KEY_PATH, MINER_PASSWORD)
-        for name, url in NODES.items()
+        for name, url in NODE_RPC_URLS.items()
     ]
     SimulationOrchestrator(nodes, args).run()
 
