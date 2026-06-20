@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""Infraestrutura para coordenar cenários de fork no ambiente Docker.
-
-Este módulo é intencionalmente simples: ele encapsula chamadas JSON-RPC para os
-nós do `docker-compose.sim.yml` e fornece métodos de alto nível para scripts de
-cenário demonstrarem mineração, conexão, desconexão e convergência da rede.
-"""
-
 import argparse
 import json
 import time
@@ -206,7 +198,30 @@ class ForkScenarioRunner:
         print("-" * 80)
 
     def assert_converged(self) -> Tuple[int, str]:
-        statuses = {name: self.status(name) for name in self.nodes}
+        return self.assert_same_head(sorted(self.nodes), label="rede")
+
+    def wait_until_converged(
+        self, timeout_seconds: float = 30.0, interval: float = 1.0
+    ) -> Tuple[int, str]:
+        deadline = time.time() + timeout_seconds
+        last_error: Optional[AssertionError] = None
+        while time.time() < deadline:
+            try:
+                return self.assert_converged()
+            except AssertionError as e:
+                last_error = e
+                time.sleep(interval)
+
+        if last_error:
+            raise last_error
+        raise AssertionError("Rede não convergiu dentro do tempo esperado")
+
+    def assert_same_head(
+        self, nodes: List[str], label: Optional[str] = None
+    ) -> Tuple[int, str]:
+        for node in nodes:
+            self._check_node(node)
+        statuses = {name: self.status(name) for name in nodes}
         heads = {
             (status.get("block_height"), status.get("top_block_hash"))
             for status in statuses.values()
@@ -216,11 +231,28 @@ class ForkScenarioRunner:
                 f"{name}=h{status.get('block_height')}:{str(status.get('top_block_hash'))[:12]}"
                 for name, status in sorted(statuses.items())
             )
-            raise AssertionError(f"Rede não convergiu: {details}")
+            group = label or ", ".join(nodes)
+            raise AssertionError(f"{group} não está convergido: {details}")
 
         height, top_hash = next(iter(heads))
-        log(f"OK: rede convergiu em height={height}, hash={str(top_hash)[:16]}")
+        group = label or ", ".join(nodes)
+        log(f"OK: {group} convergiu em height={height}, hash={str(top_hash)[:16]}")
         return height, top_hash
+
+    def assert_different_heads(
+        self, left_nodes: List[str], right_nodes: List[str]
+    ) -> Tuple[Tuple[int, str], Tuple[int, str]]:
+        left = self.assert_same_head(left_nodes, label=", ".join(left_nodes))
+        right = self.assert_same_head(right_nodes, label=", ".join(right_nodes))
+        if left == right:
+            raise AssertionError(
+                "Os grupos deveriam estar em forks diferentes, mas compartilham o mesmo topo"
+            )
+        log(
+            "OK: grupos estão em forks diferentes "
+            f"(A=h{left[0]}:{str(left[1])[:12]}, B=h{right[0]}:{str(right[1])[:12]})"
+        )
+        return left, right
 
     def assert_diverged(self):
         statuses = {name: self.status(name) for name in self.nodes}
