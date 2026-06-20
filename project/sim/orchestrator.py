@@ -181,7 +181,7 @@ class NodeAgent:
 
     def mine(self, fallback_from=None, fallback_reason=None, balance_before=None):
         started = time.time()
-        res, err = self.rpc.call("mine_block", timeout=120)
+        res, err = self.rpc.call("mine_block", timeout=300)
         end = time.time()
         result = {
             "action": "mine",

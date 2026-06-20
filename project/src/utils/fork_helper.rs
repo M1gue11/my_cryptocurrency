@@ -158,6 +158,7 @@ impl ForkHelper {
                 Some(current_best)
                     if current_best.candidate_height == candidate.candidate_height =>
                 {
+                    // the block with lowest hash is considered the "best" candidate
                     let current_leaf = current_best.blocks.last().map(|b| b.id());
                     let candidate_leaf = candidate.blocks.last().map(|b| b.id());
 
