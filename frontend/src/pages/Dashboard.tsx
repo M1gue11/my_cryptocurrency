@@ -7,6 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../contexts';
 import {
+  AnimatedNumber,
   ConsoleButton,
   ConsoleEmpty,
   ConsolePageHeader,
@@ -15,11 +16,16 @@ import {
   ConsoleRow,
   ConsoleStat,
   ConsoleStatStrip,
+  ElapsedTimer,
+  HashDisplay,
   formatCount,
   formatRelativeTimestamp,
   formatTimestamp,
-  shortHash,
+  formatBlockHeight,
+  formatValue,
+  parseApiDate,
   sumTransactionOutputs,
+  tipHeightFromCount,
 } from '../components';
 import { rpcClient } from '../services';
 import type {
@@ -43,6 +49,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const loadDashboard = useCallback(async (background = false) => {
     try {
@@ -96,7 +103,13 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, [loadDashboard]);
 
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+
   const topBlock = blocks[0];
+  const tipHeight = topBlock?.height ?? tipHeightFromCount(nodeStatus?.block_height);
   const activeBalance = activeWallet?.balance?.balance ?? 0;
   const activeUtxoCount = activeWallet?.balance?.utxo_count ?? 0;
 
@@ -108,6 +121,14 @@ export function Dashboard() {
       ) ?? 0,
     [mempool],
   );
+
+  const miningElapsed =
+    miningInfo?.started_at
+      ? Math.max(
+          0,
+          Math.floor((now - parseApiDate(miningInfo.started_at).getTime()) / 1000),
+        )
+      : 0;
 
   if (loading && !nodeStatus) {
     return (
@@ -133,7 +154,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="crm-page space-y-5">
       <ConsolePageHeader
         eyebrow="operator overview . node healthy"
         title="Dashboard"
@@ -167,7 +188,7 @@ export function Dashboard() {
       <ConsoleStatStrip columns={6}>
         <ConsoleStat
           label="chain height"
-          value={`#${formatCount(nodeStatus?.block_height)}`}
+          value={formatBlockHeight(tipHeight)}
           subtitle={chainStatus?.is_valid ? 'valid' : 'invalid'}
           tone={chainStatus?.is_valid ? 'good' : 'warn'}
         />
@@ -180,7 +201,7 @@ export function Dashboard() {
         <ConsoleStat
           label="mempool"
           value={formatCount(mempool?.count)}
-          subtitle={`${mempoolTotal.toFixed(3)} total units`}
+          subtitle={formatValue(mempoolTotal, { suffix: '' })}
           tone={(mempool?.count ?? 0) > 0 ? 'warn' : 'neutral'}
         />
         <ConsoleStat
@@ -192,12 +213,18 @@ export function Dashboard() {
         <ConsoleStat
           label="last block"
           value={chainStatus?.last_block_date ? formatTimestamp(chainStatus.last_block_date) : '-'}
-          subtitle={topBlock ? shortHash(topBlock.hash, 6) : 'no chain data'}
+          subtitle={
+            topBlock ? (
+              <HashDisplay value={topBlock.hash} preset="table" size="xs" />
+            ) : (
+              'no chain data'
+            )
+          }
         />
         <ConsoleStat
           label="visible utxos"
           value={formatCount(utxos?.utxos.length)}
-          subtitle={`${utxos?.total_value ?? 0} units`}
+          subtitle={formatValue(utxos?.total_value, { suffix: '' })}
         />
       </ConsoleStatStrip>
 
@@ -215,9 +242,11 @@ export function Dashboard() {
           <div className="crm-field-label">
             {miningInfo?.is_currently_mining ? 'searching nonce' : 'idle'}
           </div>
-          <div className="crm-mono text-3xl tracking-[-0.04em] text-[var(--crm-accent)]">
-            {miningInfo?.started_at ? formatTimestamp(miningInfo.started_at) : '--:--:--'}
-          </div>
+          <ElapsedTimer
+            seconds={miningElapsed}
+            active={Boolean(miningInfo?.started_at)}
+            size="lg"
+          />
           <div className="mt-3 h-1 overflow-hidden rounded-full bg-[var(--crm-panel-2)]">
             <div
               className={miningInfo?.is_currently_mining ? 'h-full w-[40%] bg-[var(--crm-accent)]/70' : 'h-full w-0'}
@@ -269,18 +298,22 @@ export function Dashboard() {
           {topBlock ? (
             <>
               <div className="flex flex-wrap items-end gap-3">
-                <div className="crm-mono text-4xl tracking-[-0.05em] text-[var(--crm-accent)]">
-                  #{topBlock.height.toLocaleString()}
-                </div>
+                <AnimatedNumber
+                  value={tipHeight}
+                  className="text-4xl tracking-[-0.05em] text-[var(--crm-accent)]"
+                />
                 <ConsolePill tone={chainStatus?.is_valid ? 'good' : 'warn'}>
                   {chainStatus?.is_valid ? 'valid' : 'invalid'}
                 </ConsolePill>
               </div>
               <div className="mt-4">
-                <ConsoleRow label="hash" value={topBlock.hash} />
-                <ConsoleRow label="prev" value={topBlock.prev_hash} />
-                <ConsoleRow label="merkle" value={topBlock.merkle_root} />
-                <ConsoleRow label="nonce" value={topBlock.nonce.toLocaleString()} />
+                <ConsoleRow label="hash" value={topBlock.hash} hash />
+                <ConsoleRow label="prev" value={topBlock.prev_hash} hash />
+                <ConsoleRow label="merkle" value={topBlock.merkle_root} hash />
+                <ConsoleRow
+                  label="nonce"
+                  value={<AnimatedNumber value={topBlock.nonce} />}
+                />
                 <ConsoleRow
                   label="txs"
                   value={`${topBlock.transactions.length} (${topBlock.transactions.filter((tx) => tx.is_coinbase).length} coinbase)`}
@@ -315,11 +348,12 @@ export function Dashboard() {
                 {activeWallet.keyPath} . loaded
               </div>
               <div className="crm-mono text-3xl tracking-[-0.04em]">
-                {activeBalance.toFixed(3)}{' '}
-                <span className="text-sm text-[var(--crm-dim)]">units</span>
+                {formatValue(activeBalance, { suffix: '' })}
               </div>
               <div className="mt-2 text-sm text-[var(--crm-muted)]">
-                {shortHash(activeWallet.address, 10)} . {activeUtxoCount} UTXOs
+                <HashDisplay value={activeWallet.address} preset="stat" size="sm" />
+                {' · '}
+                {activeUtxoCount} UTXOs
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <ConsoleButton
@@ -388,7 +422,9 @@ export function Dashboard() {
                       <td className="text-[var(--crm-accent)]">
                         {block.height}
                       </td>
-                      <td>{shortHash(block.hash, 10)}</td>
+                      <td>
+                        <HashDisplay value={block.hash} preset="table" size="sm" />
+                      </td>
                       <td>{block.transactions.length}</td>
                       <td>{(block.size_bytes / 1024).toFixed(1)} kB</td>
                       <td className="text-[var(--crm-dim)]">
@@ -428,10 +464,10 @@ export function Dashboard() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="crm-mono text-sm text-[var(--crm-muted)]">
-                      {shortHash(entry.tx.id, 12)}
+                      <HashDisplay value={entry.tx.id} preset="table" size="sm" />
                     </div>
                     <div className="crm-mono text-sm text-[var(--crm-accent)]">
-                      {sumTransactionOutputs(entry.tx).toFixed(3)} units
+                      {formatValue(sumTransactionOutputs(entry.tx), { suffix: '' })}
                     </div>
                   </div>
                   <div className="mt-1 flex flex-wrap justify-between gap-2 text-xs text-[var(--crm-dim)]">

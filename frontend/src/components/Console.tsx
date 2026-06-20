@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { HashDisplay } from './display';
 
 function joinClasses(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
@@ -139,6 +140,7 @@ interface ConsoleRowProps {
   label: string;
   value: ReactNode;
   mono?: boolean;
+  hash?: boolean;
   className?: string;
 }
 
@@ -146,12 +148,29 @@ export function ConsoleRow({
   label,
   value,
   mono = true,
+  hash = false,
   className,
 }: ConsoleRowProps) {
+  const resolvedValue =
+    hash && typeof value === 'string' ? (
+      <HashDisplay value={value} preset="row" size="sm" />
+    ) : (
+      value
+    );
+
+  if (hash) {
+    return (
+      <div className={joinClasses('crm-row crm-row--hash', mono ? 'crm-mono' : '', className)}>
+        <span className="crm-row__label">{label}</span>
+        <div className="crm-row__hash-value">{resolvedValue}</div>
+      </div>
+    );
+  }
+
   return (
     <div className={joinClasses('crm-row', mono ? 'crm-mono' : '', className)}>
       <span className="crm-row__label">{label}</span>
-      <span className="crm-row__value">{value}</span>
+      <span className="crm-row__value">{resolvedValue}</span>
     </div>
   );
 }
@@ -256,40 +275,33 @@ export function ConsoleTabs<T extends string>({
   );
 }
 
-export function shortHash(value: string | undefined, edge = 8) {
-  if (!value) return '-';
-  if (value.length <= edge * 2) return value;
-  return `${value.slice(0, edge)}...${value.slice(-edge)}`;
+interface MetricCardProps {
+  label: string;
+  value: ReactNode;
+  subtitle?: ReactNode;
 }
 
-export function formatCount(value: number | undefined | null) {
-  return (value ?? 0).toLocaleString();
+export function MetricCard({ label, value, subtitle }: MetricCardProps) {
+  return (
+    <div className="crm-metric">
+      <div className="crm-metric__label">{label}</div>
+      <div className="crm-metric__value">{value}</div>
+      {subtitle ? <div className="crm-metric__subtitle">{subtitle}</div> : null}
+    </div>
+  );
 }
 
-export function formatTimestamp(value: string | null | undefined) {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
-}
-
-export function formatRelativeTimestamp(value: string | number | null | undefined) {
-  if (!value) return '-';
-  const date = typeof value === 'number' ? new Date(value) : new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-}
-
-export function sumTransactionOutputs<
-  T extends { outputs: Array<{ value: number }> },
->(tx: T) {
-  return tx.outputs.reduce((total, output) => total + output.value, 0);
-}
-
+export {
+  compactHash,
+  formatBlockHeight,
+  formatCount,
+  formatElapsed,
+  formatNonce,
+  formatRelativeTimestamp,
+  formatTimestamp,
+  formatValue,
+  parseApiDate,
+  shortHash,
+  sumTransactionOutputs,
+  tipHeightFromCount,
+} from '../utils/format';

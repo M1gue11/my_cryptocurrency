@@ -6,7 +6,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
+  AnimatedNumber,
   ConsoleButton,
   ConsoleEmpty,
   ConsolePageHeader,
@@ -15,52 +17,15 @@ import {
   ConsoleRow,
   ConsoleStat,
   ConsoleStatStrip,
-  shortHash,
+  ElapsedTimer,
+  HashDisplay,
+  MetricCard,
+  formatValue,
+  parseApiDate,
 } from '../components';
+import { MiningRing } from '../components/display/MiningRing';
 import { rpcClient } from '../services';
 import type { MineBlockResponse, MiningInfoResponse } from '../types';
-
-function formatElapsed(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainingSeconds = seconds % 60;
-  return [hours, minutes, remainingSeconds]
-    .map((value) => String(value).padStart(2, '0'))
-    .join(':');
-}
-
-function parseApiDate(raw: string): Date {
-  return new Date(`${raw.slice(0, 19)}Z`);
-}
-
-function compactTarget(value: string, edge = 10): string {
-  if (!value) return '-';
-  if (value.length <= edge * 2 + 5) return value;
-  return `${value.slice(0, edge + 2)}...${value.slice(-edge)}`;
-}
-
-function TargetValue({
-  value,
-  edge = 10,
-  className = '',
-}: {
-  value?: string | null;
-  edge?: number;
-  className?: string;
-}) {
-  if (!value) {
-    return <span>-</span>;
-  }
-
-  return (
-    <span
-      className={`block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap ${className}`.trim()}
-      title={value}
-    >
-      {compactTarget(value, edge)}
-    </span>
-  );
-}
 
 export function Mining() {
   const [miningInfo, setMiningInfo] = useState<MiningInfoResponse>({
@@ -75,6 +40,7 @@ export function Mining() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const previousStartedAtRef = useRef<string | null>(null);
+  const shouldReduce = useReducedMotion();
 
   const loadMiningInfo = useCallback(async () => {
     try {
@@ -188,7 +154,7 @@ export function Mining() {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="crm-page space-y-5">
       <ConsolePageHeader
         eyebrow="mine_info . mine_block . mine_keep_mining"
         title="Mining Center"
@@ -216,11 +182,20 @@ export function Mining() {
         }
       />
 
-      {error ? (
-        <div className="rounded-sm border border-[var(--crm-warn)]/40 bg-[var(--crm-warn-bg)] px-4 py-3 text-sm text-[var(--crm-warn)]">
-          {error}
-        </div>
-      ) : null}
+      <AnimatePresence>
+        {error ? (
+          <motion.div
+            key="error"
+            className="rounded-sm border border-[var(--crm-warn)]/40 bg-[var(--crm-warn-bg)] px-4 py-3 text-sm text-[var(--crm-warn)]"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+          >
+            {error}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <ConsoleStatStrip columns={4}>
         <ConsoleStat
@@ -236,19 +211,30 @@ export function Mining() {
           tone={keepMining ? 'accent' : 'neutral'}
         />
         <ConsoleStat
-          label="started"
-          value={miningInfo.started_at ? formatElapsed(elapsedSeconds) : '-'}
-          subtitle={miningInfo.started_at ?? 'no active session'}
+          label="elapsed"
+          value={
+            <ElapsedTimer
+              seconds={elapsedSeconds}
+              active={Boolean(miningInfo.started_at)}
+              size="md"
+            />
+          }
+          subtitle={
+            miningInfo.started_at
+              ? `started ${parseApiDate(miningInfo.started_at).toLocaleTimeString()}`
+              : 'no active session'
+          }
         />
         <ConsoleStat
           label="last target"
-          value={<TargetValue value={lastResult?.target} edge={10} />}
+          value={<HashDisplay value={lastResult?.target} preset="stat" size="sm" />}
           subtitle={
             lastResult?.next_target ? (
-              <TargetValue
+              <HashDisplay
                 value={lastResult.next_target}
-                edge={12}
-                className="text-[0.64rem] text-[var(--crm-dim)]"
+                preset="table"
+                size="xs"
+                className="text-[var(--crm-dim)]"
               />
             ) : (
               'awaiting mined block'
@@ -258,32 +244,17 @@ export function Mining() {
       </ConsoleStatStrip>
 
       <div className="rounded-sm border border-[var(--crm-border)] bg-[var(--crm-panel)] p-5">
-        <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
+        <div className="grid gap-6 lg:grid-cols-[auto_1fr]">
           <div className="flex items-center gap-5">
-            <div className="relative h-24 w-24 shrink-0">
-              <div className="absolute inset-0 rounded-full border border-[var(--crm-border)]" />
-              {isCurrentlyMining ? (
-                <>
-                  <div
-                    className="absolute inset-0 rounded-full border border-[var(--crm-accent)] border-r-transparent border-b-transparent"
-                    style={{ animation: 'crm-spin 1.6s linear infinite' }}
-                  />
-                  <div
-                    className="absolute inset-[10px] rounded-full border border-[var(--crm-accent-dim)] border-l-transparent border-t-transparent"
-                    style={{ animation: 'crm-spin 2.4s linear infinite reverse' }}
-                  />
-                </>
-              ) : null}
-              <div className="absolute inset-0 grid place-items-center crm-mono text-xs tracking-[0.12em] text-[var(--crm-accent)]">
-                {isCurrentlyMining ? 'HASH' : 'IDLE'}
-              </div>
-            </div>
+            <MiningRing active={isCurrentlyMining} size={96} />
 
             <div>
               <div className="crm-field-label">{derivedStatusLabel}</div>
-              <div className="crm-mono text-3xl tracking-[-0.05em] text-[var(--crm-accent)]">
-                {miningInfo.started_at ? formatElapsed(elapsedSeconds) : '--:--:--'}
-              </div>
+              <ElapsedTimer
+                seconds={elapsedSeconds}
+                active={Boolean(miningInfo.started_at)}
+                size="xl"
+              />
               <div className="mt-1 text-sm text-[var(--crm-dim)]">
                 {miningInfo.started_at
                   ? `started at ${parseApiDate(miningInfo.started_at).toLocaleTimeString()}`
@@ -292,25 +263,31 @@ export function Mining() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
               label="target"
-              value={<TargetValue value={lastResult?.target} edge={10} />}
-              subtitle="current"
+              value={<HashDisplay value={lastResult?.target} preset="detail" size="md" />}
+              subtitle="current pow target"
             />
-            <Metric
+            <MetricCard
               label="difficulty"
               value={lastResult?.next_difficulty ?? '-'}
-              subtitle="next difficulty"
+              subtitle="next block difficulty"
             />
-            <Metric
+            <MetricCard
               label="last block"
-              value={lastResult?.block_hash ? shortHash(lastResult.block_hash, 10) : '-'}
-              subtitle="accepted block"
+              value={
+                <HashDisplay
+                  value={lastResult?.block_hash}
+                  preset="detail"
+                  size="md"
+                />
+              }
+              subtitle="accepted block hash"
             />
-            <Metric
+            <MetricCard
               label="nonce"
-              value={lastResult?.nonce?.toLocaleString() ?? '-'}
+              value={<AnimatedNumber value={lastResult?.nonce ?? null} />}
               subtitle="most recent result"
             />
           </div>
@@ -319,29 +296,42 @@ export function Mining() {
 
       <div className="rounded-sm border border-[var(--crm-border)] bg-[var(--crm-panel)] p-4">
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <div className="crm-field-label">mining progress . conceptual</div>
+          <div className="crm-field-label">mining progress</div>
           <div className="ml-auto crm-mono text-xs text-[var(--crm-dim)]">
             {isCurrentlyMining
-              ? 'trying nonces... waiting for valid target'
-              : 'miner idle - toggle keep_mining or run a manual attempt'}
+              ? 'trying nonces… waiting for valid target'
+              : 'miner idle — toggle keep_mining or run a manual attempt'}
           </div>
         </div>
         <div className="relative h-2 overflow-hidden rounded-full bg-[var(--crm-panel-2)]">
           {isCurrentlyMining ? (
-            <div
-              className="absolute inset-y-0 w-[40%] bg-[linear-gradient(90deg,transparent,var(--crm-accent),transparent)]"
-              style={{ animation: 'crm-slide 1.8s ease-in-out infinite' }}
-            />
+            shouldReduce ? (
+              <div className="absolute inset-y-0 w-[40%] bg-[var(--crm-accent)] opacity-60" />
+            ) : (
+              <motion.div
+                className="absolute inset-y-0 w-[40%] bg-[linear-gradient(90deg,transparent,var(--crm-accent),transparent)]"
+                animate={{ x: ['-100%', '250%'] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            )
           ) : null}
         </div>
         <div className="mt-3 flex flex-wrap justify-between gap-2 crm-mono text-[10px] text-[var(--crm-dim)]">
-          <span>candidate block built</span>
-          <span>transactions selected</span>
-          <span className={isCurrentlyMining ? 'text-[var(--crm-accent)]' : ''}>
+          <ProgressStep active={isCurrentlyMining} done>
+            candidate block
+          </ProgressStep>
+          <ProgressStep active={isCurrentlyMining} done>
+            transactions
+          </ProgressStep>
+          <ProgressStep active={isCurrentlyMining} highlight>
             hashing header
-          </span>
-          <span>valid nonce found</span>
-          <span>block submitted</span>
+          </ProgressStep>
+          <ProgressStep active={isCurrentlyMining}>
+            valid nonce
+          </ProgressStep>
+          <ProgressStep active={isCurrentlyMining}>
+            submitted
+          </ProgressStep>
         </div>
       </div>
 
@@ -361,21 +351,29 @@ export function Mining() {
           {lastResult?.success ? (
             <>
               <div className="flex flex-wrap items-end gap-3">
-                <div className="crm-mono text-4xl tracking-[-0.05em] text-[var(--crm-accent)]">
-                  {shortHash(lastResult.block_hash, 10)}
-                </div>
+                <HashDisplay
+                  value={lastResult.block_hash}
+                  preset="detail"
+                  size="lg"
+                  className="text-[var(--crm-accent)]"
+                />
                 <ConsolePill tone="good">latest success</ConsolePill>
               </div>
               <div className="mt-4">
-                <ConsoleRow label="hash" value={lastResult.block_hash ?? '-'} />
-                <ConsoleRow label="nonce" value={lastResult.nonce?.toLocaleString() ?? '-'} />
+                <ConsoleRow label="hash" value={lastResult.block_hash ?? '-'} hash />
+                <ConsoleRow
+                  label="nonce"
+                  value={<AnimatedNumber value={lastResult.nonce ?? null} />}
+                />
                 <ConsoleRow
                   label="target"
-                  value={<TargetValue value={lastResult.target} edge={14} />}
+                  value={lastResult.target ?? '-'}
+                  hash
                 />
                 <ConsoleRow
                   label="next target"
-                  value={<TargetValue value={lastResult.next_target} edge={14} />}
+                  value={lastResult.next_target ?? '-'}
+                  hash
                 />
                 <ConsoleRow
                   label="next difficulty"
@@ -426,7 +424,7 @@ export function Mining() {
             />
             <ControlCard
               title="Known mining errors"
-              description="no transactions in mempool . blockchain empty or inconsistent . block submission rejected"
+              description="no transactions in mempool · blockchain empty or inconsistent · block submission rejected"
             />
           </div>
         </ConsolePanel>
@@ -453,8 +451,8 @@ export function Mining() {
               <tbody>
                 {latestTransactions.map((tx) => (
                   <tr key={tx.id}>
-                    <td className="text-[var(--crm-accent)]">
-                      {shortHash(tx.id, 12)}
+                    <td>
+                      <HashDisplay value={tx.id} preset="table" size="sm" />
                     </td>
                     <td>
                       <ConsolePill tone={tx.is_coinbase ? 'accent' : 'neutral'}>
@@ -464,7 +462,10 @@ export function Mining() {
                     <td>{tx.inputs.length}</td>
                     <td>{tx.outputs.length}</td>
                     <td className="text-right text-[var(--crm-accent)]">
-                      {tx.outputs.reduce((total, output) => total + output.value, 0)}
+                      {formatValue(
+                        tx.outputs.reduce((total, output) => total + output.value, 0),
+                        { suffix: '' },
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -482,21 +483,22 @@ export function Mining() {
   );
 }
 
-function Metric({
-  label,
-  value,
-  subtitle,
+function ProgressStep({
+  children,
+  active,
+  done,
+  highlight,
 }: {
-  label: string;
-  value: ReactNode;
-  subtitle: ReactNode;
+  children: ReactNode;
+  active: boolean;
+  done?: boolean;
+  highlight?: boolean;
 }) {
+  const lit = active && (done || highlight);
   return (
-    <div className="min-w-0">
-      <div className="crm-field-label">{label}</div>
-      <div className="crm-mono min-w-0 text-base text-[var(--crm-fg)]">{value}</div>
-      <div className="mt-1 text-xs text-[var(--crm-dim)]">{subtitle}</div>
-    </div>
+    <span className={lit ? 'text-[var(--crm-accent)]' : ''}>
+      {children}
+    </span>
   );
 }
 

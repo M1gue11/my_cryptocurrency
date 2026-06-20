@@ -13,7 +13,7 @@ import {
   ConsoleRow,
   ConsoleStat,
   ConsoleStatStrip,
-  shortHash,
+  HashDisplay,
   sumTransactionOutputs,
 } from '../components';
 import { rpcClient } from '../services';
@@ -117,7 +117,7 @@ export function Transactions() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="crm-page space-y-5">
       <ConsolePageHeader
         eyebrow="transaction_view . node_mempool"
         title="Transactions"
@@ -158,7 +158,13 @@ export function Transactions() {
         />
         <ConsoleStat
           label="searched tx"
-          value={searchResult ? shortHash(searchResult.id, 10) : '-'}
+          value={
+            searchResult ? (
+              <HashDisplay value={searchResult.id} preset="stat" size="sm" />
+            ) : (
+              '-'
+            )
+          }
           subtitle={searchResult ? `${searchResult.size} bytes` : 'none selected'}
         />
         <ConsoleStat
@@ -249,7 +255,7 @@ export function Transactions() {
                         className="rounded-sm border border-dashed border-[var(--crm-border)] px-4 py-3"
                       >
                         <div className="crm-mono text-sm">
-                          {shortHash(input.prev_tx_id, 14)}
+                          <HashDisplay value={input.prev_tx_id} preset="table" size="sm" />
                         </div>
                         <div className="mt-1 text-xs text-[var(--crm-dim)]">
                           output index {input.output_index}
@@ -277,7 +283,7 @@ export function Transactions() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="crm-mono text-sm">
-                          {shortHash(output.address, 16)}
+                          <HashDisplay value={output.address} preset="table" size="sm" />
                         </div>
                         <div className="crm-mono text-sm text-[var(--crm-accent)]">
                           {output.value}
@@ -326,7 +332,7 @@ export function Transactions() {
                     }}
                   >
                     <td className="text-[var(--crm-accent)]">
-                      {shortHash(entry.tx.id, 14)}
+                      <HashDisplay value={entry.tx.id} preset="table" size="sm" />
                     </td>
                     <td>{entry.tx.inputs.length}</td>
                     <td>{entry.tx.outputs.length}</td>

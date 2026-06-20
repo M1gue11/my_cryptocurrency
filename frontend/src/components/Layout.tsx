@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { motion } from "motion/react";
 import { rpcClient } from "../services";
 import { ConsolePill } from "./Console";
+import { formatBlockHeight, tipHeightFromCount } from "../utils/format";
 
 interface LayoutProps {
   children: ReactNode;
@@ -27,7 +29,7 @@ export function Layout({ children }: LayoutProps) {
         if (cancelled) return;
 
         setNodeOnline(true);
-        setHeight(nodeStatus.block_height);
+        setHeight(tipHeightFromCount(nodeStatus.block_height));
         setMiningState(miningInfo?.is_currently_mining ? "mining" : "idle");
       } catch {
         if (cancelled) return;
@@ -79,14 +81,29 @@ export function Layout({ children }: LayoutProps) {
           </nav>
 
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--crm-dim)] lg:justify-end">
-            <span className="crm-mono">rpc http://localhost:7001/rpc</span>
+            <span className="crm-mono hidden sm:inline">rpc localhost:7001</span>
             <ConsolePill tone={nodeOnline ? "accent" : "warn"} dot>
               {nodeOnline ? "live" : "offline"}
             </ConsolePill>
             <ConsolePill>
-              {height !== null ? `#${height.toLocaleString()}` : "-"}
+              {height !== null ? formatBlockHeight(height) : "-"}
             </ConsolePill>
-            <ConsolePill>{miningState}</ConsolePill>
+            <motion.div
+              animate={
+                miningState === "mining"
+                  ? { scale: [1, 1.04, 1] }
+                  : { scale: 1 }
+              }
+              transition={
+                miningState === "mining"
+                  ? { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                  : undefined
+              }
+            >
+              <ConsolePill tone={miningState === "mining" ? "accent" : "neutral"}>
+                {miningState}
+              </ConsolePill>
+            </motion.div>
           </div>
         </div>
       </header>

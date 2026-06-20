@@ -9,7 +9,7 @@ import {
   ConsolePill,
   ConsoleRow,
   ConsoleTabs,
-  shortHash,
+  HashDisplay,
 } from '../components';
 import { rpcClient } from '../services';
 import type { GeneratedKey, WalletSendResponse } from '../types';
@@ -212,7 +212,7 @@ export function Wallet() {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="crm-page space-y-5">
       <ConsolePageHeader
         eyebrow="wallet_balance . wallet_send . wallet_generate_keys"
         title="Wallet"
@@ -391,14 +391,14 @@ export function Wallet() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="crm-mono text-sm">
-                            {shortHash(utxo.tx_id, 12)}:{utxo.index}
+                            <HashDisplay value={utxo.tx_id} preset="table" size="sm" />:{utxo.index}
                           </div>
                           <div className="crm-mono text-sm text-[var(--crm-accent)]">
                             {utxo.value} units
                           </div>
                         </div>
                         <div className="mt-2 text-sm text-[var(--crm-dim)]">
-                          {shortHash(utxo.address, 18)}
+                          <HashDisplay value={utxo.address} preset="detail" size="sm" />
                         </div>
                       </div>
                     ))}
@@ -540,14 +540,14 @@ export function Wallet() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="crm-mono text-sm">
-                            {shortHash(utxo.tx_id, 12)}
+                            <HashDisplay value={utxo.tx_id} preset="table" size="sm" />
                           </div>
                           <div className="crm-mono text-sm text-[var(--crm-accent)]">
                             {utxo.value}
                           </div>
                         </div>
                         <div className="mt-2 text-sm text-[var(--crm-dim)]">
-                          index {utxo.index} . {shortHash(utxo.address, 16)}
+                          index {utxo.index} · <HashDisplay value={utxo.address} preset="table" size="sm" />
                         </div>
                       </div>
                     ))}
@@ -605,8 +605,8 @@ export function Wallet() {
                         {generatedKeys.map((key, index) => (
                           <tr key={`${key.address}-${index}`}>
                             <td className="text-[var(--crm-accent)]">{index}</td>
-                            <td>{shortHash(key.address, 18)}</td>
-                            <td>{shortHash(key.public_key, 18)}</td>
+                            <td><HashDisplay value={key.address} preset="detail" size="sm" /></td>
+                            <td><HashDisplay value={key.public_key} preset="detail" size="sm" /></td>
                           </tr>
                         ))}
                       </tbody>
@@ -644,9 +644,9 @@ export function Wallet() {
                     <tbody>
                       {utxos.map((utxo) => (
                         <tr key={`${utxo.tx_id}-${utxo.index}`}>
-                          <td>{shortHash(utxo.tx_id, 14)}</td>
+                          <td><HashDisplay value={utxo.tx_id} preset="table" size="sm" /></td>
                           <td>{utxo.index}</td>
-                          <td>{shortHash(utxo.address, 18)}</td>
+                          <td><HashDisplay value={utxo.address} preset="detail" size="sm" /></td>
                           <td className="text-right text-[var(--crm-accent)]">
                             {utxo.value}
                           </td>
@@ -732,10 +732,10 @@ export function Wallet() {
                           className="rounded-sm border border-dashed border-[var(--crm-border)] px-4 py-3"
                         >
                           <div className="crm-mono text-sm">
-                            {shortHash(key.address, 18)}
+                            <HashDisplay value={key.address} preset="detail" size="sm" />
                           </div>
                           <div className="mt-1 text-xs text-[var(--crm-dim)]">
-                            {shortHash(key.public_key, 18)}
+                            <HashDisplay value={key.public_key} preset="detail" size="sm" />
                           </div>
                         </div>
                       ))}

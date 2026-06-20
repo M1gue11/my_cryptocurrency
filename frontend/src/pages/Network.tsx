@@ -9,9 +9,12 @@ import {
   ConsoleRow,
   ConsoleStat,
   ConsoleStatStrip,
+  HashDisplay,
+  formatBlockHeight,
   formatTimestamp,
-  shortHash,
+  formatValue,
   sumTransactionOutputs,
+  tipHeightFromCount,
 } from "../components";
 import { rpcClient } from "../services";
 import type { MempoolResponse, NodeStatusResponse, PeerInfo } from "../types";
@@ -175,7 +178,7 @@ export function Network() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="crm-page space-y-5">
       <ConsolePageHeader
         eyebrow="node_status . peers_list . node_save"
         title="Node / Runtime"
@@ -215,14 +218,20 @@ export function Network() {
         />
         <ConsoleStat
           label="chain tip"
-          value={`#${nodeStatus?.block_height.toLocaleString() ?? "-"}`}
-          subtitle={shortHash(nodeStatus?.top_block_hash, 8)}
+          value={formatBlockHeight(tipHeightFromCount(nodeStatus?.block_height))}
+          subtitle={
+            <HashDisplay
+              value={nodeStatus?.top_block_hash}
+              preset="table"
+              size="xs"
+            />
+          }
           tone="accent"
         />
         <ConsoleStat
           label="mempool"
           value={mempool?.count ?? 0}
-          subtitle={`${mempoolValue.toFixed(3)} units`}
+          subtitle={formatValue(mempoolValue, { suffix: '' })}
           tone={(mempool?.count ?? 0) > 0 ? "warn" : "neutral"}
         />
       </ConsoleStatStrip>
@@ -239,6 +248,7 @@ export function Network() {
           <ConsoleRow
             label="tip hash"
             value={nodeStatus?.top_block_hash ?? "-"}
+            hash
           />
           <ConsoleRow
             label="tip height"
@@ -247,6 +257,7 @@ export function Network() {
           <ConsoleRow
             label="genesis hash"
             value={nodeStatus?.genesis_hash ?? "-"}
+            hash
           />
         </ConsolePanel>
 
@@ -424,7 +435,7 @@ export function Network() {
                 {mempool.transactions.map((entry) => (
                   <tr key={entry.tx.id}>
                     <td className="text-[var(--crm-accent)]">
-                      {shortHash(entry.tx.id, 12)}
+                      <HashDisplay value={entry.tx.id} preset="table" size="sm" />
                     </td>
                     <td>{entry.tx.inputs.length}</td>
                     <td>{entry.tx.outputs.length}</td>

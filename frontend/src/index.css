@@ -21,6 +21,8 @@
   --crm-warn: oklch(0.8 0.14 85);
   --crm-warn-bg: oklch(0.3 0.08 85);
   --crm-bad: oklch(0.66 0.2 25);
+  --crm-idle: oklch(0.62 0.04 260);
+  --crm-idle-bg: oklch(0.24 0.02 260);
   --crm-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
 }
 
@@ -330,8 +332,27 @@ a {
 }
 
 .crm-row__value {
+  min-width: 0;
+  max-width: 68%;
   text-align: right;
-  word-break: break-word;
+  overflow: hidden;
+}
+
+.crm-row--hash {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.crm-row__hash-value {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.crm-row__hash-value .crm-copyable,
+.crm-row__hash-value .crm-hash {
+  max-width: 100%;
 }
 
 .crm-stat-strip {
@@ -355,9 +376,11 @@ a {
 
 .crm-stat__value {
   margin-top: 0.15rem;
+  min-width: 0;
   font-family: "Geist Mono", ui-monospace, monospace;
   font-size: clamp(1rem, 1.8vw, 1.4rem);
   letter-spacing: -0.03em;
+  overflow: hidden;
 }
 
 .crm-stat__subtitle {
@@ -527,6 +550,278 @@ a {
 
   100% {
     transform: translateX(250%);
+  }
+}
+
+@keyframes crm-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes crm-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px color-mix(in srgb, var(--crm-accent) 20%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 20px color-mix(in srgb, var(--crm-accent) 45%, transparent);
+  }
+}
+
+/* Hash display — segmented prefix/suffix for scannability */
+.crm-hash {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  min-width: 0;
+  max-width: 100%;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.crm-hash--xs { font-size: 0.68rem; }
+.crm-hash--sm { font-size: 0.74rem; }
+.crm-hash--md { font-size: 0.82rem; }
+.crm-hash--lg { font-size: 1rem; }
+
+.crm-hash__prefix {
+  color: var(--crm-dim);
+}
+
+.crm-hash__sep {
+  color: var(--crm-faint);
+  padding: 0 0.1em;
+  user-select: none;
+}
+
+.crm-hash__suffix {
+  color: var(--crm-fg);
+}
+
+.crm-hash__full {
+  color: var(--crm-fg);
+}
+
+/* Copyable values */
+.crm-copyable {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0.1rem 0.2rem;
+  margin: -0.1rem -0.2rem;
+  border-radius: 3px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.crm-copyable:hover {
+  background: color-mix(in srgb, var(--crm-panel-3) 70%, transparent);
+}
+
+.crm-copyable__badge {
+  position: absolute;
+  top: -1.4rem;
+  right: 0;
+  z-index: 10;
+  border-radius: 3px;
+  padding: 0.15rem 0.4rem;
+  background: var(--crm-good-bg);
+  color: var(--crm-good);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Animated numbers */
+.crm-number {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  font-family: "Geist Mono", ui-monospace, monospace;
+}
+
+.crm-number__value {
+  display: inline-block;
+}
+
+/* Elapsed timer */
+.crm-timer {
+  display: inline-block;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.crm-timer--md { font-size: 1.25rem; }
+.crm-timer--lg { font-size: 1.75rem; }
+.crm-timer--xl { font-size: 2.25rem; }
+
+.crm-timer--active {
+  color: var(--crm-accent);
+}
+
+.crm-timer--idle {
+  color: var(--crm-idle);
+}
+
+/* Metric cards for mining dashboard */
+.crm-metric {
+  min-width: 0;
+  border: 1px solid var(--crm-border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--crm-panel-2) 60%, transparent);
+  padding: 0.85rem 1rem;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.crm-metric:hover {
+  border-color: var(--crm-border-strong);
+  background: var(--crm-panel-2);
+}
+
+.crm-metric__label {
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--crm-dim);
+}
+
+.crm-metric__value {
+  margin-top: 0.35rem;
+  min-width: 0;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.9rem;
+  color: var(--crm-fg);
+  overflow: hidden;
+}
+
+.crm-metric__subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.68rem;
+  color: var(--crm-dim);
+}
+
+/* Mining status ring */
+.crm-mining-ring {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: visible;
+}
+
+.crm-mining-ring__track {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--crm-border);
+}
+
+.crm-mining-ring__spin-outer,
+.crm-mining-ring__spin-inner {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.crm-mining-ring__spin-outer {
+  inset: 0;
+  border: 1px solid var(--crm-accent);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+}
+
+.crm-mining-ring__spin-inner {
+  inset: 10px;
+  border: 1px solid var(--crm-accent-dim);
+  border-left-color: transparent;
+  border-top-color: transparent;
+}
+
+.crm-mining-ring__core {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.crm-mining-ring--active .crm-mining-ring__core {
+  color: var(--crm-accent);
+  animation: crm-pulse 2s ease-in-out infinite;
+}
+
+.crm-mining-ring--idle .crm-mining-ring__core {
+  color: var(--crm-idle);
+}
+
+/* Page entrance */
+.crm-page {
+  animation: crm-page-in 0.35s ease both;
+}
+
+@keyframes crm-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stat strip stagger children */
+.crm-stat-strip .crm-stat {
+  animation: crm-stat-in 0.4s ease both;
+}
+
+.crm-stat-strip .crm-stat:nth-child(1) { animation-delay: 0ms; }
+.crm-stat-strip .crm-stat:nth-child(2) { animation-delay: 50ms; }
+.crm-stat-strip .crm-stat:nth-child(3) { animation-delay: 100ms; }
+.crm-stat-strip .crm-stat:nth-child(4) { animation-delay: 150ms; }
+.crm-stat-strip .crm-stat:nth-child(5) { animation-delay: 200ms; }
+.crm-stat-strip .crm-stat:nth-child(6) { animation-delay: 250ms; }
+
+@keyframes crm-stat-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crm-page,
+  .crm-stat-strip .crm-stat,
+  .crm-mining-ring--active .crm-mining-ring__core,
+  .crm-mining-ring--active {
+    animation: none;
   }
 }
 

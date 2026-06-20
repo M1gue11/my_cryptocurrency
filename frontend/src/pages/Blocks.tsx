@@ -15,8 +15,10 @@ import {
   ConsoleStat,
   ConsoleStatStrip,
   ConsoleTabs,
+  AnimatedNumber,
+  HashDisplay,
   formatRelativeTimestamp,
-  shortHash,
+  formatValue,
   sumTransactionOutputs,
 } from '../components';
 import { rpcClient } from '../services';
@@ -138,7 +140,7 @@ export function Blocks() {
   const selectedTxTotal = selectedTx ? sumTransactionOutputs(selectedTx) : 0;
 
   return (
-    <div className="space-y-5">
+    <div className="crm-page space-y-5">
       <ConsolePageHeader
         eyebrow={
           currentBlock
@@ -192,8 +194,8 @@ export function Blocks() {
             />
             <ConsoleStat
               label="latest hash"
-              value={shortHash(blocks[0]?.hash, 10)}
-              subtitle="chain_status"
+              value={<HashDisplay value={blocks[0]?.hash} preset="stat" size="sm" />}
+              subtitle="chain tip"
             />
             <ConsoleStat
               label="validity"
@@ -209,7 +211,7 @@ export function Blocks() {
             <ConsoleStat
               label="utxos"
               value={utxos?.utxos.length ?? 0}
-              subtitle={`${utxos?.total_value ?? 0} units`}
+              subtitle={formatValue(utxos?.total_value, { suffix: '' })}
             />
           </ConsoleStatStrip>
 
@@ -274,9 +276,9 @@ export function Blocks() {
                     {filteredBlocks.slice(0, 20).map((block) => (
                       <tr key={block.hash} onClick={() => selectBlock(block)}>
                         <td className="text-[var(--crm-accent)]">{block.height}</td>
-                        <td>{shortHash(block.hash, 12)}</td>
+                        <td><HashDisplay value={block.hash} preset="table" size="sm" /></td>
                         <td className="text-[var(--crm-muted)]">
-                          {shortHash(block.prev_hash, 12)}
+                          <HashDisplay value={block.prev_hash} preset="table" size="sm" />
                         </td>
                         <td>{block.transactions.length}</td>
                         <td>{(block.size_bytes / 1024).toFixed(2)} kB</td>
@@ -322,9 +324,9 @@ export function Blocks() {
                     <tbody>
                       {utxos.utxos.map((utxo) => (
                         <tr key={`${utxo.tx_id}-${utxo.index}`}>
-                          <td>{shortHash(utxo.tx_id, 12)}</td>
+                          <td><HashDisplay value={utxo.tx_id} preset="table" size="sm" /></td>
                           <td>{utxo.index}</td>
-                          <td>{shortHash(utxo.address, 14)}</td>
+                          <td><HashDisplay value={utxo.address} preset="table" size="sm" /></td>
                           <td className="text-right text-[var(--crm-accent)]">
                             {utxo.value}
                           </td>
@@ -374,10 +376,13 @@ export function Blocks() {
 
           <div className="grid gap-3 xl:grid-cols-2">
             <ConsolePanel title="header" subtitle="block metadata" icon="[]">
-              <ConsoleRow label="hash" value={currentBlock.hash} />
-              <ConsoleRow label="prev_hash" value={currentBlock.prev_hash} />
-              <ConsoleRow label="merkle_root" value={currentBlock.merkle_root} />
-              <ConsoleRow label="nonce" value={currentBlock.nonce.toLocaleString()} />
+              <ConsoleRow label="hash" value={currentBlock.hash} hash />
+              <ConsoleRow label="prev_hash" value={currentBlock.prev_hash} hash />
+              <ConsoleRow label="merkle_root" value={currentBlock.merkle_root} hash />
+              <ConsoleRow
+                label="nonce"
+                value={<AnimatedNumber value={currentBlock.nonce} />}
+              />
               <ConsoleRow label="timestamp" value={currentBlock.timestamp} />
               <ConsoleRow label="size" value={`${currentBlock.size_bytes} bytes`} />
             </ConsolePanel>
@@ -409,7 +414,7 @@ export function Blocks() {
                         ) : null}
                       </div>
                       <div className="mt-2 crm-mono text-xs">
-                        {shortHash(block.hash, 14)}
+                        <HashDisplay value={block.hash} preset="detail" size="sm" />
                       </div>
                     </button>
                   ))}
@@ -438,7 +443,7 @@ export function Blocks() {
                   {currentBlock.transactions.map((tx) => (
                     <tr key={tx.id} onClick={() => setSelectedTx(tx)}>
                       <td className="text-[var(--crm-accent)]">
-                        {shortHash(tx.id, 12)}
+                        <HashDisplay value={tx.id} preset="table" size="sm" />
                       </td>
                       <td>
                         <ConsolePill tone={tx.is_coinbase ? 'accent' : 'neutral'}>
@@ -496,7 +501,7 @@ export function Blocks() {
                       className="rounded-sm border border-dashed border-[var(--crm-border)] px-4 py-3"
                     >
                       <div className="crm-mono text-sm">
-                        {shortHash(input.prev_tx_id, 14)}
+                        <HashDisplay value={input.prev_tx_id} preset="table" size="sm" />
                       </div>
                       <div className="mt-2 text-sm text-[var(--crm-dim)]">
                         output index {input.output_index}
@@ -525,7 +530,7 @@ export function Blocks() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="crm-mono text-sm">
-                        {shortHash(output.address, 16)}
+                        <HashDisplay value={output.address} preset="table" size="sm" />
                       </div>
                       <div className="crm-mono text-sm text-[var(--crm-accent)]">
                         {output.value}

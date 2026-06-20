@@ -102,7 +102,7 @@ export function Logs() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="crm-page space-y-5">
       <ConsolePageHeader
         eyebrow="get_logs"
         title="Logs & Diagnostics"
