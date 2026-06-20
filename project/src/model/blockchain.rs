@@ -61,9 +61,9 @@ impl Blockchain {
         let window_start = height - k;
 
         let mut t: i64 = 0;
-        // TODO: take a look if sum_target can overflow and if we
-        // need to use U256 for it.
-        let mut sum_target = U256::zero();
+        let k_u256 = U256::from(k);
+        let mut avg_target = U256::zero();
+        let mut target_remainder_sum = U256::zero();
         let mut weight = 1i64;
 
         for i in window_start..height {
@@ -85,7 +85,12 @@ impl Blockchain {
                 .min(6 * target_secs);
 
             t += solvetime * weight;
-            sum_target = sum_target + curr.header.target;
+            avg_target = avg_target
+                .checked_add(curr.header.target / k_u256)
+                .unwrap_or(U256::MAX);
+            target_remainder_sum = target_remainder_sum
+                .checked_add(curr.header.target % k_u256)
+                .unwrap_or(U256::MAX);
             weight += 1;
         }
 
@@ -93,7 +98,9 @@ impl Blockchain {
             return CONSENSUS_RULES.initial_target;
         }
 
-        let avg_target = sum_target / U256::from(k);
+        let avg_target = avg_target
+            .checked_add(target_remainder_sum / k_u256)
+            .unwrap_or(U256::MAX);
         let n_sums = U256::from((k * (k + 1) / 2) as u64);
         let denom = U256::from(target_secs as u64) * n_sums;
         let t_u256 = U256::from(t as u64);
