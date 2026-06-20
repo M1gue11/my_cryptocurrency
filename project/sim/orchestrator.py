@@ -603,6 +603,33 @@ class SimulationOrchestrator:
             for name, node_snap in snap.get("nodes", snap).items()
         }
 
+    def wait_for_convergence(self, timeout: float, delay: float = 1.0):
+        deadline = time.time() + timeout
+        last_snap = None
+        while time.time() <= deadline:
+            last_snap = self.snapshot()
+            if self.is_converged(last_snap):
+                return last_snap
+            time.sleep(delay)
+        return last_snap or self.snapshot()
+
+    def bootstrap_initial_block(self):
+        bootstrap_node = self.nodes[0]
+        log(
+            f"Minerando bloco inicial em {bootstrap_node.name} para fixar genesis hash comum..."
+        )
+        event = bootstrap_node.mine()
+        if not event.get("ok"):
+            log("ERRO: falha ao minerar bloco inicial. Abortando.")
+            return event, self.snapshot(), False
+
+        snap = self.wait_for_convergence(timeout=max(30.0, self.settle), delay=1.0)
+        self.print_snapshot(snap)
+        converged = self.is_converged(snap)
+        if not converged:
+            log("ERRO: rede não convergiu após o bloco inicial. Abortando.")
+        return event, snap, converged
+
     def run(self):
         log(
             f"=== Simulacao distribuida Caramuru | seed={self.seed} rounds={self.rounds} ==="
@@ -618,12 +645,21 @@ class SimulationOrchestrator:
         simulation_started = time.time()
         simulation_started_at = iso_now()
 
-        log("Estado inicial:")
-        snap0 = self.snapshot()
-        self.print_snapshot(snap0)
+        bootstrap_event, snap0, bootstrap_ok = self.bootstrap_initial_block()
         self.history.append(
-            {"round": 0, "event": "initial", "timestamp": iso_now(), "snapshot": snap0}
+            {
+                "round": 0,
+                "event": "bootstrap_initial_block",
+                "timestamp": iso_now(),
+                "events": [bootstrap_event],
+                "snapshot": snap0,
+            }
         )
+        if not bootstrap_ok:
+            sys.exit(1)
+
+        log("Estado inicial das rodadas:")
+        self.print_snapshot(snap0)
 
         for i in range(1, self.rounds + 1):
             self.run_round(i)
