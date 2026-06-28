@@ -6,22 +6,79 @@ cadeia principal mais longa.
 """
 
 import argparse
+import time
 
 from fork_scenario_runner import ForkScenarioRunner
+from sim_common import log
 
 MAIN_GROUP = ["node1", "node2", "node3"]
 ISOLATED_NODE = "node4"
 
 
+def force_drop_pending_peers(runner: ForkScenarioRunner, node: str):
+    """Derruba conexões que não completaram o handshake.
+
+    A desconexão padrão localiza o peer pelo endereço anunciado, mas uma
+    conexão presa em 'connecting' ainda não trocou a mensagem Version e, por
+    isso, não possui advertised_addr (aparece como 'peer=?'). Essas conexões
+    fantasmas só podem ser encerradas pelo addr real do socket.
+    """
+    dropped = []
+    for peer in runner.peers(node):
+        if peer.get("advertised_addr"):
+            continue  # handshake completo: a desconexão normal já trata
+        addr = peer.get("addr")
+        if not addr:
+            continue
+        runner.clients[node].call_or_raise("peer_disconnect", {"addr": addr})
+        dropped.append(f"{addr} [state={peer.get('handshake_state')}]")
+    if dropped:
+        log(f"{node}: forçando queda de conexões pendentes -> {', '.join(dropped)}")
+    return dropped
+
+
+def wait_until_isolated(
+    runner: ForkScenarioRunner,
+    node: str,
+    timeout: float = 20.0,
+    interval: float = 1.0,
+):
+    """Aguarda o `node` ficar sem peers, limpando conexões fantasmas pendentes."""
+    deadline = time.time() + timeout
+    while True:
+        peers = runner.peers(node)
+        if not peers:
+            log(f"OK: {node} ficou isolado (0 peers)")
+            return
+        force_drop_pending_peers(runner, node)
+        if time.time() >= deadline:
+            restantes = ", ".join(
+                f"{p.get('advertised_addr') or '?'} via {p.get('addr')} "
+                f"[{p.get('handshake_state')}]"
+                for p in peers
+            )
+            raise AssertionError(
+                f"{node} não ficou isolado em {timeout:.0f}s; peers restantes: {restantes}"
+            )
+        time.sleep(interval)
+
+
 def isolate_node4(runner: ForkScenarioRunner):
+    # Fecha as conexões entre o node4 e a rede principal nos dois sentidos.
     for node in MAIN_GROUP:
         runner.disconnect_if_connected(ISOLATED_NODE, node)
         runner.disconnect_if_connected(node, ISOLATED_NODE)
 
-    runner.wait(1.0, "fechamento das conexões do node4")
+    # Reforça a topologia interna da rede principal antes de validar o
+    # isolamento, mantendo node1/node2/node3 conectados entre si.
     runner.connect_if_needed("node2", "node1")
     runner.connect_if_needed("node3", "node2")
     runner.wait(1.0, "garantia da topologia interna da rede principal")
+
+    # Por último, confirma que o node4 realmente ficou sem peers, aguardando o
+    # fechamento das conexões e derrubando qualquer conexão fantasma presa em
+    # handshake pelo addr real.
+    wait_until_isolated(runner, ISOLATED_NODE)
 
 
 def mine_sequence(
