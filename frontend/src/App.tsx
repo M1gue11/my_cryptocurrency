@@ -2,14 +2,17 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import { Layout } from './components';
 import { Dashboard, Blocks, Wallet, Transactions, Network, Logs, Mining } from './pages';
-import { WalletProvider } from './contexts';
+import { WalletProvider, NodeProvider, useNode } from './contexts';
 
 function AnimatedRoutes() {
   const location = useLocation();
+  const { selectedNode } = useNode();
 
   return (
     <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+      {/* Keying on the node id remounts every page when the node changes,
+          so each one re-fetches against the newly selected daemon. */}
+      <Routes location={location} key={`${selectedNode.id}:${location.pathname}`}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/blocks" element={<Blocks />} />
         <Route path="/wallet" element={<Wallet />} />
@@ -24,13 +27,15 @@ function AnimatedRoutes() {
 
 function App() {
   return (
-    <WalletProvider>
-      <BrowserRouter>
-        <Layout>
-          <AnimatedRoutes />
-        </Layout>
-      </BrowserRouter>
-    </WalletProvider>
+    <NodeProvider>
+      <WalletProvider>
+        <BrowserRouter>
+          <Layout>
+            <AnimatedRoutes />
+          </Layout>
+        </BrowserRouter>
+      </WalletProvider>
+    </NodeProvider>
   );
 }
 

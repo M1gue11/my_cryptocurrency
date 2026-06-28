@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { rpcClient } from "../services";
+import { useNode } from "../contexts";
 import { ConsolePill } from "./Console";
 import { formatBlockHeight, tipHeightFromCount } from "../utils/format";
 
@@ -12,6 +13,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const { nodes, selectedNode, selectNode } = useNode();
   const [nodeOnline, setNodeOnline] = useState(true);
   const [height, setHeight] = useState<number | null>(null);
   const [miningState, setMiningState] = useState<"mining" | "idle">("idle");
@@ -44,7 +46,9 @@ export function Layout({ children }: LayoutProps) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+    // Re-run immediately when the selected node changes so the header reflects
+    // the new daemon without waiting for the next poll.
+  }, [selectedNode]);
 
   const footerLabel = (() => {
     if (location.pathname === "/blocks") return "blockchain explorer";
@@ -81,7 +85,25 @@ export function Layout({ children }: LayoutProps) {
           </nav>
 
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--crm-dim)] lg:justify-end">
-            <span className="crm-mono hidden sm:inline">rpc localhost:7001</span>
+            <label className="crm-mono flex items-center gap-1.5">
+              <span className="hidden text-(--crm-dim) sm:inline">node</span>
+              <select
+                value={selectedNode.id}
+                onChange={(e) => selectNode(e.target.value)}
+                title={selectedNode.url}
+                className="crm-mono rounded-sm border border-[var(--crm-border)] bg-[var(--crm-panel)] px-1.5 py-0.5 text-[11px] text-[var(--crm-fg)] outline-none focus:border-[var(--crm-accent)]"
+              >
+                {nodes.map((node) => (
+                  <option
+                    key={node.id}
+                    value={node.id}
+                    className="bg-[var(--crm-panel)] text-[var(--crm-fg)]"
+                  >
+                    {node.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <ConsolePill tone={nodeOnline ? "accent" : "warn"} dot>
               {nodeOnline ? "live" : "offline"}
             </ConsolePill>

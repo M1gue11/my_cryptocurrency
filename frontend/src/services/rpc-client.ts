@@ -35,6 +35,16 @@ export class RpcClient {
     this.baseUrl = baseUrl;
   }
 
+  /** Repoint the client at a different daemon endpoint at runtime. */
+  setBaseUrl(baseUrl: string): void {
+    this.baseUrl = baseUrl;
+  }
+
+  /** Current daemon endpoint. */
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   /**
    * Makes a generic JSON-RPC call
    */
@@ -253,5 +263,11 @@ export class RpcClient {
   }
 }
 
+// Default RPC endpoint. Override with VITE_RPC_URL to point the frontend at a
+// specific node — e.g. the simulation containers (node1=7101 .. node4=7104):
+//   VITE_RPC_URL=http://localhost:7101/rpc npm run dev
+const DEFAULT_RPC_URL =
+  import.meta.env.VITE_RPC_URL ?? "http://localhost:7001/rpc";
+
 // Default client instance
-export const rpcClient = new RpcClient();
+export const rpcClient = new RpcClient(DEFAULT_RPC_URL);
