@@ -96,6 +96,79 @@ class ForkScenarioRunner:
         self._check_node(node)
         return self.clients[node].call_or_raise("node_status")
 
+    def genesis_hash(self, node: str) -> str:
+        return str(self.status(node).get("genesis_hash", ""))
+
+    def bootstrap_common_root(
+        self,
+        bootstrap_node: str = "node1",
+        timeout_seconds: float = 40.0,
+    ) -> str:
+        """Garante que todos os nós compartilhem o mesmo bloco raiz (genesis).
+
+        Antes de qualquer partição é preciso que todos os nós tenham pelo menos
+        um bloco e que esse bloco seja idêntico. Caso contrário, cada grupo
+        minera seu próprio genesis durante a partição, os hashes divergem e o
+        handshake P2P rejeita a reconexão com "Network mismatch".
+        """
+        self._check_node(bootstrap_node)
+        empty = "0" * 64
+
+        genesis = {name: self.genesis_hash(name) for name in sorted(self.nodes)}
+        non_empty = {g for g in genesis.values() if g and g != empty}
+
+        if len(non_empty) > 1:
+            details = ", ".join(f"{n}={g[:12]}" for n, g in sorted(genesis.items()))
+            raise RuntimeError(
+                "Os nós já possuem blocos raiz divergentes: "
+                f"{details}. Resete os volumes antes de rodar o cenário "
+                "(docker compose -f docker-compose.sim.yml down -v)."
+            )
+
+        if len(non_empty) == 1 and all(
+            g == next(iter(non_empty)) for g in genesis.values()
+        ):
+            root = next(iter(non_empty))
+            log(f"OK: todos os nós já compartilham o bloco raiz {root[:16]}")
+            return root
+
+        log(
+            "Nós sem raiz comum; minerando bloco inicial em "
+            f"{bootstrap_node} para fixar um genesis compartilhado..."
+        )
+        self.connect_default_topology()
+        self.mine(bootstrap_node)
+        self.wait_until_converged(timeout_seconds=timeout_seconds)
+
+        genesis = {name: self.genesis_hash(name) for name in sorted(self.nodes)}
+        roots = {g for g in genesis.values()}
+        if len(roots) != 1 or empty in roots:
+            details = ", ".join(f"{n}={g[:12]}" for n, g in sorted(genesis.items()))
+            raise RuntimeError(
+                f"Falha ao fixar bloco raiz comum após o bootstrap: {details}"
+            )
+
+        root = next(iter(roots))
+        log(f"OK: bloco raiz comum fixado em {root[:16]} para todos os nós")
+        return root
+
+    def connect_default_topology(self):
+        """Reestabelece as conexões da topologia padrão do docker-compose.
+
+        Garante um grafo conectado para que a propagação do bloco inicial
+        alcance todos os nós durante o bootstrap.
+        """
+        edges = [
+            ("node2", "node1"),
+            ("node3", "node2"),
+            ("node4", "node3"),
+            ("node4", "node1"),
+        ]
+        for from_node, to_node in edges:
+            if from_node in self.nodes and to_node in self.nodes:
+                self.connect_if_needed(from_node, to_node)
+        self.wait(1.0, "estabilização da topologia padrão")
+
     def peers(self, node: str) -> List[dict]:
         self._check_node(node)
         result = self.clients[node].call_or_raise("peers_list")

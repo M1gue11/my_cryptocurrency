@@ -18,6 +18,9 @@ def run(runner: ForkScenarioRunner, propagation_wait: float):
 
     runner.ensure_wallets()
 
+    runner.step("Garantir bloco raiz comum antes de isolar node4")
+    runner.bootstrap_common_root()
+
     runner.step("Estado inicial da rede")
     runner.snapshot()
     runner.assert_converged()

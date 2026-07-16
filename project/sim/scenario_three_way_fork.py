@@ -38,6 +38,9 @@ def run(runner: ForkScenarioRunner, propagation_wait: float):
     runner.wait_until_up()
     runner.ensure_wallets()
 
+    runner.step("Garantir bloco raiz comum antes de particionar a rede")
+    runner.bootstrap_common_root()
+
     runner.step("Confirmar estado inicial convergido")
     runner.snapshot()
     runner.assert_converged()
