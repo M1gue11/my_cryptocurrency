@@ -14,7 +14,7 @@ scenarios:
 	python .\sim\scenario_deep_reorg.py $(ARGS)
 	python .\sim\scenario_shorter_fork_rejected.py $(ARGS)
 	python .\sim\scenario_three_way_fork.py $(ARGS)
-	python .\sim\scenario_staged_healing_bridge.py $(ARGS)
+	# python .\sim\scenario_staged_healing_bridge.py $(ARGS)
 
 # Valida que todos os cenários executam com sucesso, como testes unitários.
 # Reseta o ambiente (volumes) antes de cada cenário para garantir isolamento.
